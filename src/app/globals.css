@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --color-ink: #16181d;
+  --color-muted: #6b7280;
+  --color-line: #e7e5e4;
+  --color-paper: #fafaf9;
+  --color-card: #ffffff;
+  --color-accent: #2f5bd3;
+  --color-accent-soft: #eaf0ff;
+  --color-li: #0a66c2;
+  --color-x: #111111;
+  --color-good: #15803d;
+  --color-warn: #b45309;
+  --color-bad: #b91c1c;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-ink: #eceae6;
+    --color-muted: #9ca3af;
+    --color-line: #2c2f36;
+    --color-paper: #111317;
+    --color-card: #181b20;
+    --color-accent: #7c9cff;
+    --color-accent-soft: #1e2740;
+    --color-li: #4ea1f3;
+    --color-x: #e5e5e5;
+  }
+}
+
+html, body { background: var(--color-paper); color: var(--color-ink); }
+body { font-feature-settings: "cv11", "ss01"; -webkit-font-smoothing: antialiased; }
+::selection { background: var(--color-accent-soft); }
+
+@utility btn { @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap; }
+@utility btn-primary { @apply btn bg-accent text-white hover:opacity-90; }
+@utility btn-secondary { @apply btn border border-line bg-card hover:bg-paper; }
+@utility btn-ghost { @apply btn text-muted hover:text-ink hover:bg-paper; }
+@utility btn-danger { @apply btn border border-line bg-card text-bad hover:bg-paper; }
+@utility input { @apply w-full rounded-lg border border-line bg-card px-3 py-2 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft; }
+@utility label { @apply block text-xs font-medium uppercase tracking-wide text-muted mb-1; }
+@utility card { @apply rounded-xl border border-line bg-card; }
+.prose-post { white-space: pre-wrap; word-break: break-word; line-height: 1.55; }
