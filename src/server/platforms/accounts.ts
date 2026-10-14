@@ -38,7 +38,7 @@ export function redirectUri(p: Platform) {
 // OAuth
 // ---------------------------------------------------------------------------
 
-export async function startOAuth(userId: string, platform: Platform): Promise<string> {
+export async function startOAuth(platform: Platform): Promise<string> {
   if (!isPlatformConfigured(platform)) throw new Error(`${platform} app credentials are not configured on the server.`);
   if (!env().TOKEN_ENCRYPTION_KEY) throw new Error("TOKEN_ENCRYPTION_KEY must be set before connecting accounts.");
   const state = randomToken(24);
@@ -46,7 +46,7 @@ export async function startOAuth(userId: string, platform: Platform): Promise<st
   await db().delete(schema.oauthStates).where(lt(schema.oauthStates.expiresAt, new Date()));
   await db()
     .insert(schema.oauthStates)
-    .values({ state, userId, platform, codeVerifierEnc: encryptSecret(verifier), expiresAt: new Date(Date.now() + 10 * 60_000) });
+    .values({ state, platform, codeVerifierEnc: encryptSecret(verifier), expiresAt: new Date(Date.now() + 10 * 60_000) });
 
   if (platform === "x") {
     const u = new URL(X_AUTHORIZE_URL);
@@ -103,10 +103,10 @@ async function tokenRequest(platform: Platform, params: Record<string, string>):
 }
 
 /** Validates state (single use, unexpired, same user and platform) and stores encrypted tokens. */
-export async function completeOAuth(userId: string, platform: Platform, state: string, code: string) {
+export async function completeOAuth(platform: Platform, state: string, code: string) {
   const [row] = await db()
     .delete(schema.oauthStates)
-    .where(and(eq(schema.oauthStates.state, state), eq(schema.oauthStates.platform, platform), eq(schema.oauthStates.userId, userId)))
+    .where(and(eq(schema.oauthStates.state, state), eq(schema.oauthStates.platform, platform)))
     .returning();
   if (!row || row.expiresAt < new Date()) throw new Error("The authorization request expired or is invalid. Try connecting again.");
 
@@ -130,30 +130,30 @@ export async function completeOAuth(userId: string, platform: Platform, state: s
   };
   await db()
     .insert(schema.platformAccounts)
-    .values({ userId, platform, ...values })
-    .onConflictDoUpdate({ target: [schema.platformAccounts.userId, schema.platformAccounts.platform], set: values });
+    .values({ platform, ...values })
+    .onConflictDoUpdate({ target: schema.platformAccounts.platform, set: values });
 }
 
-export async function disconnectAccount(userId: string, platform: Platform) {
+export async function disconnectAccount(platform: Platform) {
   await db()
     .update(schema.platformAccounts)
     .set({ status: "disconnected", accessTokenEnc: null, refreshTokenEnc: null, expiresAt: null, updatedAt: new Date() })
-    .where(and(eq(schema.platformAccounts.userId, userId), eq(schema.platformAccounts.platform, platform)));
+    .where(eq(schema.platformAccounts.platform, platform));
 }
 
-export async function markAccountError(userId: string, platform: Platform, message: string) {
+export async function markAccountError(platform: Platform, message: string) {
   await db()
     .update(schema.platformAccounts)
     .set({ status: "error", lastError: message, updatedAt: new Date() })
-    .where(and(eq(schema.platformAccounts.userId, userId), eq(schema.platformAccounts.platform, platform)));
+    .where(eq(schema.platformAccounts.platform, platform));
 }
 
 export class NotConnectedError extends Error {}
 
 /** Returns usable credentials, refreshing the X token when it is close to expiry. */
-export async function getCredentials(userId: string, platform: Platform): Promise<AccountCredentials> {
+export async function getCredentials(platform: Platform): Promise<AccountCredentials> {
   const acct = await db().query.platformAccounts.findFirst({
-    where: and(eq(schema.platformAccounts.userId, userId), eq(schema.platformAccounts.platform, platform)),
+    where: eq(schema.platformAccounts.platform, platform),
   });
   if (!acct || !acct.accessTokenEnc || !acct.externalUserId || acct.status === "disconnected") {
     throw new NotConnectedError(`${platform === "x" ? "X" : "LinkedIn"} is not connected.`);
@@ -162,7 +162,7 @@ export async function getCredentials(userId: string, platform: Platform): Promis
   if (!expiringSoon) return { accessToken: decryptSecret(acct.accessTokenEnc), externalUserId: acct.externalUserId };
 
   if (!acct.refreshTokenEnc) {
-    await markAccountError(userId, platform, "Access token expired. Reconnect the account.");
+    await markAccountError(platform, "Access token expired. Reconnect the account.");
     throw new NotConnectedError("Access token expired. Reconnect the account.");
   }
   try {
@@ -177,11 +177,11 @@ export async function getCredentials(userId: string, platform: Platform): Promis
         lastError: null,
         updatedAt: new Date(),
       })
-      .where(eq(schema.platformAccounts.id, acct.id));
+      .where(eq(schema.platformAccounts.platform, platform));
     return { accessToken: tok.access_token, externalUserId: acct.externalUserId };
   } catch (err) {
     const msg = `Token refresh failed: ${(err as Error).message}. Reconnect the account.`;
-    await markAccountError(userId, platform, msg);
+    await markAccountError(platform, msg);
     throw new NotConnectedError(msg);
   }
 }
