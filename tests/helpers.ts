@@ -1,56 +1,46 @@
 import { sql } from "drizzle-orm";
-import { db, schema } from "@/server/db/client";
-import { defaultPreferences, saveUserPreferences, type Preferences } from "@/server/preferences";
-import { encryptSecret } from "@/server/crypto";
-import type { PlatformClient, PublishResult } from "@/server/platforms/types";
+import { db } from "../src/server/db/client";
+import { setLLMProviderForTests, type CompletionRequest } from "../src/server/llm";
+import { setPlatformClientForTests } from "../src/server/platforms/accounts";
+import type { PlatformClient, PublishResult } from "../src/server/platforms/types";
 
 export async function resetDb() {
-  await db().execute(sql`truncate users, sources, items, item_sources, repo_snapshots, briefings, job_runs, llm_calls, llm_cache cascade`);
+  await db().execute(sql`truncate posts, items, notes, sources, events, llm_calls, settings, platform_accounts, oauth_states restart identity cascade`);
 }
 
-/** Preferences with permissive limits and an all-day window so tests control the variables. */
-export function openPrefs(overrides: Partial<Preferences["platforms"]["x"]> = {}): Preferences {
-  const p = defaultPreferences();
-  const open = { paused: false, maxPerDay: 10, maxPerWeek: 50, minIntervalMinutes: 0, windows: [{ days: [1, 2, 3, 4, 5, 6, 7], start: "00:00", end: "23:59" }], allowEvergreenFill: true, prioritizeTimely: true, linkInReply: false, styleNotes: "" };
-  p.platforms.x = { ...open, ...overrides };
-  p.platforms.linkedin = { ...open, ...overrides };
-  return p;
-}
+export type LlmHandler = (req: CompletionRequest) => unknown;
 
-export async function makeUser(prefs: Preferences = openPrefs()) {
-  const [u] = await db().insert(schema.users).values({ email: `u${Math.random()}@test.dev` }).returning();
-  await saveUserPreferences(u.id, prefs);
-  return u.id;
-}
-
-export async function connect(userId: string, platform: "x" | "linkedin") {
-  await db().insert(schema.platformAccounts).values({
-    userId,
-    platform,
-    externalUserId: platform === "x" ? "42" : "abc",
-    handle: "@me",
-    accessTokenEnc: encryptSecret("token"),
-    status: "connected",
+/** Replace the model with a function that returns the JSON object for each task. */
+export function fakeLLM(handler: LlmHandler) {
+  const calls: CompletionRequest[] = [];
+  setLLMProviderForTests({
+    async complete(req) {
+      calls.push(req);
+      return { text: JSON.stringify(handler(req)), inputTokens: 10, outputTokens: 10 };
+    },
   });
+  return calls;
 }
 
-export class FakeClient implements PlatformClient {
-  calls: string[][] = [];
-  results: PublishResult[] = [];
-  existing: { text: string; id: string }[] = [];
-  reconcileSupported = true;
-  async publish(parts: string[]): Promise<PublishResult> {
-    this.calls.push(parts);
-    const r = this.results.shift() ?? { kind: "success", externalIds: [`ext-${this.calls.length}`], url: `https://example.test/${this.calls.length}` };
-    if (r.kind === "success") this.existing.push({ text: parts[0], id: r.externalIds[0] });
-    return r;
-  }
-  async findRecentPost(text: string) {
-    if (!this.reconcileSupported) {
-      const { ReconcileNotSupported } = await import("@/server/platforms/types");
-      throw new ReconcileNotSupported("linkedin");
-    }
-    const hit = this.existing.find((e) => e.text === text);
-    return hit ? { externalId: hit.id } : null;
-  }
+export const GOOD_REVIEW = { worth_posting: 9, factual: 9, slop: 9, claims: [{ claim: "x", support: "supported", evidence: "e" }], issues: [], revision_instructions: "", is_duplicate: false };
+
+export function fakePlatform(platform: "x" | "linkedin", result: () => PublishResult) {
+  const published: string[][] = [];
+  const client: PlatformClient = {
+    async publish(parts) {
+      published.push(parts);
+      return result();
+    },
+    async findRecentPost() {
+      return null;
+    },
+  };
+  setPlatformClientForTests(platform, client);
+  return published;
+}
+
+export async function connectAccount(platform: "x" | "linkedin") {
+  const { encryptSecret } = await import("../src/server/crypto");
+  const { schema } = await import("../src/server/db/client");
+  await db().insert(schema.platformAccounts).values({ platform, externalUserId: "u1", handle: "@me", accessTokenEnc: encryptSecret("tok"), status: "connected" }).onConflictDoNothing();
 }
