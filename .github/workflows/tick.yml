@@ -1,0 +1,18 @@
+# Free scheduler: pings the app every 5 minutes so it can publish due posts and write new ones.
+# GitHub may delay scheduled runs by several minutes under load; cron-job.org (free) is a good second pinger.
+name: tick
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call /api/cron/tick
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          curl --fail --silent --show-error --max-time 290 \
+            -H "Authorization: Bearer $CRON_SECRET" "$APP_URL/api/cron/tick"
