@@ -7,6 +7,7 @@ import { llmConfigured } from "./llm";
 import { getSettings } from "./settings";
 import { addEvent } from "./events";
 import { log } from "./log";
+import { recordHeartbeat } from "./health";
 
 export interface TickResult {
   skipped?: string;
@@ -38,6 +39,7 @@ export async function tick(opts: { budgetMs?: number } = {}): Promise<TickResult
     return { ...out, skipped: "another tick is running" };
   }
   try {
+    await recordHeartbeat().catch(() => {});
     const s = await getSettings();
     if (s.paused) return { ...out, skipped: "paused" };
 

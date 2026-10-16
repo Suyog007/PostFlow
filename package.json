@@ -9,6 +9,7 @@
     "start": "next start -p 3000",
     "db:migrate": "tsx scripts/migrate.ts",
     "tick": "tsx scripts/tick.ts",
+    "tick:loop": "tsx scripts/tick.ts --loop",
     "hash-password": "tsx scripts/hash-password.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
