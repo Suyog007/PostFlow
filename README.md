@@ -1,120 +1,84 @@
 # PostFlow
 
-A personal discovery, research, drafting and publishing desk. It finds developments worth your attention and explains why they matter. When you choose a topic, it researches it and drafts separate LinkedIn and X posts. Nothing is published without your approval of the exact text.
+Autopilot for a personal LinkedIn and X presence. It keeps a calendar filled a few days ahead with posts about **your work**, **tech news with your take**, the **Nepal tech scene** and **evergreen lessons**. A separate reviewer agent checks every draft before it is scheduled. Posts go out on schedule **unless you remove them from the calendar**.
 
-**Discover automatically. Research intelligently. Draft thoughtfully. You decide what gets published and when.**
+```
+every 5 min (cron)  ──►  /api/cron/tick
+                           1. publish anything due          (always first)
+                           2. collect RSS feeds
+                           3. score new items for relevance + urgency
+                           4. fill empty calendar slots:  pick material → write → REVIEW → schedule
+                           5. Telegram: "scheduled: <text>  [Remove]"
+```
 
-## Daily use (the whole workflow)
+## What makes it safe to leave on autopilot
 
-1. **Home → Today's ideas.** Scan the list. Press **Write post** on anything worth sharing and **Skip** the rest. "Why this, and sources" expands the details.
-2. **Review.** The LinkedIn and X versions open side by side. Edit the text, or use a one-click rewrite (Shorter, More analytical, **More creative**, or type an angle).
-3. **Make it engaging.** The **Format** row rewrites the post as a *What if…*, *Contrarian*, *3 takeaways*, *Quote + take* or *One question* post. **Make carousel** turns a LinkedIn draft into 7–9 rendered slides. **Images** lets you render a stat/quote/list/headline card in your theme, reuse the article's own preview image, or generate decorative art (paid, off by default) — the image is bound to that revision, so approving covers the exact text *and* the exact picture.
-4. Press **Approve & schedule · <suggested time>**, or **Post now**. Under **More** you can pick your own time or approve without scheduling.
-5. **Calendar** shows what goes out when. Open any post to reschedule or unschedule it.
-6. **Scorecard** shows what earned likes, reposts, replies and impressions, by format. X numbers refresh automatically every ~6 hours; LinkedIn numbers you type in from the post's analytics.
+- **Reviewer gate.** A second model pass scores *worth posting*, *factual accuracy* and *AI-slop*, and extracts every checkable claim, marking each supported / unsupported / unverifiable against the source text. The pass/fail decision is made by code thresholds, not by the model. Failed drafts are rewritten with the reviewer's notes (max 3 rounds) or rejected and never scheduled. Rejections stay visible in the app.
+- **Deterministic checks on top:** length limits (X counts links as 23 chars), banned cliché phrases, hashtag/emoji/question caps, near-duplicate detection against recent posts.
+- **No invented experience.** First-person claims are only allowed when they come from *your* notes. News posts must attribute the source. Evergreen posts stay inside your stated expertise and use well-known facts only.
+- **You can veto anything**: remove from the calendar (web or Telegram button), edit, move, or pause everything with one switch (`/pause` in Telegram too). Removed slots are not refilled.
+- **Time-sensitive news** gets an expiry (breaking: 48 h, this-week: 7 days). It takes the earliest suitable slot (displacing an unedited evergreen post if needed) and is *dropped, not posted late* if it goes stale.
+- **No double posting.** Row-locked claims, a one-live-post-per-slot index, and ambiguous results (timeouts, 5xx, crashes) become *unconfirmed* instead of being retried. X posts are auto-reconciled against your timeline; LinkedIn can't be read back, so you confirm in the app.
+- Fetched articles are treated as untrusted data; model output is schema-validated and can't trigger actions. A daily model-call cap (`MAX_LLM_CALLS_PER_DAY`) bounds cost.
 
-**Found an article yourself?** Open **Intake**, paste a link or the full text. It is distilled into *atoms* — numbers, quotes, insights, contrarian points — and you pick which atoms a post is built from. Your own writing is first-class here: drafts inherit your perspective instead of the article's.
+**Limit to know about:** the fact-checker can only verify against the article text or your note it was given (no live web search). Skim the calendar daily; it is a queue, not a black box.
 
-Press **Find new ideas** to check your sources again. Discovery also runs automatically at the times set in Settings.
+## Using it
 
-## Quick start
+1. **Notes** (web or Telegram): drop rough notes about what you built or learned. This is the highest-quality input and how your voice shows up.
+2. **Calendar**: skim the week. Click a post to read the reviewer's reasoning and claim-by-claim evidence, edit it, move it or remove it.
+3. **Settings**: slots (`linkedin mon-fri 09:15`, `x daily 19:30`), content mix, voice, topics, feeds.
+
+Telegram: send any text = note (`#nepal`, `#learning` tags steer it), `/queue`, `/pause`, `/resume`.
+
+## Free-tier deployment (about 20 minutes)
+
+| Piece | Service | Cost |
+| --- | --- | --- |
+| Web app + API | Vercel (Hobby) | free |
+| Database | Neon or Supabase Postgres | free |
+| Scheduler (every 5 min) | cron-job.org and/or the included GitHub Action | free |
+| Alerts + notes | Telegram bot | free |
+| Model | Fireworks | pay per use (small) |
+| LinkedIn API | developer app | free |
+| **X API** | developer app | **paid per post; check current pricing before relying on it** |
+
+1. Create a Neon database; put the pooled connection string in `DATABASE_URL` and run `npm run db:migrate` once locally with it.
+2. Import the repo in Vercel; add every variable from `.env.example` (`APP_URL` = your Vercel URL).
+3. **Scheduler:** Vercel's free cron only runs hourly, so add a free job at cron-job.org: `GET https://<app>/api/cron/tick` every 5 minutes with header `Authorization: Bearer <CRON_SECRET>`. Or add `APP_URL` and `CRON_SECRET` as GitHub repo secrets and the included workflow does it (GitHub may delay runs). Posts publish within about 5 minutes of their slot.
+4. Open the app, go to **Settings**: connect LinkedIn and X, register the Telegram webhook, set your profile and slots.
+5. Add a few notes. Watch the calendar fill.
+
+### Connecting accounts
+
+**LinkedIn:** create an app at linkedin.com/developers (needs a LinkedIn Page you administer), add products *Share on LinkedIn* and *Sign In with LinkedIn using OpenID Connect*, add redirect `${APP_URL}/api/oauth/linkedin/callback`. Scopes: `openid profile w_member_social`.
+
+**X:** create a project/app at developer.x.com, enable OAuth 2.0 with *Read and write*, callback `${APP_URL}/api/oauth/x/callback`. Scopes: `tweet.read tweet.write users.read offline.access`.
+
+**Platform rules:** LinkedIn's API terms restrict "automating posting" and X restricts automated or bot-like behaviour. Posting your own reviewed content to your own account through the official APIs, with a human veto, is the intended shape of this tool, but read both sets of terms and decide for yourself. PostFlow never likes, comments, follows or messages.
+
+## Local development
 
 ```bash
-npm install                 # uses ./.npm-cache (see .npmrc)
-npm run db:start            # Postgres cluster stored in ./.data/pg, port 54329
+npm install
+# Postgres on :54329 (scripts/db.sh, run as a non-root user), then:
+cp .env.example .env     # fill it in
 npm run db:migrate
-npm run db:seed             # owner user, default preferences, source set (44 defined: AI news + builder signal, 27 enabled)
-cp .env.example .env        # then fill in (see below); a filled .env may already exist
-npm run build && npm start  # web app on http://localhost:3000
-npm run worker              # in a second terminal: discovery + publishing
-
-npm run desk                # …or just this: web app + worker together (Ctrl-C stops both)
-npm run doctor              # checks everything: env, DB, AI model, sources, accounts, worker
-npm run mcp                 # optional: MCP stdio server (drafts only, never approves/publishes)
-npm run shot -- --out ./shots  # optional: full-page screenshots of the running app (headless, signed in)
+npm run dev              # app on :3000
+npm run tick:loop        # local scheduler (instead of cron)
+npm test                 # Postgres-backed tests with fake model and fake platforms
 ```
 
-`.env` essentials:
-
-| Variable | Purpose |
-| --- | --- |
-| `APP_PASSWORD_HASH` | `npm run hash-password -- 'your password'` |
-| `SESSION_SECRET` | 32+ random chars (`openssl rand -base64 48`) |
-| `TOKEN_ENCRYPTION_KEY` | 32 bytes base64 (`openssl rand -base64 32`): encrypts OAuth tokens at rest |
-| `FIREWORKS_API_KEY`, `FIREWORKS_MODEL` | Required for analysis, research and drafting. Choose a current model id from fireworks.ai/models |
-| `FIREWORKS_RESEARCH_MODEL` | Optional stronger model for research and drafting |
-| `FIREWORKS_PRICE_INPUT_PER_M`, `FIREWORKS_PRICE_OUTPUT_PER_M` | Optional, from your Fireworks pricing page. Enables USD estimates and the USD budget |
-| `GITHUB_TOKEN` | Optional, raises GitHub API rate limits |
-| `LINKEDIN_CLIENT_ID/SECRET`, `X_CLIENT_ID/SECRET` | Optional, enables publishing |
-
-Without Fireworks the app still collects and keyword-ranks discoveries. Without social accounts, research and drafting still work. Publishing fails visibly; it never pretends to succeed.
-
-## How it works
-
-```
-worker (tsx)                               web (Next.js)
-├─ discovery at configured local times  ◄──  "Run discovery" queues a job_runs row
-│   collect → normalize → dedupe/group → filter → prefilter
-│   → LLM batch analysis (cached) → deterministic score → briefing
-├─ publishDue every 20s (row-locked claim, approval re-verified)
-├─ reconcile every 60s (ambiguous results, crashed attempts)
-└─ flagStale every 10m (time-sensitive posts → needs review)
-```
-
-Everything is in one TypeScript codebase: a modular monolith plus a worker process. PostgreSQL holds all state, including the job queue (`FOR UPDATE SKIP LOCKED`). Redis and BullMQ were not needed at this volume. Restarting the worker is safe.
+## Layout
 
 | Area | Where |
 | --- | --- |
-| Schema and migrations | `src/server/db/schema.ts`, `drizzle/` (Drizzle ORM) |
-| Draft state machine and platform validation | `src/server/drafts/state.ts` |
-| Approval, scheduling, cancel and retry | `src/server/drafts/service.ts` |
-| Quality validator (slop phrases, near-duplicates) | `src/server/drafts/validator.ts` |
-| Slot rules and suggestions (timezone and DST) | `src/server/scheduling/rules.ts` |
-| Publisher, reconciliation and staleness | `src/server/publishing/publisher.ts` |
-| X and LinkedIn clients, OAuth | `src/server/platforms/` |
-| Intake: article extraction and atom mining | `src/server/intake/` |
-| Card / carousel / OG image engine (satori + sharp) | `src/server/images/`; fonts in `assets/fonts/` |
-| Voice profile (your approved posts as style examples) | `src/server/voice.ts` |
-| Metrics collection and scorecard | `src/server/metrics.ts` |
-| Fireworks provider, cache, budget | `src/server/llm/index.ts`; prompts are in `llm/prompts.ts` |
-| Discovery pipeline | `src/server/discovery/` |
-| Ranking (weights, caps, penalties) | `src/server/discovery/scoring.ts` |
-| MCP server (drafts-only) | `mcp/server.ts` |
-
-### Guarantees the code enforces
-
-- **Approval belongs to a revision.** Revisions are immutable. Editing creates a new revision, revokes the approval, and cancels any pending schedule. Right before sending, the worker re-checks that the scheduled revision, the approval and the content hash all match.
-- **Images are part of the revision.** The content hash covers the text, the format tag and the exact image ids, so swapping a card or slide demands a fresh approval. Media files are served only to you (`/api/media/<id>`, session-checked).
-- **Drafts are never published by a model.** The MCP surface can list, read and draft, but there is no approve or publish tool anywhere in it. Publishing is only ever your click in the UI, and the worker re-verifies everything first.
-- **Platforms are independent.** Each platform has its own drafts, approvals, schedules, limits, windows and pause switch. Approving the LinkedIn version never touches the X version.
-- **No double posting.** Claims use row locks and an attempt row is written before the API call. Unique indexes block two live schedules per draft and identical text twice on one platform.
-- **Ambiguous results are never blindly retried.** A timeout, a 5xx or a worker crash puts the post in the "unconfirmed" state. On X, the reconciler looks for the post on your timeline. On LinkedIn, the member-posting API can't read your posts back, so you confirm in the UI.
-- **Stale news isn't published late.** Time-sensitive posts carry a freshness horizon. Once it passes, the post is held for review instead of being published.
-- **Fetched content is untrusted.** It is wrapped in delimiters and the model has no tools. Model output is schema-validated and can't trigger any action. Article fetching refuses private-network URLs.
-- **Ranking is explainable.** The model scores relevance, evidence, insight and audience (0–5). Recency, evidence caps, repeat-topic penalties and the weighted total are computed by plain code. Each score is stored with its version and weights.
-
-## Tests
-
-```bash
-npm test     # 72 tests against the postflow_test database
-```
-
-They cover approval enforcement, independent platform queues, Kathmandu timezone and US DST handling, limits and suggestions, URL normalization, deduplication and grouping, scoring and briefing, retries, ambiguous-result reconciliation, crash recovery, LLM caching, budgets and malformed output, the quality validator, card-form parsing, X cost estimates, and intake extraction.
-
-## Before you connect real accounts (verify these yourself)
-
-Both platforms require you to create a developer app once. **Step-by-step instructions: [SETUP.md](SETUP.md).** In short:
-
-- **LinkedIn:** create an app at linkedin.com/developers and add the products *Sign In with LinkedIn using OpenID Connect* and *Share on LinkedIn*. Scopes are `openid profile w_member_social`. Posting uses `POST /v2/ugcPosts`. Register `${APP_URL}/api/oauth/linkedin/callback`.
-- **X:** create an app in the developer console with OAuth 2.0 (PKCE) and read+write permission. Scopes are `tweet.read tweet.write users.read offline.access`. Posting uses `POST /2/tweets`. Register `${APP_URL}/api/oauth/x/callback`. **Check your access tier and per-post pricing first**, because X API pricing changes often.
-- Model ids and prices are never hard-coded. Pick them from the current Fireworks docs.
-- Run `npm run doctor` after each step; it tells you exactly what is still missing.
-
-## Known limitations / next steps
-
-- **LinkedIn metrics are manual.** The member-posting API can't read your posts back, so you type likes/comments in from the post's analytics. X collects automatically (`X_*` keys must be set; the collector refreshes every ~6 hours).
-- Card images render in one theme (dark, Inter). More themes would be a small change to `src/server/images/render.tsx`.
-- No drag-and-drop on the calendar. You reschedule from the post's panel instead, which avoids accidental moves.
-- "Research a topic" draws on your library, Hacker News search and GitHub search. There is no general web-search API.
-- Paid AI image generation (BFL or OpenAI) is decorative-only and off unless you set `BFL_API_KEY` or `OPENAI_API_KEY`. It is never used for cards or slides, which are rendered locally for free.
-- The login rate limiter lives in memory, which suits a single instance. Back up `./.data/pg` regularly with `pg_dump -h localhost -p 54329 -U postflow postflow`.
+| Schema / migrations | `src/server/db/schema.ts`, `drizzle/` |
+| Tick orchestration | `src/server/tick.ts` |
+| Feed collection, scoring | `collect.ts`, `analyze.ts` |
+| Material choice, writer, reviewer, gate, planner | `generate.ts`, `prompts.ts`, `checks.ts` |
+| Slots / timezone math | `slots.ts` |
+| Publisher, retries, reconciliation | `publisher.ts` |
+| Owner actions (edit, remove, reschedule) | `posts.ts` |
+| Telegram | `telegram.ts`, `telegram-inbound.ts` |
+| LinkedIn / X clients, OAuth | `platforms/` |
