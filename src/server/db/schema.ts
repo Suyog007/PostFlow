@@ -103,6 +103,8 @@ export const posts = pgTable(
     sourceUrl: text("source_url"),
     review: jsonb("review").$type<Record<string, unknown>>(),
     userEdited: boolean("user_edited").notNull().default(false),
+    /** Posted outside the normal slots because the story was too important to wait. */
+    fast: boolean("fast").notNull().default(false),
     attempts: integer("attempts").notNull().default(0),
     externalId: text("external_id"),
     url: text("url"),
