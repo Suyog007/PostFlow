@@ -5,7 +5,7 @@ export default defineConfig({
     environment: "node",
     include: ["tests/**/*.test.ts"],
     env: {
-      DATABASE_URL: "postgres://postflow@localhost:54329/postflow_test",
+      DATABASE_URL: process.env.TEST_DATABASE_URL ?? "postgres://postflow@localhost:54329/postflow_test",
       TOKEN_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString("base64"),
       FIREWORKS_API_KEY: "test",
       FIREWORKS_MODEL: "test-model",
