@@ -151,4 +151,18 @@ describe("time-sensitive news", () => {
     await fillCalendar({ now: NOW, max: 1 });
     expect((await db().select().from(schema.posts).where(eq(schema.posts.userEdited, true)))[0].text).toBe("Mine");
   });
+
+  it("caps time-sensitive posts so owner notes still get slots", async () => {
+    await saveSettings({ horizonDays: 1, pillars: { own_work: 1, news: 1, nepal: 0, learning: 0 }, slots: [{ platform: "x", days: [1, 2, 3, 4, 5, 6, 7], time: "09:30" }, { platform: "x", days: [1, 2, 3, 4, 5, 6, 7], time: "12:30" }, { platform: "x", days: [1, 2, 3, 4, 5, 6, 7], time: "15:30" }] });
+    await db().insert(schema.notes).values([{ text: "Note one: shipped the billing export and it halved support tickets for us.", pillar: "own_work" }, { text: "Note two: found that our cron drifted by 40s a day until we pinned the clock.", pillar: "own_work" }]);
+    for (const t of ["Breaking one", "Breaking two", "Breaking three"]) await addItem(t, "breaking", 1, 9);
+    const texts = ["Vendor launch today. According to the announcement, deploys need far less config now.", "Our billing export halved support tickets. Boring work, measurable result, worth repeating.", "Cron drifted forty seconds a day until we pinned the clock source. Check yours."];
+    let n = 0;
+    fakeLLM((req) => (req.schemaName === "write_post" ? { text: texts[n++ % 3] } : GOOD_REVIEW));
+    await fillCalendar({ now: NOW, max: 5 });
+    const rows = await db().select().from(schema.posts).where(eq(schema.posts.status, "scheduled"));
+    expect(rows).toHaveLength(3);
+    expect(rows.filter((r) => r.expiresAt).length).toBe(1);
+    expect(rows.filter((r) => r.noteId).length).toBe(2);
+  });
 });

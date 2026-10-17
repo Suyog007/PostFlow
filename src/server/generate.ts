@@ -162,9 +162,29 @@ async function pillarOrder(s: Settings, now: Date): Promise<Pillar[]> {
     .map((x) => x.p);
 }
 
+/** At most this many time-sensitive posts per platform per day, so breaking news cannot crowd out the owner's own posts. */
+const MAX_URGENT_PER_DAY = 1;
+
+async function urgentCapReached(platform: Platform, at: Date): Promise<boolean> {
+  const rows = await db()
+    .select({ n: sql<number>`count(*)` })
+    .from(schema.posts)
+    .where(
+      and(
+        eq(schema.posts.platform, platform),
+        isNotNull(schema.posts.expiresAt),
+        notInArray(schema.posts.status, ["rejected", "cancelled", "expired"]),
+        gte(schema.posts.scheduledAt, new Date(at.getTime() - 12 * 3_600_000)),
+        lte(schema.posts.scheduledAt, new Date(at.getTime() + 12 * 3_600_000)),
+      ),
+    );
+  return Number(rows[0].n) >= MAX_URGENT_PER_DAY;
+}
+
 /** Time-sensitive items first (soonest to go stale), otherwise rotate pillars. */
 export async function chooseMaterial(platform: Platform, slotAt: Date, s: Settings, now = new Date()): Promise<Material | null> {
-  const urgent = (await candidateItems(platform, s, "any", now, slotAt))
+  const capped = await urgentCapReached(platform, slotAt);
+  const urgent = (capped ? [] : await candidateItems(platform, s, "any", now, slotAt))
     .map((it) => ({ it, exp: itemExpiry(it) }))
     .filter((x): x is { it: ItemRow; exp: Date } => !!x.exp && x.exp.getTime() > slotAt.getTime() + 3_600_000)
     .sort((a, b) => a.exp.getTime() - b.exp.getTime());
@@ -341,6 +361,7 @@ async function bumpForUrgent(platform: Platform, s: Settings, now: Date, freeSlo
     .orderBy(asc(schema.posts.scheduledAt))
     .limit(1);
   if (!victim[0]) return false;
+  if (await urgentCapReached(platform, victim[0].scheduledAt)) return false;
   await db().delete(schema.posts).where(eq(schema.posts.id, victim[0].id));
   await addEvent("bumped", `Replaced an evergreen ${platform} post with a time-sensitive one.`);
   return true;
