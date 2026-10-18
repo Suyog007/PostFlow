@@ -125,6 +125,22 @@ export async function saveProfileAction(form: FormData) {
   });
 }
 
+export async function saveFastLaneAction(form: FormData) {
+  await guarded("/settings", async () => {
+    const platforms = (["x", "linkedin"] as const).filter((p) => form.get(`fl_${p}`) === "on");
+    await saveSettings({
+      fastLane: {
+        enabled: form.get("fl_enabled") === "on",
+        minRelevance: Number(form.get("fl_min") || 9),
+        maxPerDay: Number(form.get("fl_max") || 1),
+        leadMinutes: Number(form.get("fl_lead") || 45),
+        platforms,
+        quietStart: String(form.get("fl_qs") || "23:00"),
+        quietEnd: String(form.get("fl_qe") || "07:00"),
+      },
+    });
+  });
+}
 export async function saveSlotsAction(form: FormData) {
   await guarded("/settings", async () => saveSettings({ slots: parseSlots(String(form.get("slots") ?? "")) }));
 }

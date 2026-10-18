@@ -6,7 +6,7 @@ import { formatSlots } from "@/server/slots-parse";
 import { healthChecks } from "@/server/health";
 import { isPlatformConfigured } from "@/server/platforms/accounts";
 import { env } from "@/server/env";
-import { addSourceAction, connectAction, deleteSourceAction, disconnectAction, runTickAction, saveProfileAction, saveSlotsAction, telegramWebhookAction, toggleSourceAction, togglePauseAction } from "@/app/actions";
+import { addSourceAction, connectAction, deleteSourceAction, disconnectAction, runTickAction, saveFastLaneAction, saveProfileAction, saveSlotsAction, telegramWebhookAction, toggleSourceAction, togglePauseAction } from "@/app/actions";
 import { Flash } from "../flash";
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ ok?: string; error?: string; connected?: string }> }) {
@@ -62,6 +62,26 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           <p className="text-sm text-muted">One slot per line, in {s.timezone}: <code>platform days time</code>. Autopilot fills these slots {s.horizonDays} day(s) ahead.</p>
           <textarea name="slots" rows={5} defaultValue={formatSlots(s.slots)} className="input font-mono text-sm" />
           <button className="btn-primary">Save schedule</button>
+        </form>
+      </section>
+
+      <section>
+        <h2 className="mb-2 text-lg font-semibold">Fast lane</h2>
+        <form action={saveFastLaneAction} className="card space-y-3 p-4 text-sm">
+          <p className="text-muted">When a breaking story is a clear opportunity for builders, post about it soon instead of waiting for the next slot. You get the lead time below (and a Telegram Remove button) to veto it.</p>
+          <label className="flex items-center gap-2"><input type="checkbox" name="fl_enabled" defaultChecked={s.fastLane.enabled} /> Fast lane on</label>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div><label className="label">Min. score (7-10)</label><input name="fl_min" type="number" min={7} max={10} defaultValue={s.fastLane.minRelevance} className="input" /></div>
+            <div><label className="label">Max per day, per platform</label><input name="fl_max" type="number" min={1} max={3} defaultValue={s.fastLane.maxPerDay} className="input" /></div>
+            <div><label className="label">Lead time (minutes)</label><input name="fl_lead" type="number" min={15} max={240} defaultValue={s.fastLane.leadMinutes} className="input" /></div>
+            <div><label className="label">Quiet from</label><input name="fl_qs" defaultValue={s.fastLane.quietStart} className="input" /></div>
+            <div><label className="label">Quiet until</label><input name="fl_qe" defaultValue={s.fastLane.quietEnd} className="input" /></div>
+          </div>
+          <div className="flex gap-6">
+            <label className="flex items-center gap-2"><input type="checkbox" name="fl_x" defaultChecked={s.fastLane.platforms.includes("x")} /> X</label>
+            <label className="flex items-center gap-2"><input type="checkbox" name="fl_linkedin" defaultChecked={s.fastLane.platforms.includes("linkedin")} /> LinkedIn</label>
+          </div>
+          <button className="btn-primary">Save fast lane</button>
         </form>
       </section>
 

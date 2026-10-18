@@ -25,7 +25,8 @@ function PostChip({ p, tz }: { p: Post; tz: string }) {
       <div className="mb-0.5 flex items-center gap-1.5 text-[11px] text-muted">
         <span className={`font-semibold ${p.platform === "x" ? "text-x" : "text-li"}`}>{p.platform === "x" ? "X" : "in"}</span>
         <span>{DateTime.fromJSDate(p.scheduledAt, { zone: tz }).toFormat("HH:mm")}</span>
-        {p.expiresAt && <span title="Time-sensitive">⏱</span>}
+        {p.fast && <span title="Fast lane: posted outside your normal slots">⚡</span>}
+        {p.expiresAt && !p.fast && <span title="Time-sensitive">⏱</span>}
         {p.userEdited && <span title="Edited by you">✎</span>}
         {p.status !== "scheduled" && <span className="ml-auto uppercase">{p.status}</span>}
       </div>

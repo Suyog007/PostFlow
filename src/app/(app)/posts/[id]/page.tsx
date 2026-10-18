@@ -32,6 +32,7 @@ export default async function PostPage({ params, searchParams }: { params: Promi
       <div className="mb-4 mt-2 flex flex-wrap items-center gap-3">
         <h1 className="text-lg font-semibold">{platformName} post · {local.toFormat("ccc d LLL, HH:mm")}</h1>
         <span className="rounded-full border border-line px-2 py-0.5 text-xs uppercase">{p.status}</span>
+        {p.fast && <span className="text-xs text-muted">⚡ fast lane: a big story, posted outside your normal slots</span>}
         {p.expiresAt && <span className="text-xs text-muted">⏱ time-sensitive, stale after {DateTime.fromJSDate(p.expiresAt, { zone: s.timezone }).toFormat("ccc d LLL HH:mm")}</span>}
       </div>
       {p.error && <p className="mb-3 text-sm text-bad">{p.error}</p>}
