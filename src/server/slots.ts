@@ -27,3 +27,18 @@ export function slotsBetween(settings: Pick<Settings, "slots" | "timezone">, fro
 export function formatLocal(d: Date, zone: string) {
   return DateTime.fromJSDate(d, { zone }).toFormat("ccc d LLL, HH:mm");
 }
+
+/** Moves `at` to the end of the quiet window when it falls inside it (the window may wrap midnight). */
+export function afterQuietHours(at: Date, zone: string, start: string, end: string): Date {
+  const local = DateTime.fromJSDate(at, { zone });
+  const toMin = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3));
+  const now = local.hour * 60 + local.minute;
+  const a = toMin(start);
+  const b = toMin(end);
+  if (a === b) return at;
+  const inside = a < b ? now >= a && now < b : now >= a || now < b;
+  if (!inside) return at;
+  let out = local.set({ hour: Math.floor(b / 60), minute: b % 60, second: 0, millisecond: 0 });
+  if (out <= local) out = out.plus({ days: 1 });
+  return out.toJSDate();
+}

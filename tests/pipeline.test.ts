@@ -101,7 +101,7 @@ describe("fillCalendar", () => {
 describe("time-sensitive news", () => {
   beforeEach(async () => {
     await resetDb();
-    await saveSettings({ slots: ONE_X_SLOT, horizonDays: 3, minRelevance: 6, pillars: { own_work: 1, news: 1, nepal: 0, learning: 0 } });
+    await saveSettings({ slots: ONE_X_SLOT, horizonDays: 3, minRelevance: 6, pillars: { own_work: 1, news: 1, nepal: 0, learning: 0 }, fastLane: { enabled: false, minRelevance: 9, maxPerDay: 1, leadMinutes: 45, platforms: ["x"], quietStart: "23:00", quietEnd: "07:00" } });
   });
 
   async function addItem(title: string, urgency: "breaking" | "week" | "evergreen", ageHours: number, relevance = 8) {

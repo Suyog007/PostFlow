@@ -48,6 +48,19 @@ export const settingsSchema = z.object({
   /** Smallest relevance (0-10) a news item needs before it can become a post. */
   minRelevance: z.number().int().min(1).max(10).default(6),
   includeLinks: z.object({ linkedin: z.boolean().default(true), x: z.boolean().default(false) }).default({ linkedin: true, x: false }),
+  /** Extra posts, outside the normal slots, for rare high-scoring breaking stories. The owner still has the lead time to veto. */
+  fastLane: z
+    .object({
+      enabled: z.boolean().default(true),
+      minRelevance: z.number().int().min(7).max(10).default(9),
+      maxPerDay: z.number().int().min(1).max(3).default(1),
+      leadMinutes: z.number().int().min(15).max(240).default(45),
+      platforms: z.array(z.enum(["x", "linkedin"])).default(["x", "linkedin"]),
+      /** No fast-lane posts between these local times. */
+      quietStart: hhmm.default("23:00"),
+      quietEnd: hhmm.default("07:00"),
+    })
+    .default({ enabled: true, minRelevance: 9, maxPerDay: 1, leadMinutes: 45, platforms: ["x", "linkedin"], quietStart: "23:00", quietEnd: "07:00" }),
   telegram: z.object({ updateOffset: z.number().default(0) }).default({ updateOffset: 0 }),
 });
 

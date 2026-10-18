@@ -6,7 +6,7 @@ import { runTask, untrusted, LLMError } from "./llm";
 import { getSettings, type Settings } from "./settings";
 import { REVIEWER_SYSTEM, profileBlock, writerSystem } from "./prompts";
 import { runChecks, type Check } from "./checks";
-import { slotsBetween, formatLocal } from "./slots";
+import { afterQuietHours, slotsBetween, formatLocal } from "./slots";
 import { fetchArticleText } from "./net";
 import { addEvent } from "./events";
 import { notifyScheduled, notifyText } from "./telegram";
@@ -173,6 +173,7 @@ async function urgentCapReached(platform: Platform, at: Date): Promise<boolean> 
       and(
         eq(schema.posts.platform, platform),
         isNotNull(schema.posts.expiresAt),
+        eq(schema.posts.fast, false),
         notInArray(schema.posts.status, ["rejected", "cancelled", "expired"]),
         gte(schema.posts.scheduledAt, new Date(at.getTime() - 12 * 3_600_000)),
         lte(schema.posts.scheduledAt, new Date(at.getTime() + 12 * 3_600_000)),
@@ -294,7 +295,7 @@ export interface Produced {
   reasons: string[];
 }
 
-export async function produceForSlot(platform: Platform, at: Date, m: Material, s: Settings, maxRounds = 3): Promise<Produced> {
+export async function produceForSlot(platform: Platform, at: Date, m: Material, s: Settings, maxRounds = 3, opts: { fast?: boolean } = {}): Promise<Produced> {
   const recent = await recentTexts(platform);
   let text = await write(m, platform, s);
   let verdict: Verdict = { approved: false, reasons: [] };
@@ -326,13 +327,14 @@ export async function produceForSlot(platform: Platform, at: Date, m: Material, 
       noteId: m.noteId ?? null,
       topic: m.topic ?? null,
       sourceUrl: m.sourceUrl ?? null,
+      fast: opts.fast ?? false,
       review: reviewJson,
       error: verdict.approved ? null : verdict.reasons.join(" | ").slice(0, 500),
     })
     .returning();
 
   if (verdict.approved) {
-    await addEvent("scheduled", `${platform === "x" ? "X" : "LinkedIn"} post scheduled for ${formatLocal(at, s.timezone)}: ${m.label.slice(0, 80)}`, row.id);
+    await addEvent("scheduled", `${opts.fast ? "Fast lane: " : ""}${platform === "x" ? "X" : "LinkedIn"} post scheduled for ${formatLocal(at, s.timezone)}: ${m.label.slice(0, 80)}`, row.id);
     await notifyScheduled(row, s.timezone).catch(() => {});
   } else {
     await addEvent("rejected", `Reviewer rejected a ${platform} draft (${m.label.slice(0, 60)}): ${verdict.reasons[0] ?? ""}`, row.id);
@@ -367,6 +369,54 @@ async function bumpForUrgent(platform: Platform, s: Settings, now: Date, freeSlo
   return true;
 }
 
+
+// ---------------------------------------------------------------------------
+// Fast lane: rare, high-value breaking stories get an extra post soon, outside the normal slots
+// ---------------------------------------------------------------------------
+
+const FAST_MAX_AGE_MS = 12 * 3_600_000;
+const FAST_MAX_REJECTED_PER_DAY = 3; // bounds model spend when nothing passes review
+
+async function fastLaneTime(platform: Platform, s: Settings, now: Date): Promise<Date> {
+  const f = s.fastLane;
+  let at = new Date(Math.ceil((now.getTime() + f.leadMinutes * 60_000) / 60_000) * 60_000);
+  at = afterQuietHours(at, s.timezone, f.quietStart, f.quietEnd);
+  for (let i = 0; i < 30; i++) {
+    const clash = await db()
+      .select({ id: schema.posts.id })
+      .from(schema.posts)
+      .where(and(eq(schema.posts.platform, platform), eq(schema.posts.scheduledAt, at), inArray(schema.posts.status, ["scheduled", "publishing"])));
+    if (!clash.length) break;
+    at = new Date(at.getTime() + 60_000);
+  }
+  return at;
+}
+
+export async function runFastLane(s: Settings, now: Date): Promise<{ produced: number; rejected: number }> {
+  const out = { produced: 0, rejected: 0 };
+  const f = s.fastLane;
+  if (!f.enabled) return out;
+  const since = new Date(now.getTime() - 24 * 3_600_000);
+  for (const platform of f.platforms) {
+    const recent = await db()
+      .select({ status: schema.posts.status })
+      .from(schema.posts)
+      .where(and(eq(schema.posts.platform, platform), eq(schema.posts.fast, true), gte(schema.posts.createdAt, since)));
+    if (recent.filter((r) => r.status !== "rejected").length >= f.maxPerDay) continue;
+    if (recent.filter((r) => r.status === "rejected").length >= FAST_MAX_REJECTED_PER_DAY) continue;
+
+    const at = await fastLaneTime(platform, s, now);
+    const candidate = (await candidateItems(platform, s, "any", now, at)).find(
+      (it) => it.urgency === "breaking" && (it.relevance ?? 0) >= f.minRelevance && now.getTime() - it.publishedAt.getTime() <= FAST_MAX_AGE_MS,
+    );
+    if (!candidate) continue;
+    const r = await produceForSlot(platform, at, await itemMaterial(candidate), s, 3, { fast: true });
+    if (r.status === "scheduled") out.produced++;
+    else out.rejected++;
+  }
+  return out;
+}
+
 export interface FillResult {
   produced: number;
   rejected: number;
@@ -379,6 +429,15 @@ export async function fillCalendar(opts: { max?: number; now?: Date; deadline?: 
   const s = await getSettings();
   const res: FillResult = { produced: 0, rejected: 0, idle: null };
   if (s.paused) return { ...res, idle: "paused" };
+
+  try {
+    const f = await runFastLane(s, now);
+    res.produced += f.produced;
+    res.rejected += f.rejected;
+  } catch (err) {
+    if (err instanceof LLMError) return { ...res, idle: err.message };
+    throw err;
+  }
 
   let guard = 0;
   while (res.produced + res.rejected < max && Date.now() < deadline && guard++ < 6) {

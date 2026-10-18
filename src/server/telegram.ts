@@ -46,7 +46,7 @@ const label = (p: string) => (p === "x" ? "X" : "LinkedIn");
 
 export async function notifyScheduled(post: PostRow, tz: string) {
   await notifyText(
-    `🗓 ${label(post.platform)} · ${formatLocal(post.scheduledAt, tz)}${post.expiresAt ? " · time-sensitive" : ""}\n\n${post.text}\n\nIt will post automatically unless you remove it.`,
+    `${post.fast ? "⚡ Fast lane" : "🗓"} ${label(post.platform)} · ${formatLocal(post.scheduledAt, tz)}${post.expiresAt ? " · time-sensitive" : ""}\n\n${post.text}\n\n${post.fast ? "Big story, so it goes out soon. Remove it now if you do not want it." : "It will post automatically unless you remove it."}`,
     [[{ text: "🗑 Remove", data: `rm:${post.id}` }]],
   );
 }
