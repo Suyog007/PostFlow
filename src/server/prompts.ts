@@ -26,8 +26,8 @@ Be strict: most items should score below 6. Return every id exactly once.`;
 export function writerSystem(s: Settings, platform: "x" | "linkedin") {
   const platformRules =
     platform === "x"
-      ? `Platform: X. One post, at most 270 characters including spaces. One idea. No hashtags unless essential (max 1). No emoji unless it adds meaning. A real question at the end only if you genuinely want answers.`
-      : `Platform: LinkedIn. 600 to 1,300 characters. First line is a specific hook (no clickbait, no "I'm excited to announce"). Short paragraphs of 1-2 lines, blank line between them. End with a concrete takeaway or one genuine question. At most 2 hashtags, at the end, only if natural.`;
+      ? `Platform: X. One post, at most 270 characters including spaces. One idea. No hashtags unless essential (max 1). At most one emoji, only if it adds meaning. A real question at the end only if you genuinely want answers.`
+      : `Platform: LinkedIn. 600 to 1,300 characters. First line is a specific hook (no clickbait, no "I'm excited to announce"). Short paragraphs of 1 to 3 short lines, a blank line between them, never a wall of text. Emojis are visual anchors, not decoration: put one at the START of a key line (the hook, a step, a gotcha, the takeaway), 3 to 5 in the whole post, each carrying meaning (for example 🔧 a fix, ⚠️ a gotcha, 👉 the takeaway), never mid-sentence and never in a row. End with a concrete takeaway or one genuine question. At most 2 hashtags, at the end, only if natural.`;
   return `You ghost-write posts for one person. Write exactly as they would: plain, specific, human.
 
 ${profileBlock(s)}
@@ -49,7 +49,7 @@ export const REVIEWER_SYSTEM = `You are a strict, skeptical editor and fact-chec
 Judge:
 1. worth_posting (0-10): Does it say something specific and useful to developers/builders? Is there a real point of view? 10 = I would follow this person for posts like it. Generic, obvious or filler = 0-4.
 2. factual (0-10): Extract every checkable claim (numbers, names, dates, quotes, cause-and-effect, "X launched Y"). Mark each "supported" only if the SOURCE MATERIAL or OWNER NOTE explicitly backs it; "unsupported" if it contradicts or goes beyond it; "unverifiable" if it cannot be checked from what you were given (for evergreen posts, well-established general knowledge may be "supported"). Any first-person experience not in the OWNER NOTE is "unsupported". 10 only if every claim is supported.
-3. slop (0-10, 10 = clean human prose): Penalise corporate buzzwords, filler openers, forced contrast ("It's not X, it's Y"), triplets for rhythm, engagement bait, hollow motivation, emoji spam, hashtag spam, a tone that sounds machine-written.
+3. slop (0-10, 10 = clean human prose): Penalise corporate buzzwords, filler openers, forced contrast ("It's not X, it's Y"), triplets for rhythm, engagement bait, hollow motivation, emoji used as decoration instead of as a line-start anchor, walls of text (a paragraph longer than about 3 lines), hashtag spam, a tone that sounds machine-written.
 4. issues: concrete problems, each one sentence.
 5. revision_instructions: precise edits that would fix the problems (empty if none).
 For news posts: a recap with no builder opening or point of view is worth at most 5. Predictions and opportunity claims must be framed as the owner's opinion and follow from the source; a prediction or guarantee stated as fact is "unsupported".

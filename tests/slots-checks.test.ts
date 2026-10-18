@@ -49,4 +49,14 @@ describe("checks", () => {
     expect(runChecks(t, "x", [t]).some((c) => c.code === "duplicate")).toBe(true);
     expect(runChecks("Why? How? When?", "x").some((c) => c.code === "questions")).toBe(true);
   });
+  it("allows up to 5 anchor emoji on LinkedIn but only 2 on X", () => {
+    const li = "🔧 Fixed the slow page.\n\n⚠️ Caching hid the real problem.\n\n👉 Measure before you cache.";
+    expect(runChecks(li, "linkedin").some((c) => c.code === "emoji")).toBe(false);
+    expect(runChecks("🔧 a 🔥 b ⚠️ c", "x").some((c) => c.code === "emoji" && c.severity === "block")).toBe(true);
+    expect(runChecks("🔧 a 🔥 b 👉 c 🎯 d 💡 e 🚀 f", "linkedin").some((c) => c.code === "emoji")).toBe(true);
+  });
+  it("warns on walls of text on LinkedIn", () => {
+    const wall = "word ".repeat(100);
+    expect(runChecks(wall + "\n\nShort.", "linkedin").some((c) => c.code === "wall")).toBe(true);
+  });
 });

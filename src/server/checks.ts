@@ -54,7 +54,9 @@ export function runChecks(text: string, platform: "x" | "linkedin", recent: stri
     checks.push({ code: "slop_phrases", severity: hits.length >= 2 ? "block" : "warn", message: `Cliché or machine-sounding phrasing: ${hits.join(", ")}.` });
   }
   if ((body.match(HASHTAG_RE) ?? []).length > 2) checks.push({ code: "hashtags", severity: "block", message: "More than 2 hashtags." });
-  if ((body.match(EMOJI_RE) ?? []).length > 3) checks.push({ code: "emoji", severity: "block", message: "More than 3 emoji." });
+  const emojiMax = platform === "linkedin" ? 5 : 2;
+  if ((body.match(EMOJI_RE) ?? []).length > emojiMax) checks.push({ code: "emoji", severity: "block", message: `More than ${emojiMax} emoji for ${platform === "x" ? "X" : "LinkedIn"}.` });
+  if (platform === "linkedin" && body.split(/\n{2,}/).some((p) => p.length > 420)) checks.push({ code: "wall", severity: "warn", message: "A paragraph is too long. Keep paragraphs to 2-3 short lines." });
   if ((body.match(/\?/g) ?? []).length > 2) checks.push({ code: "questions", severity: "block", message: "Reads as engagement bait (several questions)." });
 
   for (const r of recent) {
