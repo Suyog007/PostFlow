@@ -47,7 +47,8 @@ export function runChecks(text: string, platform: "x" | "linkedin", recent: stri
   const len = weightedLength(body);
   if (platform === "x" && len > 280) checks.push({ code: "too_long", severity: "block", message: `${len} characters; X allows 280.` });
   if (platform === "linkedin" && len > 3000) checks.push({ code: "too_long", severity: "block", message: `${len} characters; LinkedIn allows 3000.` });
-  if (platform === "linkedin" && len < 250) checks.push({ code: "too_short", severity: "warn", message: "Very short for LinkedIn." });
+  if (len < 40) checks.push({ code: "too_short", severity: "warn", message: "Very short; say what changed and what it opens up." });
+  if (body.split(/\n+/).filter((l) => l.trim()).length > 4) checks.push({ code: "too_many_lines", severity: "warn", message: "Keep it to 2-3 lines." });
 
   const hits = BANNED.filter(([re]) => re.test(body)).map(([, l]) => l);
   if (hits.length) {

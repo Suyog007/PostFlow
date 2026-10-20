@@ -3,10 +3,10 @@ import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lte, notInArray, s
 import { db, schema } from "./db/client";
 import type { Pillar } from "./db/schema";
 import { runTask, untrusted, LLMError } from "./llm";
-import { getSettings, type Settings } from "./settings";
+import { getSettings, saveSettings, type Settings } from "./settings";
 import { REVIEWER_SYSTEM, profileBlock, writerSystem } from "./prompts";
 import { runChecks, type Check } from "./checks";
-import { afterQuietHours, slotsBetween, formatLocal } from "./slots";
+import { afterQuietHours, slotsBetween, formatLocal, nextFreeSlot } from "./slots";
 import { fetchArticleText } from "./net";
 import { addEvent } from "./events";
 import { notifyScheduled, notifyText } from "./telegram";
@@ -371,11 +371,92 @@ export async function produceForSlot(platform: Platform, at: Date, m: Material, 
     await notifyText(`📝 Draft ready for ${platform === "x" ? "X" : "LinkedIn"}${verdict.approved ? "" : " (the reviewer had concerns: " + verdict.reasons[0] + ")"}\n\n${finalText}\n\nOpen the app to edit it or put it on the calendar.`).catch(() => {});
   } else if (verdict.approved) {
     await addEvent("scheduled", `${opts.fast ? "Fast lane: " : ""}${platform === "x" ? "X" : "LinkedIn"} post scheduled for ${formatLocal(at, s.timezone)}: ${m.label.slice(0, 80)}`, row.id);
-    await notifyScheduled(row, s.timezone).catch(() => {});
+    await notifyScheduled(row, s.timezone, s.requireApproval).catch(() => {});
   } else {
     await addEvent("rejected", `Reviewer rejected a ${platform} draft (${m.label.slice(0, 60)}): ${verdict.reasons[0] ?? ""}`, row.id);
   }
   return { status, postId: row.id, reasons: verdict.reasons };
+}
+
+/** Rebuilds what a post was written from, so it can be rewritten without new facts. */
+async function materialForPost(p: typeof schema.posts.$inferSelect): Promise<Material> {
+  if (p.itemId) {
+    const it = await db().query.items.findFirst({ where: eq(schema.items.id, p.itemId) });
+    if (it) return itemMaterial(it, (it.verification as Verification | null) ?? undefined);
+  }
+  if (p.noteId) {
+    const n = await db().query.notes.findFirst({ where: eq(schema.notes.id, p.noteId) });
+    if (n) return noteMaterial(n);
+  }
+  if (p.topic) return { kind: "evergreen", pillar: p.pillar, source: `Topic: ${p.topic}\n(Evergreen explainer: use only well-established, widely known facts.)`, label: p.topic, topic: p.topic, firstPerson: false };
+  // Nothing left to draw from: the current text is the only material.
+  return { kind: "note", pillar: p.pillar, source: p.text, label: p.text.slice(0, 80), firstPerson: false };
+}
+
+/**
+ * The owner likes the post but not the wording. Same story and facts, new wording that follows their feedback.
+ * The result goes back to "needs approval"; the reviewer re-checks facts, and its concerns are shown rather than blocking.
+ */
+export async function rewordPost(id: string, feedback: string, remember: boolean): Promise<{ text: string; reasons: string[] }> {
+  const p = await db().query.posts.findFirst({ where: eq(schema.posts.id, id) });
+  if (!p) throw new Error("Post not found.");
+  if (!["scheduled", "draft", "rejected"].includes(p.status)) throw new Error(`A ${p.status} post cannot be reworded.`);
+  const note = feedback.trim().slice(0, 500);
+  if (!note) throw new Error("Say what about the wording is not yours.");
+
+  const s = await getSettings();
+  if (remember && !s.styleNotes.includes(note)) {
+    await saveSettings({ styleNotes: [...s.styleNotes, note].slice(-20) });
+    s.styleNotes = [...s.styleNotes, note].slice(-20);
+  }
+  const platform = p.platform as Platform;
+  const m = await materialForPost(p);
+  const recent = (await recentTexts(platform)).filter((t) => t !== p.text);
+  const text = await write(m, platform, s, recent, {
+    previous: p.text,
+    notes: [`The owner says the content is fine but the wording does not sound like them: "${note}"`, "Keep the same story, facts and point. Change only the wording."],
+  });
+  const checks = runChecks(text, platform, recent);
+  const block = checks.find((c) => c.severity === "block" && (c.code === "too_long" || c.code === "empty"));
+  if (block) throw new Error(`The rewrite came out unusable (${block.message}) Try again.`);
+  const r = await review(m, text, platform, recent);
+  const verdict = gate(r, checks, m);
+  const finalText = withLink(text, m, platform, s);
+  await db()
+    .update(schema.posts)
+    .set({
+      text: finalText,
+      approvedAt: null,
+      review: { ...(p.review ?? {}), ...r, checks, verdict, reworded: note, reviewedAt: new Date().toISOString() },
+      error: verdict.approved ? null : `Reviewer: ${verdict.reasons.join(" | ")}`.slice(0, 500),
+      updatedAt: new Date(),
+    })
+    .where(eq(schema.posts.id, id));
+  await addEvent("reworded", `Reworded a ${platform} post: ${note.slice(0, 80)}`, id);
+  return { text: finalText, reasons: verdict.reasons };
+}
+
+/** The owner rejected a post: drop it and write a different one for the same platform. Its story is not reused. */
+export async function rejectAndReplace(id: string): Promise<{ replacementId: string | null; message: string }> {
+  const p = await db().query.posts.findFirst({ where: eq(schema.posts.id, id) });
+  if (!p) throw new Error("Post not found.");
+  if (!["scheduled", "draft"].includes(p.status)) throw new Error(`A ${p.status} post cannot be rejected.`);
+  await db().update(schema.posts).set({ status: "declined", approvedAt: null, updatedAt: new Date() }).where(eq(schema.posts.id, id));
+  await addEvent("declined", `You rejected a ${p.platform} post; looking for a different story.`, id);
+
+  const s = await getSettings();
+  const platform = p.platform as Platform;
+  const now = new Date();
+  // Keep the same slot unless it is too close; then take the next free one.
+  const at = p.scheduledAt.getTime() > now.getTime() + 20 * 60_000 ? p.scheduledAt : await nextFreeSlot(s, platform, new Date(now.getTime() + 20 * 60_000));
+  if (!at) return { replacementId: null, message: "Rejected. No free slot to put a replacement in." };
+  for (let i = 0; i < MAX_ATTEMPTS_PER_SLOT; i++) {
+    const m = await chooseMaterial(platform, at, s, now);
+    if (!m) return { replacementId: null, message: "Rejected. Nothing else strong enough to post right now; the slot will be retried as new stories come in." };
+    const out = await produceForSlot(platform, at, m, s);
+    if (out.status === "scheduled") return { replacementId: out.postId, message: "Rejected. A replacement is waiting for your approval." };
+  }
+  return { replacementId: null, message: "Rejected. The replacements I wrote did not pass review; the slot will be retried later." };
 }
 
 // ---------------------------------------------------------------------------
