@@ -5,6 +5,7 @@ export const PILLARS = ["own_work", "news", "nepal", "learning"] as const;
 export type Pillar = (typeof PILLARS)[number];
 
 export const POST_STATUSES = [
+  "draft", // written but not on the calendar (you asked for a draft, or the reviewer held it for you)
   "scheduled", // reviewed and on the calendar; will publish unless removed
   "publishing", // claimed by the publisher right now
   "published",
@@ -71,6 +72,9 @@ export const items = pgTable(
     urgency: text("urgency"), // "breaking" | "week" | "evergreen"
     angle: text("angle"), // one-line suggested take
     analyzedAt: timestamp("analyzed_at", { withTimezone: true }),
+    // Cross-check against other publishers (see verify.ts).
+    verifiedAt: timestamp("verified_at", { withTimezone: true }),
+    verification: jsonb("verification").$type<Record<string, unknown>>(),
     status: text("status").notNull().default("new"), // new | skipped
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -120,6 +124,22 @@ export const posts = pgTable(
     uniqueIndex("posts_slot_uq").on(t.platform, t.scheduledAt).where(sql`${t.status} in ('scheduled','publishing')`),
   ],
 );
+
+/** "Make a post from this idea or link." Processed by the scheduler (or right away after you submit). */
+export const requests = pgTable("requests", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  input: text("input").notNull(), // an idea, a link, or a link plus your angle
+  mode: text("mode").notNull().default("schedule"), // schedule (next free slot) | soon (about 20 minutes) | draft (do not schedule)
+  platforms: jsonb("platforms").$type<string[]>().notNull(),
+  status: text("status").notNull().default("pending"), // pending | processing | done | failed
+  error: text("error"),
+  postIds: jsonb("post_ids").$type<string[]>().notNull().default([]),
+  via: text("via").notNull().default("web"),
+  /** The link is the owner's own article: write as its author and include the link. */
+  own: boolean("own").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  finishedAt: timestamp("finished_at", { withTimezone: true }),
+});
 
 export const events = pgTable(
   "events",

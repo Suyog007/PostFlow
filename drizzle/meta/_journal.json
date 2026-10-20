@@ -15,6 +15,13 @@
       "when": 1792540286517,
       "tag": "0001_curly_silver_sable",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792541289511,
+      "tag": "0002_good_medusa",
+      "breakpoints": true
     }
   ]
 }
