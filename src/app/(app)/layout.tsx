@@ -14,6 +14,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <Link href="/" className="font-semibold">PostFlow</Link>
         <nav className="flex gap-4 text-sm text-muted">
           <Link href="/" className="hover:text-ink">Calendar</Link>
+          <Link href="/create" className="hover:text-ink">Create</Link>
           <Link href="/notes" className="hover:text-ink">Notes</Link>
           <Link href="/settings" className="hover:text-ink">Settings</Link>
         </nav>

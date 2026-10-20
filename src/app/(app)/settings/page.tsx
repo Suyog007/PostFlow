@@ -107,11 +107,14 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           <div className="grid gap-3 sm:grid-cols-3">
             <div><label className="label">Timezone</label><input name="timezone" defaultValue={s.timezone} className="input" /></div>
             <div><label className="label">Plan ahead (days)</label><input name="horizonDays" type="number" min={1} max={14} defaultValue={s.horizonDays} className="input" /></div>
-            <div><label className="label">Min. news relevance (1-10)</label><input name="minRelevance" type="number" min={1} max={10} defaultValue={s.minRelevance} className="input" /></div>
+            <div><label className="label">Min. news score, X (1-10)</label><input name="minRelevance" type="number" min={1} max={10} defaultValue={s.minRelevance} className="input" /></div>
+            <div><label className="label">Min. news score, LinkedIn (1-10)</label><input name="linkedinMinRelevance" type="number" min={1} max={10} defaultValue={s.linkedinMinRelevance} className="input" /></div>
           </div>
+          <div><label className="label">Your own sites (links to these are treated as your own articles)</label><input name="ownDomains" defaultValue={s.ownDomains.join(", ")} placeholder="yourname.dev, blog.yourname.com" className="input" /></div>
+          <label className="flex items-center gap-2"><input type="checkbox" name="fillerPosts" defaultChecked={s.fillerPosts} /> Fill empty slots with evergreen explainers when there is nothing strong to post <span className="text-xs text-muted">(off: the slot stays empty)</span></label>
           <div className="flex gap-6">
-            <label className="flex items-center gap-2"><input type="checkbox" name="link_linkedin" defaultChecked={s.includeLinks.linkedin} /> Add source link on LinkedIn</label>
-            <label className="flex items-center gap-2"><input type="checkbox" name="link_x" defaultChecked={s.includeLinks.x} /> Add source link on X <span className="text-xs text-muted">(X charges far more per post with a link)</span></label>
+            <label className="flex items-center gap-2"><input type="checkbox" name="link_linkedin" defaultChecked={s.includeLinks.linkedin} /> Add the news source link on LinkedIn</label>
+            <label className="flex items-center gap-2"><input type="checkbox" name="link_x" defaultChecked={s.includeLinks.x} /> Add the news source link on X <span className="text-xs text-muted">(X charges far more per post with a link)</span></label>
           </div>
           <button className="btn-primary">Save</button>
         </form>

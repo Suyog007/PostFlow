@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { DateTime } from "luxon";
-import { and, desc, gte, lt } from "drizzle-orm";
+import { and, desc, eq, gte, lt } from "drizzle-orm";
 import { db, schema } from "@/server/db/client";
 import { getSettings } from "@/server/settings";
 import { healthChecks } from "@/server/health";
@@ -49,6 +49,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const shown = posts.filter((p) => p.status !== "rejected");
   const rejected = await db().select().from(schema.posts).where(and(gte(schema.posts.scheduledAt, new Date(Date.now() - 3 * 86_400_000)))).orderBy(desc(schema.posts.createdAt)).limit(40);
   const rej = rejected.filter((p) => p.status === "rejected" && p.text).slice(0, 5);
+  const drafts = await db().select().from(schema.posts).where(eq(schema.posts.status, "draft")).orderBy(desc(schema.posts.createdAt)).limit(8);
   const checks = (await healthChecks()).filter((c) => !c.ok);
   const critical = checks.filter((c) => c.critical);
   const events = await recentEvents(12);
@@ -93,6 +94,21 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
           );
         })}
       </div>
+
+      {drafts.length > 0 && (
+        <>
+          <h2 className="mb-2 mt-8 text-sm font-medium text-muted">Drafts (not on the calendar)</h2>
+          <div className="grid gap-3 md:grid-cols-2">
+            {drafts.map((p) => (
+              <Link key={p.id} href={`/posts/${p.id}`} className="card block p-3 text-sm hover:bg-paper">
+                <div className="mb-1 text-xs text-muted"><span className={`font-semibold ${p.platform === "x" ? "text-x" : "text-li"}`}>{p.platform === "x" ? "X" : "in"}</span> · draft</div>
+                <p className="line-clamp-3 break-words">{p.text}</p>
+                {p.error && <p className="mt-1 text-xs text-warn">{p.error}</p>}
+              </Link>
+            ))}
+          </div>
+        </>
+      )}
 
       {rej.length > 0 && (
         <details className="mt-6 text-sm">

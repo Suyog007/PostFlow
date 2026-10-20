@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { redirect } from "next/navigation";
 import { DateTime } from "luxon";
 import { eq } from "drizzle-orm";
@@ -9,7 +10,9 @@ import { db, schema } from "@/server/db/client";
 import { PILLARS, type Pillar } from "@/server/db/schema";
 import { getSettings, saveSettings } from "@/server/settings";
 import { parseSlots } from "@/server/slots-parse";
-import { editPost, postNow, PostError, removePost, reschedulePost, resolveUnconfirmed, restorePost } from "@/server/posts";
+import { editPost, postNow, PostError, removePost, reschedulePost, resolveUnconfirmed, restorePost, scheduleDraft } from "@/server/posts";
+import { createRequest, processRequests, type RequestMode } from "@/server/requests";
+import { addTip } from "@/server/tips";
 import { disconnectAccount, startOAuth } from "@/server/platforms/accounts";
 import { registerWebhook } from "@/server/telegram";
 import { tick } from "@/server/tick";
@@ -78,6 +81,38 @@ export async function resolveAction(form: FormData) {
   await guarded(`/posts/${id}`, () => resolveUnconfirmed(id, form.get("published") === "yes"), "Updated.");
 }
 
+export async function scheduleDraftAction(form: FormData) {
+  const id = String(form.get("id"));
+  await guarded(`/posts/${id}`, () => scheduleDraft(id), "On the calendar at the next free slot.");
+}
+
+// ---- create from an idea or link ------------------------------------------
+
+export async function createPostAction(form: FormData) {
+  await guarded(
+    "/create",
+    async () => {
+      const platforms = (["linkedin", "x"] as const).filter((p) => form.get(`p_${p}`) === "on");
+      if (!platforms.length) throw new Error("Pick at least one platform.");
+      const mode = String(form.get("mode")) as RequestMode;
+      await createRequest({ text: String(form.get("text") ?? ""), platforms: [...platforms], mode: ["schedule", "soon", "draft"].includes(mode) ? mode : "schedule", own: form.get("own") === "on" });
+      after(() => processRequests({ max: 1 }).then(() => undefined));
+    },
+    "Writing it now. It shows up on the calendar (or under Drafts) within a minute or two.",
+  );
+}
+
+export async function addTipAction(form: FormData) {
+  await guarded(
+    "/create",
+    async () => {
+      const r = await addTip(String(form.get("url") ?? ""));
+      if (!r.ok) throw new Error(r.message);
+    },
+    "Tip saved. It is posted only if other publishers confirm it.",
+  );
+}
+
 // ---- notes ----------------------------------------------------------------
 
 export async function addNoteAction(form: FormData) {
@@ -106,6 +141,9 @@ export async function saveProfileAction(form: FormData) {
       timezone: String(form.get("timezone") || s.timezone),
       horizonDays: Number(form.get("horizonDays") || s.horizonDays),
       minRelevance: Number(form.get("minRelevance") || s.minRelevance),
+      linkedinMinRelevance: Number(form.get("linkedinMinRelevance") || s.linkedinMinRelevance),
+      fillerPosts: form.get("fillerPosts") === "on",
+      ownDomains: String(form.get("ownDomains") ?? "").split(/[\s,]+/).map((d) => d.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "")).filter(Boolean),
       profile: {
         name: String(form.get("name") ?? ""),
         role: String(form.get("role") ?? ""),

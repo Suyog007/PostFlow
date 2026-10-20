@@ -4,11 +4,14 @@ import { DateTime } from "luxon";
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/server/db/client";
 import { getSettings } from "@/server/settings";
-import { editPostAction, postNowAction, removePostAction, reschedulePostAction, resolveAction, restorePostAction } from "@/app/actions";
+import { editPostAction, postNowAction, removePostAction, reschedulePostAction, resolveAction, restorePostAction, scheduleDraftAction } from "@/app/actions";
 import { Flash } from "../../flash";
 
 interface Claim { claim: string; support: string; evidence: string }
+interface Mention { domain: string; title: string; url: string }
+interface Verif { ok: boolean; independent: number; needed: number; reason: string; mentions: Mention[] }
 interface ReviewData {
+  verification?: Verif | null;
   worth_posting?: number; factual?: number; slop?: number; claims?: Claim[]; issues?: string[]; rounds?: number;
   checks?: { severity: string; message: string }[]; material?: { kind: string; label: string }; verdict?: { approved: boolean; reasons: string[] };
 }
@@ -22,7 +25,7 @@ export default async function PostPage({ params, searchParams }: { params: Promi
   const s = await getSettings();
   const r = (p.review ?? {}) as ReviewData;
   const local = DateTime.fromJSDate(p.scheduledAt, { zone: s.timezone });
-  const editable = ["scheduled", "failed", "cancelled"].includes(p.status);
+  const editable = ["scheduled", "failed", "cancelled", "draft"].includes(p.status);
   const platformName = p.platform === "x" ? "X" : "LinkedIn";
 
   return (
@@ -51,13 +54,16 @@ export default async function PostPage({ params, searchParams }: { params: Promi
       )}
 
       <div className="mb-6 flex flex-wrap gap-2">
-        {p.status === "scheduled" && (
+        {p.status === "draft" && (
+          <form action={scheduleDraftAction}><input type="hidden" name="id" value={p.id} /><button className="btn-primary">Put on calendar (next free slot)</button></form>
+        )}
+        {["scheduled", "draft"].includes(p.status) && (
           <form action={removePostAction}><input type="hidden" name="id" value={p.id} /><button className="btn-danger">Remove from calendar</button></form>
         )}
         {["cancelled", "failed", "expired"].includes(p.status) && (
           <form action={restorePostAction}><input type="hidden" name="id" value={p.id} /><button className="btn-secondary">Put back on calendar</button></form>
         )}
-        {["scheduled", "failed"].includes(p.status) && (
+        {["scheduled", "failed", "draft"].includes(p.status) && (
           <form action={postNowAction}><input type="hidden" name="id" value={p.id} /><button className="btn-secondary">Post now</button></form>
         )}
         {p.url && <a href={p.url} target="_blank" rel="noreferrer" className="btn-secondary">View live post ↗</a>}
@@ -73,7 +79,7 @@ export default async function PostPage({ params, searchParams }: { params: Promi
         </div>
       )}
 
-      {["scheduled", "failed", "cancelled", "expired"].includes(p.status) && (
+      {["scheduled", "failed", "cancelled", "expired", "draft"].includes(p.status) && (
         <form action={reschedulePostAction} className="card mb-6 flex flex-wrap items-end gap-3 p-4">
           <input type="hidden" name="id" value={p.id} />
           <div>
@@ -103,6 +109,12 @@ export default async function PostPage({ params, searchParams }: { params: Promi
                 <li key={i}><span className={c.support === "supported" ? "text-good" : "text-bad"}>{c.support === "supported" ? "✓" : "✗"}</span> {c.claim} <span className="text-muted">— {c.evidence}</span></li>
               ))}
             </ul>
+          )}
+          {r.verification && (
+            <p className={`mb-3 text-xs ${r.verification.ok ? "text-good" : "text-warn"}`}>
+              {r.verification.ok ? "✓ Cross-checked" : "⚠ Not fully cross-checked"}: {r.verification.reason}
+              {r.verification.mentions.length > 0 && <> Also reported by {r.verification.mentions.map((m) => m.domain).join(", ")}.</>}
+            </p>
           )}
           {r.verdict && !r.verdict.approved && <p className="text-bad">Rejected: {r.verdict.reasons.join(" · ")}</p>}
           {r.checks && r.checks.length > 0 && <ul className="text-xs text-muted">{r.checks.map((c, i) => <li key={i}>{c.severity}: {c.message}</li>)}</ul>}
