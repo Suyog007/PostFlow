@@ -12,6 +12,7 @@ export const POST_STATUSES = [
   "unconfirmed", // the platform did not confirm; needs a human look
   "failed",
   "cancelled", // removed by the owner
+  "declined", // rejected by the owner; its slot is refilled with a different story
   "expired", // time-sensitive and the window passed
   "rejected", // the reviewer refused it (kept for transparency)
 ] as const;
@@ -109,6 +110,8 @@ export const posts = pgTable(
     userEdited: boolean("user_edited").notNull().default(false),
     /** Posted outside the normal slots because the story was too important to wait. */
     fast: boolean("fast").notNull().default(false),
+    /** Set when the owner approves the post. While approval is required, unapproved posts are never published. */
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
     attempts: integer("attempts").notNull().default(0),
     externalId: text("external_id"),
     url: text("url"),
