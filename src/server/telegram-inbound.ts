@@ -3,7 +3,8 @@ import { db, schema } from "./db/client";
 import { env } from "./env";
 import { sendTo, telegramApi } from "./telegram";
 import { getSettings, saveSettings } from "./settings";
-import { removePost, PostError, upcoming } from "./posts";
+import { approvePost, removePost, PostError, upcoming } from "./posts";
+import { rejectAndReplace } from "./generate";
 import { formatLocal } from "./slots";
 import type { Pillar } from "./db/schema";
 import { after } from "next/server";
@@ -49,7 +50,23 @@ export async function handleTelegramUpdate(u: Update): Promise<void> {
   if (u.callback_query) {
     const data = u.callback_query.data ?? "";
     let answer = "Done";
-    if (data.startsWith("rm:")) {
+    if (data.startsWith("ok:")) {
+      try {
+        await approvePost(data.slice(3));
+        answer = "✅ Approved. It goes out at its scheduled time.";
+      } catch (err) {
+        answer = err instanceof PostError ? err.message : "Could not approve it.";
+      }
+    } else if (data.startsWith("rj:")) {
+      // Finding and writing a replacement takes a while; acknowledge first, the new post arrives as its own message.
+      await telegramApi("answerCallbackQuery", { callback_query_id: u.callback_query.id, text: "Rejected. Looking for another story…" });
+      const id = data.slice(3);
+      after(async () => {
+        const r = await rejectAndReplace(id).catch((err: Error) => ({ replacementId: null, message: err.message }));
+        if (!r.replacementId) await sendTo(chat, r.message);
+      });
+      return;
+    } else if (data.startsWith("rm:")) {
       try {
         await removePost(data.slice(3));
         answer = "Removed. It will not be posted.";

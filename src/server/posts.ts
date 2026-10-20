@@ -65,7 +65,22 @@ export async function postNow(id: string) {
     at = new Date(at.getTime() - 1000);
   }
   if (!["scheduled", "failed", "cancelled", "draft"].includes(p.status)) throw new PostError(`A ${p.status} post cannot be posted now.`);
-  await db().update(schema.posts).set({ scheduledAt: at, status: "scheduled", error: null, attempts: 0, claimedAt: null, updatedAt: new Date() }).where(eq(schema.posts.id, id));
+  // Asking to post now is an approval.
+  await db().update(schema.posts).set({ scheduledAt: at, status: "scheduled", approvedAt: p.approvedAt ?? new Date(), error: null, attempts: 0, claimedAt: null, updatedAt: new Date() }).where(eq(schema.posts.id, id));
+}
+
+/** While approval is required, only approved posts are published. */
+export async function approvePost(id: string) {
+  const p = await load(id);
+  if (!["scheduled", "draft"].includes(p.status)) throw new PostError(`A ${p.status} post cannot be approved.`);
+  await db().update(schema.posts).set({ approvedAt: new Date(), updatedAt: new Date() }).where(eq(schema.posts.id, id));
+  await addEvent("approved", `Approved a ${p.platform} post.`, id);
+}
+
+export async function unapprovePost(id: string) {
+  const p = await load(id);
+  if (p.status !== "scheduled" && p.status !== "draft") throw new PostError(`A ${p.status} post cannot be changed.`);
+  await db().update(schema.posts).set({ approvedAt: null, updatedAt: new Date() }).where(eq(schema.posts.id, id));
 }
 
 /** The owner checked the platform and the unconfirmed post is (or is not) there. */

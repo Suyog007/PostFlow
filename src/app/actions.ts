@@ -10,12 +10,13 @@ import { db, schema } from "@/server/db/client";
 import { PILLARS, type Pillar } from "@/server/db/schema";
 import { getSettings, saveSettings } from "@/server/settings";
 import { parseSlots } from "@/server/slots-parse";
-import { editPost, postNow, PostError, removePost, reschedulePost, resolveUnconfirmed, restorePost, scheduleDraft } from "@/server/posts";
+import { approvePost, editPost, postNow, PostError, removePost, unapprovePost, reschedulePost, resolveUnconfirmed, restorePost, scheduleDraft } from "@/server/posts";
 import { createRequest, processRequests, type RequestMode } from "@/server/requests";
 import { addTip } from "@/server/tips";
 import { disconnectAccount, startOAuth } from "@/server/platforms/accounts";
 import { registerWebhook } from "@/server/telegram";
 import { tick } from "@/server/tick";
+import { rejectAndReplace, rewordPost } from "@/server/generate";
 import { isPublicHttpUrl } from "@/server/net";
 
 export async function loginAction(_: unknown, form: FormData) {
@@ -75,6 +76,37 @@ export async function reschedulePostAction(form: FormData) {
 export async function postNowAction(form: FormData) {
   const id = String(form.get("id"));
   await guarded(`/posts/${id}`, () => postNow(id), "Queued. It goes out on the next scheduler tick (within about 5 minutes).");
+}
+export async function approvePostAction(form: FormData) {
+  const id = String(form.get("id"));
+  await guarded(`/posts/${id}`, () => approvePost(id), "Approved. It goes out at its scheduled time.");
+}
+export async function unapprovePostAction(form: FormData) {
+  const id = String(form.get("id"));
+  await guarded(`/posts/${id}`, () => unapprovePost(id), "Approval withdrawn. It will not be posted until you approve it again.");
+}
+export async function rejectPostAction(form: FormData) {
+  const id = String(form.get("id"));
+  await requireOwner();
+  let r: Awaited<ReturnType<typeof rejectAndReplace>>;
+  try {
+    r = await rejectAndReplace(id);
+  } catch (err) {
+    back(`/posts/${id}`, "error", (err as Error).message);
+  }
+  revalidatePath("/", "layout");
+  back(r.replacementId ? `/posts/${r.replacementId}` : "/", "ok", r.message);
+}
+export async function rewordPostAction(form: FormData) {
+  const id = String(form.get("id"));
+  await guarded(`/posts/${id}`, () => rewordPost(id, String(form.get("feedback") ?? ""), form.get("remember") === "on"), "Reworded. Check it and approve when it sounds like you.");
+}
+export async function removeStyleNoteAction(form: FormData) {
+  const i = Number(form.get("i"));
+  await guarded("/settings", async () => {
+    const s = await getSettings();
+    await saveSettings({ styleNotes: s.styleNotes.filter((_, j) => j !== i) });
+  }, "Removed.");
 }
 export async function resolveAction(form: FormData) {
   const id = String(form.get("id"));
@@ -181,6 +213,9 @@ export async function saveFastLaneAction(form: FormData) {
 }
 export async function saveSlotsAction(form: FormData) {
   await guarded("/settings", async () => saveSettings({ slots: parseSlots(String(form.get("slots") ?? "")) }));
+}
+export async function toggleApprovalAction() {
+  await guarded("/settings", async () => saveSettings({ requireApproval: !(await getSettings()).requireApproval }));
 }
 export async function togglePauseAction() {
   await guarded("/settings", async () => saveSettings({ paused: !(await getSettings()).paused }));

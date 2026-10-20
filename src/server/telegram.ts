@@ -44,9 +44,14 @@ export async function notifyText(text: string, buttons?: { text: string; data: s
 
 const label = (p: string) => (p === "x" ? "X" : "LinkedIn");
 
-export async function notifyScheduled(post: PostRow, tz: string) {
+export async function notifyScheduled(post: PostRow, tz: string, requireApproval = false) {
+  const head = `${post.fast ? "⚡ Fast lane" : "🗓"} ${label(post.platform)} · ${formatLocal(post.scheduledAt, tz)}${post.expiresAt ? " · time-sensitive" : ""}\n\n${post.text}\n\n`;
+  if (requireApproval) {
+    await notifyText(`${head}It will not be posted until you approve it.`, [[{ text: "✅ Approve", data: `ok:${post.id}` }, { text: "🔁 Reject, find another", data: `rj:${post.id}` }]]);
+    return;
+  }
   await notifyText(
-    `${post.fast ? "⚡ Fast lane" : "🗓"} ${label(post.platform)} · ${formatLocal(post.scheduledAt, tz)}${post.expiresAt ? " · time-sensitive" : ""}\n\n${post.text}\n\n${post.fast ? "Big story, so it goes out soon. Remove it now if you do not want it." : "It will post automatically unless you remove it."}`,
+    `${head}${post.fast ? "Big story, so it goes out soon. Remove it now if you do not want it." : "It will post automatically unless you remove it."}`,
     [[{ text: "🗑 Remove", data: `rm:${post.id}` }]],
   );
 }

@@ -15,6 +15,10 @@ export type Slot = z.infer<typeof slotSchema>;
 export const settingsSchema = z.object({
   /** Master switch: nothing is generated or published while true. */
   paused: z.boolean().default(false),
+  /** Nothing is published until the owner approves it. Turn off for full auto mode. */
+  requireApproval: z.boolean().default(true),
+  /** Wording preferences the owner gave when asking for a reword. Fed to the writer on every post. */
+  styleNotes: z.array(z.string()).default([]),
   timezone: z.string().default("Asia/Kathmandu"),
   profile: z
     .object({

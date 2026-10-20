@@ -15,14 +15,15 @@ const RETRY_BACKOFF_MS = 10 * 60_000;
 /** A non-urgent post more than this late is moved to the next free slot instead of going out at an odd hour. */
 const MAX_LATE_MS = 6 * 3_600_000;
 
-async function claimNext(now: Date): Promise<PostRow | null> {
+async function claimNext(now: Date, requireApproval: boolean): Promise<PostRow | null> {
   const nowIso = now.toISOString();
+  const approved = requireApproval ? sql`and approved_at is not null` : sql``;
   const backoff = new Date(now.getTime() - RETRY_BACKOFF_MS).toISOString();
   const rows = await db().execute<PostRow & Record<string, unknown>>(sql`
     update posts set status = 'publishing', claimed_at = ${nowIso}::timestamptz, attempts = attempts + 1, updated_at = ${nowIso}::timestamptz
     where id = (
       select id from posts
-      where status = 'scheduled' and scheduled_at <= ${nowIso}::timestamptz and (claimed_at is null or claimed_at < ${backoff}::timestamptz)
+      where status = 'scheduled' and scheduled_at <= ${nowIso}::timestamptz and (claimed_at is null or claimed_at < ${backoff}::timestamptz) ${approved}
       order by scheduled_at
       limit 1
       for update skip locked
@@ -105,7 +106,7 @@ export async function publishDue(opts: { now?: Date; max?: number } = {}): Promi
   let published = 0;
   let handled = 0;
   for (let i = 0; i < (opts.max ?? 5); i++) {
-    const post = await claimNext(now);
+    const post = await claimNext(now, s.requireApproval);
     if (!post) break;
     handled++;
     try {
