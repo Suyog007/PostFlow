@@ -72,7 +72,7 @@ describe("fast lane", () => {
 
   it("waits out quiet hours", async () => {
     const lateNow = new Date("2026-10-21T16:45:00Z"); // 22:30 NPT; +45m = 23:15 NPT, inside quiet hours
-    await addItem("Late story", { publishedAt: new Date(lateNow.getTime() - 3_600_000) });
+    await addItem("Late breaking story that builders care about", { publishedAt: new Date(lateNow.getTime() - 3_600_000) });
     llm();
     await fillCalendar({ now: lateNow, max: 1 });
     const [p] = await db().select().from(schema.posts).where(eq(schema.posts.fast, true));

@@ -59,6 +59,9 @@ export function runChecks(text: string, platform: "x" | "linkedin", recent: stri
   if (platform === "linkedin" && body.split(/\n{2,}/).some((p) => p.length > 420)) checks.push({ code: "wall", severity: "warn", message: "A paragraph is too long. Keep paragraphs to 2-3 short lines." });
   if ((body.match(/\?/g) ?? []).length > 2) checks.push({ code: "questions", severity: "block", message: "Reads as engagement bait (several questions)." });
 
+  const reused = recent.map((r) => sharedPhrase(body, r)).find(Boolean);
+  if (reused) checks.push({ code: "reused_phrase", severity: "block", message: `Reuses wording from a recent post ("${reused}"). Say it differently.` });
+
   for (const r of recent) {
     if (textSimilarity(body, r) >= 0.5) {
       checks.push({ code: "duplicate", severity: "block", message: "Too close to a recent post." });
@@ -91,4 +94,25 @@ export function textSimilarity(a: string, b: string): number {
   for (const g of GA) if (GB.has(g)) inter++;
   const union = GA.size + GB.size - inter;
   return union === 0 ? 0 : inter / union;
+}
+
+/** A run of `n` identical words shared with an earlier post means the writer is repeating itself. */
+export function sharedPhrase(a: string, b: string, n = 6): string | null {
+  const words = (s: string) =>
+    s
+      .toLowerCase()
+      .replace(URL_RE, " ")
+      .replace(/[^a-z0-9\s']/g, " ")
+      .split(/\s+/)
+      .filter(Boolean);
+  const A = words(a);
+  const B = words(b);
+  if (A.length < n || B.length < n) return null;
+  const grams = new Set<string>();
+  for (let i = 0; i + n <= B.length; i++) grams.add(B.slice(i, i + n).join(" "));
+  for (let i = 0; i + n <= A.length; i++) {
+    const g = A.slice(i, i + n).join(" ");
+    if (grams.has(g)) return g;
+  }
+  return null;
 }

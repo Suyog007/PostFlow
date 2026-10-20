@@ -43,7 +43,7 @@ describe("fillCalendar", () => {
     const calls = fakeLLM((req) => {
       if (req.schemaName === "write_post") return { text: req.user.includes("editor rejected") ? GOOD_POST : "Cut cold start a lot. Huge improvement overall for everyone involved here." };
       reviews++;
-      return reviews === 1 ? { ...GOOD_REVIEW, worth_posting: 4, issues: ["Vague: no numbers."], revision_instructions: "Add the 4s to 1.2s numbers." } : GOOD_REVIEW;
+      return reviews === 1 ? { ...GOOD_REVIEW, worth_posting: 6, issues: ["Vague: no numbers."], revision_instructions: "Add the 4s to 1.2s numbers." } : GOOD_REVIEW;
     });
     await fillCalendar({ now: NOW, max: 1 });
     const [p] = await db().select().from(schema.posts);
@@ -155,7 +155,7 @@ describe("time-sensitive news", () => {
   it("caps time-sensitive posts so owner notes still get slots", async () => {
     await saveSettings({ horizonDays: 1, pillars: { own_work: 1, news: 1, nepal: 0, learning: 0 }, slots: [{ platform: "x", days: [1, 2, 3, 4, 5, 6, 7], time: "09:30" }, { platform: "x", days: [1, 2, 3, 4, 5, 6, 7], time: "12:30" }, { platform: "x", days: [1, 2, 3, 4, 5, 6, 7], time: "15:30" }] });
     await db().insert(schema.notes).values([{ text: "Note one: shipped the billing export and it halved support tickets for us.", pillar: "own_work" }, { text: "Note two: found that our cron drifted by 40s a day until we pinned the clock.", pillar: "own_work" }]);
-    for (const t of ["Breaking one", "Breaking two", "Breaking three"]) await addItem(t, "breaking", 1, 9);
+    for (const t of ["Breaking story number one about developer tools", "Breaking story number two about cloud pricing", "Breaking story number three about open models"]) await addItem(t, "breaking", 1, 9);
     const texts = ["Vendor launch today. According to the announcement, deploys need far less config now.", "Our billing export halved support tickets. Boring work, measurable result, worth repeating.", "Cron drifted forty seconds a day until we pinned the clock source. Check yours."];
     let n = 0;
     fakeLLM((req) => (req.schemaName === "write_post" ? { text: texts[n++ % 3] } : GOOD_REVIEW));

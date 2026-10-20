@@ -40,7 +40,7 @@ Hard rules:
 3. For news, do not just summarise the article. Attribute the facts to the source by name ("According to The Verge"), then say what opening it creates for builders. Shape: (a) what changed, in one plain sentence; (b) why it is an opening: who benefits, what could be built, why now; (c) one concrete next step, or one real question. Your read on the opportunity is opinion: frame it as yours ("I'd expect", "this looks like a window for"), base it only on what the source says, and never promise outcomes or claim certainty about the future.
 4. For evergreen explainers: only well-established, widely known facts. No statistics unless certain. Teach one useful thing.
 5. Banned: "game-changer", "revolutionary", "unlock", "leverage", "delve", "in today's fast-paced world", "let that sink in", "thoughts?", "agree?", rhetorical pile-ups, bullet-spam, emoji walls, fake urgency, engagement bait.
-6. Write in English. Do not mention that you are an AI. Do not include links; the system adds them.
+6. Write in English. Do not mention that you are an AI. Do not include links; the system adds them. If the material is the owner's own article on X, keep the text to 250 characters so the link fits.
 ${UNTRUSTED_NOTICE}`;
 }
 

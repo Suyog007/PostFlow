@@ -4,6 +4,7 @@ import { db, schema } from "./db/client";
 import { runTask, untrusted } from "./llm";
 import { ANALYST_SYSTEM, profileBlock } from "./prompts";
 import { getSettings } from "./settings";
+import { tipsSourceId } from "./tips";
 import { addEvent } from "./events";
 
 const out = z.object({
@@ -38,6 +39,7 @@ export async function analyzeBatch(batchSize = 15): Promise<number> {
     maxTokens: 1800,
     temperature: 0.1,
   });
+  const tipsId = await tipsSourceId();
   const byIdx = new Map(res.items.map((x) => [x.id.replace(/\D/g, ""), x]));
   let n = 0;
   for (const [i, row] of rows.entries()) {
@@ -46,7 +48,7 @@ export async function analyzeBatch(batchSize = 15): Promise<number> {
       .update(schema.items)
       .set(
         r
-          ? { relevance: Math.round(r.relevance), urgency: r.urgency, angle: r.angle.slice(0, 300), analyzedAt: new Date() }
+          ? { relevance: row.sourceId === tipsId ? Math.max(8, Math.round(r.relevance)) : Math.round(r.relevance), urgency: r.urgency, angle: r.angle.slice(0, 300), analyzedAt: new Date() }
           : // The model skipped it; treat as not worth posting rather than retrying forever.
             { relevance: 0, urgency: "evergreen", analyzedAt: new Date() },
       )

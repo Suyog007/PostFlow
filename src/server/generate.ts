@@ -10,6 +10,7 @@ import { afterQuietHours, slotsBetween, formatLocal } from "./slots";
 import { fetchArticleText } from "./net";
 import { addEvent } from "./events";
 import { notifyScheduled, notifyText } from "./telegram";
+import { ensureVerification, type Verification } from "./verify";
 
 type Platform = "x" | "linkedin";
 const LIVE = ["scheduled", "publishing", "published", "unconfirmed", "failed", "cancelled", "expired"] as const;
@@ -28,6 +29,9 @@ export interface Material {
   expiresAt?: Date;
   /** True when first-person experience is allowed (the owner's own note). */
   firstPerson: boolean;
+  verification?: Verification;
+  /** The owner's own article: its link is appended to the post (not as a "Source:" line). */
+  ownUrl?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -54,17 +58,17 @@ function itemExpiry(it: ItemRow): Date | undefined {
   return undefined;
 }
 
-async function itemMaterial(it: ItemRow): Promise<Material> {
+async function itemMaterial(it: ItemRow, v?: Verification): Promise<Material> {
   let body = it.body;
   if (!body) {
     body = await fetchArticleText(it.url);
     if (body) await db().update(schema.items).set({ body }).where(eq(schema.items.id, it.id));
   }
   const src = it.sourceId ? await db().query.sources.findFirst({ where: eq(schema.sources.id, it.sourceId) }) : null;
-  const text = [`Source: ${src?.name ?? new URL(it.url).hostname}`, `Title: ${it.title}`, `Published: ${it.publishedAt.toISOString().slice(0, 10)}`, `Summary: ${it.summary}`, body ? `Article text:\n${body}` : "(Only the headline and summary are available; do not claim details beyond them.)", it.angle ? `Suggested angle (from an assistant, not a fact): ${it.angle}` : ""]
+  const text = [`Source: ${src?.name ?? new URL(it.url).hostname}`, `Title: ${it.title}`, `Published: ${it.publishedAt.toISOString().slice(0, 10)}`, `Summary: ${it.summary}`, body ? `Article text:\n${body}` : "(Only the headline and summary are available; do not claim details beyond them.)", v?.mentions.length ? `Also reported by (independent publishers; you may say "according to X and Y"):\n${v.mentions.map((m) => `- ${m.domain}: ${m.title}`).join("\n")}` : "", it.angle ? `Suggested angle (from an assistant, not a fact): ${it.angle}` : ""]
     .filter(Boolean)
     .join("\n");
-  return { kind: "news", pillar: it.pillar, source: text, label: it.title, itemId: it.id, sourceUrl: it.url, expiresAt: itemExpiry(it), firstPerson: false };
+  return { kind: "news", pillar: it.pillar, source: text, label: it.title, itemId: it.id, sourceUrl: it.url, expiresAt: itemExpiry(it), firstPerson: false, verification: v };
 }
 
 function noteMaterial(n: typeof schema.notes.$inferSelect): Material {
@@ -80,7 +84,7 @@ async function candidateItems(platform: Platform, s: Settings, pillar: Pillar | 
       and(
         eq(schema.items.status, "new"),
         isNotNull(schema.items.analyzedAt),
-        gte(schema.items.relevance, s.minRelevance),
+        gte(schema.items.relevance, platform === "linkedin" ? s.linkedinMinRelevance : s.minRelevance),
         gte(schema.items.publishedAt, new Date(now.getTime() - 7 * 86_400_000)),
         pillar === "any" ? undefined : eq(schema.items.pillar, pillar),
       ),
@@ -89,6 +93,18 @@ async function candidateItems(platform: Platform, s: Settings, pillar: Pillar | 
     .limit(60);
   // Time-sensitive items must still be fresh an hour after the slot they would take.
   return rows.filter((r) => !used.items.has(r.id) && !((e) => e && e.getTime() <= slotAt.getTime() + 3_600_000)(itemExpiry(r)));
+}
+
+/** First candidate that enough independent publishers confirm. Checks are cached on the item and capped per call. */
+async function pickVerified(items: ItemRow[], maxChecks = 4): Promise<{ it: ItemRow; v: Verification } | null> {
+  let checks = 0;
+  for (const it of items) {
+    const cached = it.verification as unknown as Verification | null;
+    if (!cached && ++checks > maxChecks) break;
+    const v = await ensureVerification(it);
+    if (v.ok) return { it, v };
+  }
+  return null;
 }
 
 async function pickNote(platform: Platform, pillar: Pillar) {
@@ -135,8 +151,8 @@ async function pickByPillar(platform: Platform, pillar: Pillar, s: Settings, now
     return n ? noteMaterial(n) : pickEvergreenTopic(s, platform);
   }
   if (pillar === "news" || pillar === "nepal") {
-    const items = await candidateItems(platform, s, pillar, now, slotAt);
-    if (items.length) return itemMaterial(items[0]);
+    const hit = await pickVerified(await candidateItems(platform, s, pillar, now, slotAt));
+    if (hit) return itemMaterial(hit.it, hit.v);
     if (pillar === "nepal") {
       const n = await pickNote(platform, "nepal");
       return n ? noteMaterial(n) : null;
@@ -182,15 +198,24 @@ async function urgentCapReached(platform: Platform, at: Date): Promise<boolean> 
   return Number(rows[0].n) >= MAX_URGENT_PER_DAY;
 }
 
-/** Time-sensitive items first (soonest to go stale), otherwise rotate pillars. */
+/** Time-sensitive verified items first (soonest to go stale), otherwise rotate pillars. Returns null when nothing is worth posting. */
 export async function chooseMaterial(platform: Platform, slotAt: Date, s: Settings, now = new Date()): Promise<Material | null> {
   const capped = await urgentCapReached(platform, slotAt);
   const urgent = (capped ? [] : await candidateItems(platform, s, "any", now, slotAt))
     .map((it) => ({ it, exp: itemExpiry(it) }))
     .filter((x): x is { it: ItemRow; exp: Date } => !!x.exp && x.exp.getTime() > slotAt.getTime() + 3_600_000)
-    .sort((a, b) => a.exp.getTime() - b.exp.getTime());
-  if (urgent.length) return itemMaterial(urgent[0].it);
-  for (const p of await pillarOrder(s, now)) {
+    .sort((a, b) => a.exp.getTime() - b.exp.getTime())
+    .map((x) => x.it);
+  const hit = await pickVerified(urgent);
+  if (hit) return itemMaterial(hit.it, hit.v);
+  const order = await pillarOrder(s, now);
+  for (const [i, p] of order.entries()) {
+    // An evergreen explainer in place of a missing story is filler. Only your own "learning" notes qualify unless filler is switched on.
+    if (p === "learning" && i > 0 && !s.fillerPosts) {
+      const n = await pickNote(platform, "learning");
+      if (n) return noteMaterial(n);
+      continue;
+    }
     const m = await pickByPillar(platform, p, s, now, slotAt);
     if (m) return m;
   }
@@ -219,9 +244,10 @@ function sanitize(text: string): string {
     .trim();
 }
 
-async function write(m: Material, platform: Platform, s: Settings, feedback?: { previous: string; notes: string[] }): Promise<string> {
+async function write(m: Material, platform: Platform, s: Settings, recent: string[], feedback?: { previous: string; notes: string[] }): Promise<string> {
   const user = [
     describeMaterial(m),
+    recent.length ? `Your recent posts. Do not reuse their openings, phrases or structure; this one must read differently:\n${recent.slice(0, 8).map((r) => `- ${r.replace(/\s+/g, " ").slice(0, 140)}`).join("\n")}` : "",
     feedback ? `\nYour previous draft:\n"""${feedback.previous}"""\nAn editor rejected it for these reasons. Fix every one, keep what worked, do not add new facts:\n${feedback.notes.map((n) => `- ${n}`).join("\n")}` : "\nWrite the post.",
   ].join("\n");
   const res = await runTask({ task: "write_post", role: "writer", system: writerSystem(s, platform), user, output: writerOut, maxTokens: 900, temperature: 0.7 });
@@ -290,37 +316,43 @@ function withLink(text: string, m: Material, platform: Platform, s: Settings): s
 }
 
 export interface Produced {
-  status: "scheduled" | "rejected";
+  status: "scheduled" | "rejected" | "draft";
   postId: string;
   reasons: string[];
 }
 
-export async function produceForSlot(platform: Platform, at: Date, m: Material, s: Settings, maxRounds = 3, opts: { fast?: boolean } = {}): Promise<Produced> {
+export async function produceForSlot(platform: Platform, at: Date, m: Material, s: Settings, maxRounds = 3, opts: { fast?: boolean; requested?: "schedule" | "draft" } = {}): Promise<Produced> {
   const recent = await recentTexts(platform);
-  let text = await write(m, platform, s);
+  // For your own article the link is part of the post, so length checks and the reviewer see it.
+  const compose = (t: string) => (m.ownUrl ? (platform === "linkedin" ? `${t}\n\n${m.ownUrl}` : `${t} ${m.ownUrl}`) : t);
+  let text = await write(m, platform, s, recent);
   let verdict: Verdict = { approved: false, reasons: [] };
   let lastReview: Review | null = null;
   let checks: Check[] = [];
   const rounds: { text: string; reasons: string[] }[] = [];
 
   for (let round = 0; round < maxRounds; round++) {
-    checks = runChecks(text, platform, recent);
-    lastReview = await review(m, text, platform, recent);
+    checks = runChecks(compose(text), platform, recent);
+    lastReview = await review(m, compose(text), platform, recent);
     verdict = gate(lastReview, checks, m);
     rounds.push({ text, reasons: verdict.reasons });
     if (verdict.approved || round === maxRounds - 1) break;
-    text = await write(m, platform, s, { previous: text, notes: [...verdict.reasons, lastReview.revision_instructions].filter(Boolean) });
+    // A story that is simply not worth posting will not be rescued by rewording; skip it.
+    if (!opts.requested && lastReview.worth_posting <= 4) break;
+    text = await write(m, platform, s, recent, { previous: text, notes: [...verdict.reasons, lastReview.revision_instructions].filter(Boolean) });
   }
 
-  const finalText = verdict.approved ? withLink(text, m, platform, s) : text;
-  const reviewJson = { ...lastReview, checks, verdict, rounds: rounds.length, material: { kind: m.kind, label: m.label }, reviewedAt: new Date().toISOString() } as Record<string, unknown>;
+  const finalText = m.ownUrl ? compose(text) : verdict.approved ? withLink(text, m, platform, s) : text;
+  // Posts you asked for are never thrown away: if the reviewer is unhappy or you wanted a draft, you get a draft.
+  const status: "scheduled" | "rejected" | "draft" = opts.requested ? (verdict.approved && opts.requested === "schedule" ? "scheduled" : "draft") : verdict.approved ? "scheduled" : "rejected";
+  const reviewJson = { ...lastReview, checks, verdict, rounds: rounds.length, material: { kind: m.kind, label: m.label }, verification: m.verification ?? null, reviewedAt: new Date().toISOString() } as Record<string, unknown>;
   const [row] = await db()
     .insert(schema.posts)
     .values({
       platform,
       pillar: m.pillar,
       text: finalText,
-      status: verdict.approved ? "scheduled" : "rejected",
+      status: status,
       scheduledAt: at,
       expiresAt: m.expiresAt ?? null,
       itemId: m.itemId ?? null,
@@ -328,18 +360,22 @@ export async function produceForSlot(platform: Platform, at: Date, m: Material, 
       topic: m.topic ?? null,
       sourceUrl: m.sourceUrl ?? null,
       fast: opts.fast ?? false,
+      userEdited: !!opts.requested, // protects posts you asked for from being replaced by news
       review: reviewJson,
-      error: verdict.approved ? null : verdict.reasons.join(" | ").slice(0, 500),
+      error: verdict.approved ? null : `Reviewer: ${verdict.reasons.join(" | ")}`.slice(0, 500),
     })
     .returning();
 
-  if (verdict.approved) {
+  if (status === "draft") {
+    await addEvent("draft", `Draft ready for ${platform === "x" ? "X" : "LinkedIn"}: ${m.label.slice(0, 80)}`, row.id);
+    await notifyText(`📝 Draft ready for ${platform === "x" ? "X" : "LinkedIn"}${verdict.approved ? "" : " (the reviewer had concerns: " + verdict.reasons[0] + ")"}\n\n${finalText}\n\nOpen the app to edit it or put it on the calendar.`).catch(() => {});
+  } else if (verdict.approved) {
     await addEvent("scheduled", `${opts.fast ? "Fast lane: " : ""}${platform === "x" ? "X" : "LinkedIn"} post scheduled for ${formatLocal(at, s.timezone)}: ${m.label.slice(0, 80)}`, row.id);
     await notifyScheduled(row, s.timezone).catch(() => {});
   } else {
     await addEvent("rejected", `Reviewer rejected a ${platform} draft (${m.label.slice(0, 60)}): ${verdict.reasons[0] ?? ""}`, row.id);
   }
-  return { status: verdict.approved ? "scheduled" : "rejected", postId: row.id, reasons: verdict.reasons };
+  return { status, postId: row.id, reasons: verdict.reasons };
 }
 
 // ---------------------------------------------------------------------------
@@ -348,11 +384,12 @@ export async function produceForSlot(platform: Platform, at: Date, m: Material, 
 
 /** Frees the earliest soft slot for a time-sensitive item that would otherwise go stale before any free slot. */
 async function bumpForUrgent(platform: Platform, s: Settings, now: Date, freeSlots: { at: Date }[]): Promise<boolean> {
-  const urgent = (await candidateItems(platform, s, "any", now))
-    .map((it) => itemExpiry(it))
-    .filter((e): e is Date => !!e && e.getTime() > now.getTime() + 3_600_000)
-    .sort((a, b) => a.getTime() - b.getTime())[0];
-  if (!urgent) return false;
+  const cands = (await candidateItems(platform, s, "any", now))
+    .filter((it) => { const e = itemExpiry(it); return !!e && e.getTime() > now.getTime() + 3_600_000; })
+    .sort((a, b) => itemExpiry(a)!.getTime() - itemExpiry(b)!.getTime());
+  const hit = await pickVerified(cands, 3);
+  if (!hit) return false;
+  const urgent = itemExpiry(hit.it)!;
   const firstFree = freeSlots[0]?.at.getTime() ?? Infinity;
   if (firstFree < urgent.getTime() - 3_600_000) return false; // a free slot already works
 
@@ -406,11 +443,14 @@ export async function runFastLane(s: Settings, now: Date): Promise<{ produced: n
     if (recent.filter((r) => r.status === "rejected").length >= FAST_MAX_REJECTED_PER_DAY) continue;
 
     const at = await fastLaneTime(platform, s, now);
-    const candidate = (await candidateItems(platform, s, "any", now, at)).find(
-      (it) => it.urgency === "breaking" && (it.relevance ?? 0) >= f.minRelevance && now.getTime() - it.publishedAt.getTime() <= FAST_MAX_AGE_MS,
+    const hit = await pickVerified(
+      (await candidateItems(platform, s, "any", now, at)).filter(
+        (it) => it.urgency === "breaking" && (it.relevance ?? 0) >= f.minRelevance && now.getTime() - it.publishedAt.getTime() <= FAST_MAX_AGE_MS,
+      ),
+      3,
     );
-    if (!candidate) continue;
-    const r = await produceForSlot(platform, at, await itemMaterial(candidate), s, 3, { fast: true });
+    if (!hit) continue;
+    const r = await produceForSlot(platform, at, await itemMaterial(hit.it, hit.v), s, 3, { fast: true });
     if (r.status === "scheduled") out.produced++;
     else out.rejected++;
   }
@@ -439,8 +479,10 @@ export async function fillCalendar(opts: { max?: number; now?: Date; deadline?: 
     throw err;
   }
 
+  // Slots with nothing worth posting are skipped for this pass (and retried on the next one, when new stories may have arrived).
+  const skipped = new Set<string>();
   let guard = 0;
-  while (res.produced + res.rejected < max && Date.now() < deadline && guard++ < 6) {
+  while (res.produced + res.rejected < max && Date.now() < deadline && guard++ < 12) {
     const from = new Date(now.getTime() + 20 * 60_000);
     const to = new Date(now.getTime() + s.horizonDays * 86_400_000);
     const all = slotsBetween(s, from, to);
@@ -453,7 +495,7 @@ export async function fillCalendar(opts: { max?: number; now?: Date; deadline?: 
     const occupied = new Set(taken.filter((t) => (LIVE as readonly string[]).includes(t.status)).map((t) => `${t.platform}@${t.at.getTime()}`));
     const attempts = new Map<string, number>();
     for (const t of taken.filter((t) => t.status === "rejected")) attempts.set(`${t.platform}@${t.at.getTime()}`, (attempts.get(`${t.platform}@${t.at.getTime()}`) ?? 0) + 1);
-    const free = all.filter((sl) => !occupied.has(`${sl.platform}@${sl.at.getTime()}`) && (attempts.get(`${sl.platform}@${sl.at.getTime()}`) ?? 0) < MAX_ATTEMPTS_PER_SLOT);
+    const free = all.filter((sl) => !occupied.has(`${sl.platform}@${sl.at.getTime()}`) && !skipped.has(`${sl.platform}@${sl.at.getTime()}`) && (attempts.get(`${sl.platform}@${sl.at.getTime()}`) ?? 0) < MAX_ATTEMPTS_PER_SLOT);
     // Make room for breaking news if every free slot is too late; the freed slot is picked up on the next pass.
     let bumped = false;
     for (const p of ["x", "linkedin"] as const) {
@@ -463,7 +505,7 @@ export async function fillCalendar(opts: { max?: number; now?: Date; deadline?: 
       }
     }
     if (bumped) continue;
-    if (!free.length) return { ...res, idle: res.produced + res.rejected ? null : "calendar full" };
+    if (!free.length) return { ...res, idle: res.produced + res.rejected ? null : skipped.size ? "nothing worth posting right now" : "calendar full" };
     const target = free[0];
 
     let material: Material | null;
@@ -474,8 +516,7 @@ export async function fillCalendar(opts: { max?: number; now?: Date; deadline?: 
       throw err;
     }
     if (!material) {
-      // Nothing left to say for this slot: mark it as attempted so we move on to the next one.
-      await db().insert(schema.posts).values({ platform: target.platform, pillar: "learning", text: "", status: "rejected", scheduledAt: target.at, error: "No material available" });
+      skipped.add(`${target.platform}@${target.at.getTime()}`);
       continue;
     }
     try {
