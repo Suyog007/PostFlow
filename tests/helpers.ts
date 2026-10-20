@@ -5,7 +5,7 @@ import { setPlatformClientForTests } from "../src/server/platforms/accounts";
 import type { PlatformClient, PublishResult } from "../src/server/platforms/types";
 
 export async function resetDb() {
-  await db().execute(sql`truncate posts, items, notes, sources, events, llm_calls, settings, platform_accounts, oauth_states restart identity cascade`);
+  await db().execute(sql`truncate posts, items, notes, sources, events, llm_calls, settings, platform_accounts, oauth_states, requests restart identity cascade`);
 }
 
 export type LlmHandler = (req: CompletionRequest) => unknown;

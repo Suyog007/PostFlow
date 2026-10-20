@@ -32,6 +32,19 @@ function clean(raw: string, max: number) {
 
 /** Fetch a public page and return its readable text, or null. Bounded and best-effort. */
 export async function fetchArticleText(url: string, maxChars = 9000): Promise<string | null> {
+  return (await fetchArticle(url, maxChars))?.text ?? null;
+}
+
+type Article = { title: string; text: string } | null;
+let articleImpl: (url: string, maxChars: number) => Promise<Article> = realFetchArticle;
+export function fetchArticle(url: string, maxChars = 9000): Promise<Article> {
+  return articleImpl(url, maxChars);
+}
+export function setFetchArticleForTests(fn: (url: string) => Promise<Article>) {
+  articleImpl = fn;
+}
+
+async function realFetchArticle(url: string, maxChars: number): Promise<Article> {
   if (!isPublicHttpUrl(url)) return null;
   try {
     const res = await fetch(url, { headers: { "User-Agent": UA, Accept: "text/html" }, signal: AbortSignal.timeout(15_000), redirect: "follow" });
@@ -42,7 +55,8 @@ export async function fetchArticleText(url: string, maxChars = 9000): Promise<st
     const dom = new JSDOM(html, { url, virtualConsole: new VirtualConsole() });
     const parsed = new Readability(dom.window.document).parse();
     const text = clean(parsed?.textContent ?? dom.window.document.body?.textContent ?? "", maxChars);
-    return text.length >= 300 ? text : null;
+    const title = (parsed?.title ?? dom.window.document.title ?? "").trim().slice(0, 200);
+    return text.length >= 300 ? { title: title || new URL(url).hostname, text } : null;
   } catch {
     return null;
   }
