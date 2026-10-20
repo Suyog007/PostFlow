@@ -2,6 +2,8 @@ import { and, eq, gt, inArray } from "drizzle-orm";
 import { db, schema } from "./db/client";
 import { addEvent } from "./events";
 import { runChecks } from "./checks";
+import { getSettings } from "./settings";
+import { nextFreeSlot } from "./slots";
 
 export class PostError extends Error {}
 
@@ -15,7 +17,7 @@ async function load(id: string) {
 export async function removePost(id: string) {
   const p = await load(id);
   if (p.status === "publishing") throw new PostError("It is being published right now.");
-  if (!["scheduled", "failed", "unconfirmed", "expired"].includes(p.status)) throw new PostError(`A ${p.status} post cannot be removed.`);
+  if (!["scheduled", "failed", "unconfirmed", "expired", "draft"].includes(p.status)) throw new PostError(`A ${p.status} post cannot be removed.`);
   await db().update(schema.posts).set({ status: "cancelled", updatedAt: new Date() }).where(eq(schema.posts.id, id));
   await addEvent("removed", `Removed a ${p.platform} post from ${p.scheduledAt.toISOString()}.`, id);
 }
@@ -30,7 +32,7 @@ export async function restorePost(id: string) {
 
 export async function editPost(id: string, text: string) {
   const p = await load(id);
-  if (!["scheduled", "failed", "cancelled"].includes(p.status)) throw new PostError(`A ${p.status} post cannot be edited.`);
+  if (!["scheduled", "failed", "cancelled", "draft"].includes(p.status)) throw new PostError(`A ${p.status} post cannot be edited.`);
   const checks = runChecks(text, p.platform as "x" | "linkedin");
   const block = checks.find((c) => c.severity === "block" && (c.code === "too_long" || c.code === "empty"));
   if (block) throw new PostError(block.message);
@@ -39,7 +41,7 @@ export async function editPost(id: string, text: string) {
 
 export async function reschedulePost(id: string, at: Date) {
   const p = await load(id);
-  if (!["scheduled", "failed", "cancelled", "expired"].includes(p.status)) throw new PostError(`A ${p.status} post cannot be rescheduled.`);
+  if (!["scheduled", "failed", "cancelled", "expired", "draft"].includes(p.status)) throw new PostError(`A ${p.status} post cannot be rescheduled.`);
   if (at.getTime() < Date.now() + 60_000) throw new PostError("Pick a time in the future.");
   if (p.expiresAt && at.getTime() > p.expiresAt.getTime()) throw new PostError("That is after this time-sensitive post goes stale.");
   const clash = await db()
@@ -62,7 +64,7 @@ export async function postNow(id: string) {
     if (!clash.some((c) => c.id !== id)) break;
     at = new Date(at.getTime() - 1000);
   }
-  if (!["scheduled", "failed", "cancelled"].includes(p.status)) throw new PostError(`A ${p.status} post cannot be posted now.`);
+  if (!["scheduled", "failed", "cancelled", "draft"].includes(p.status)) throw new PostError(`A ${p.status} post cannot be posted now.`);
   await db().update(schema.posts).set({ scheduledAt: at, status: "scheduled", error: null, attempts: 0, claimedAt: null, updatedAt: new Date() }).where(eq(schema.posts.id, id));
 }
 
@@ -82,4 +84,13 @@ export function upcoming(limit = 20) {
     orderBy: schema.posts.scheduledAt,
     limit,
   });
+}
+
+/** Puts a draft on the calendar at the next free slot for its platform. */
+export async function scheduleDraft(id: string) {
+  const p = await load(id);
+  if (p.status !== "draft") throw new PostError("Only drafts can be put on the calendar this way.");
+  const at = await nextFreeSlot(await getSettings(), p.platform as "x" | "linkedin", new Date(Date.now() + 20 * 60_000));
+  if (!at) throw new PostError("No free slot in the next 14 days. Add slots in Settings or pick a time.");
+  await db().update(schema.posts).set({ status: "scheduled", scheduledAt: at, userEdited: true, error: null, updatedAt: new Date() }).where(eq(schema.posts.id, id));
 }

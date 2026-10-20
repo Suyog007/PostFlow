@@ -42,12 +42,19 @@ export const settingsSchema = z.object({
   /** Relative share of each content type. */
   pillars: z
     .object({ own_work: z.number().min(0), news: z.number().min(0), nepal: z.number().min(0), learning: z.number().min(0) })
-    .default({ own_work: 3, news: 3, nepal: 2, learning: 2 }),
+    .default({ own_work: 3, news: 3, nepal: 2, learning: 1 }),
   /** How many days ahead the calendar is kept filled. */
   horizonDays: z.number().int().min(1).max(14).default(3),
-  /** Smallest relevance (0-10) a news item needs before it can become a post. */
-  minRelevance: z.number().int().min(1).max(10).default(6),
-  includeLinks: z.object({ linkedin: z.boolean().default(true), x: z.boolean().default(false) }).default({ linkedin: true, x: false }),
+  /** Smallest relevance (0-10) a news item needs to become an X post. */
+  minRelevance: z.number().int().min(1).max(10).default(7),
+  /** LinkedIn is stricter: a weak story is skipped there rather than posted for the sake of posting. */
+  linkedinMinRelevance: z.number().int().min(1).max(10).default(8),
+  /** When no strong material exists for a slot, leave the slot empty (false) or fill it with an evergreen explainer (true). */
+  fillerPosts: z.boolean().default(false),
+  /** Domains of your own sites (portfolio, blog). A link to one of these is treated as your own article: written as its author, with the link included. */
+  ownDomains: z.array(z.string()).default([]),
+  /** Links in posts. Off by default: the post names its source in words. */
+  includeLinks: z.object({ linkedin: z.boolean().default(false), x: z.boolean().default(false) }).default({ linkedin: false, x: false }),
   /** Extra posts, outside the normal slots, for rare high-scoring breaking stories. The owner still has the lead time to veto. */
   fastLane: z
     .object({

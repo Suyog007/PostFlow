@@ -2,6 +2,7 @@ import { sqlClient } from "./db/client";
 import { collectFeeds, seedSourcesIfEmpty } from "./collect";
 import { analyzeBatch } from "./analyze";
 import { fillCalendar } from "./generate";
+import { processRequests } from "./requests";
 import { publishDue, reconcile } from "./publisher";
 import { llmConfigured } from "./llm";
 import { getSettings } from "./settings";
@@ -50,6 +51,15 @@ export async function tick(opts: { budgetMs?: number } = {}): Promise<TickResult
     } catch (err) {
       out.errors.push(`publish: ${(err as Error).message}`);
       log.error("tick_publish_failed", { error: (err as Error).message });
+    }
+
+    // Things you asked for come before anything the autopilot decides on its own.
+    if (llmConfigured()) {
+      try {
+        await processRequests({ max: 2, deadline });
+      } catch (err) {
+        out.errors.push(`requests: ${(err as Error).message}`);
+      }
     }
 
     await seedSourcesIfEmpty().catch(() => {});

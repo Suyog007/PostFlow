@@ -5,7 +5,7 @@ import { getCredentials, getPlatformClient, markAccountError, NotConnectedError 
 import { ReconcileNotSupported, type Platform } from "./platforms/types";
 import { addEvent } from "./events";
 import { notifyProblem, notifyPublished, notifyText } from "./telegram";
-import { slotsBetween } from "./slots";
+import { nextFreeSlot } from "./slots";
 import { log } from "./log";
 
 type PostRow = typeof schema.posts.$inferSelect;
@@ -34,15 +34,8 @@ async function claimNext(now: Date): Promise<PostRow | null> {
   return (await db().query.posts.findFirst({ where: eq(schema.posts.id, r.id as string) })) ?? null;
 }
 
-async function nextFreeSlot(platform: Platform, after: Date): Promise<Date | null> {
-  const s = await getSettings();
-  const to = new Date(after.getTime() + 14 * 86_400_000);
-  const live = await db()
-    .select({ at: schema.posts.scheduledAt })
-    .from(schema.posts)
-    .where(and(eq(schema.posts.platform, platform), inArray(schema.posts.status, ["scheduled", "publishing", "published", "unconfirmed"]), gt(schema.posts.scheduledAt, after)));
-  const taken = new Set(live.map((l) => l.at.getTime()));
-  return slotsBetween(s, after, to).find((sl) => sl.platform === platform && !taken.has(sl.at.getTime()))?.at ?? null;
+async function nextFreeSlotFor(platform: Platform, after: Date): Promise<Date | null> {
+  return nextFreeSlot(await getSettings(), platform, after);
 }
 
 async function setStatus(id: string, patch: Partial<typeof schema.posts.$inferInsert>) {
@@ -59,7 +52,7 @@ async function publishOne(post: PostRow, now: Date): Promise<"published" | "othe
     return "other";
   }
   if (!post.expiresAt && now.getTime() - post.scheduledAt.getTime() > MAX_LATE_MS) {
-    const next = await nextFreeSlot(platform, now);
+    const next = await nextFreeSlotFor(platform, now);
     if (next) {
       await setStatus(post.id, { status: "scheduled", scheduledAt: next, claimedAt: null, attempts: 0 });
       await addEvent("moved", `A late ${platform} post was moved to its next slot.`, post.id);

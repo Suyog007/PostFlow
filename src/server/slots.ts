@@ -1,4 +1,6 @@
 import { DateTime } from "luxon";
+import { and, eq, gt, inArray } from "drizzle-orm";
+import { db, schema } from "./db/client";
 import type { Settings, Slot } from "./settings";
 
 export interface SlotTime {
@@ -41,4 +43,14 @@ export function afterQuietHours(at: Date, zone: string, start: string, end: stri
   let out = local.set({ hour: Math.floor(b / 60), minute: b % 60, second: 0, millisecond: 0 });
   if (out <= local) out = out.plus({ days: 1 });
   return out.toJSDate();
+}
+
+/** The next configured slot for a platform that no live post uses (null if none in the next 14 days). */
+export async function nextFreeSlot(settings: Pick<Settings, "slots" | "timezone">, platform: Slot["platform"], after: Date): Promise<Date | null> {
+  const live = await db()
+    .select({ at: schema.posts.scheduledAt })
+    .from(schema.posts)
+    .where(and(eq(schema.posts.platform, platform), inArray(schema.posts.status, ["scheduled", "publishing", "published", "unconfirmed"]), gt(schema.posts.scheduledAt, after)));
+  const taken = new Set(live.map((l) => l.at.getTime()));
+  return slotsBetween(settings, after, new Date(after.getTime() + 14 * 86_400_000)).find((s) => s.platform === platform && !taken.has(s.at.getTime()))?.at ?? null;
 }
