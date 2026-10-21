@@ -9,6 +9,6 @@ export default async (req: Request) => {
     console.warn("tick-background: unauthorized call ignored");
     return;
   }
-  const result = await tick();
+  const result = await tick({ budgetMs: 12 * 60_000 }); // background functions may run for 15 minutes
   console.log("tick", JSON.stringify(result));
 };
