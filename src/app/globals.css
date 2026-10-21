@@ -73,9 +73,10 @@ h1, h2, h3 { text-wrap: balance; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
 
 /* ---- buttons ---- */
-.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 6px; font-size: 13px; font-weight: 500; white-space: nowrap; cursor: pointer; border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); transition: background .12s, border-color .12s; }
-.btn:hover { background: var(--raised); border-color: var(--subtle); }
-.btn:disabled { opacity: .5; cursor: not-allowed; }
+/* .btn-primary / .btn-secondary also work on their own (older pages use them without .btn). */
+.btn, .btn-primary, .btn-secondary { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 6px; font-size: 13px; font-weight: 500; white-space: nowrap; cursor: pointer; border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); transition: background .12s, border-color .12s; }
+.btn:hover, .btn-secondary:hover { background: var(--raised); border-color: var(--subtle); }
+.btn:disabled, .btn-primary:disabled, .btn-secondary:disabled { opacity: .5; cursor: not-allowed; }
 .btn-primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
 .btn-primary:hover { background: var(--ink); opacity: .88; border-color: var(--ink); }
 .btn-accent { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
@@ -109,10 +110,12 @@ h1, h2, h3 { text-wrap: balance; }
 .chip-input:focus-visible + .chip { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ---- surfaces ---- */
-.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+.panel, .card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
 .panel-head { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--line); font-weight: 600; font-size: 13px; }
 .panel-body { padding: 16px; }
 .divide > * + * { border-top: 1px solid var(--line); }
+
+.prose-post { white-space: pre-wrap; overflow-wrap: anywhere; }
 
 /* ---- badges ---- */
 .badge { display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 7px; border-radius: 999px; font-size: 11px; font-weight: 500; background: var(--side); color: var(--muted); white-space: nowrap; }
@@ -131,3 +134,4 @@ h1, h2, h3 { text-wrap: balance; }
 .cal-hour { height: 64px; border-top: 1px solid var(--line); }
 .cal-event { position: absolute; border-radius: 6px; border: 1px solid var(--line-strong); border-left-width: 3px; background: var(--surface); padding: 4px 6px; overflow: hidden; font-size: 12px; line-height: 1.3; box-shadow: 0 1px 1px rgba(0,0,0,.04); transition: box-shadow .12s, transform .12s; }
 .cal-event:hover { box-shadow: 0 4px 12px rgba(0,0,0,.12); z-index: 5; }
+

@@ -21,7 +21,7 @@ export default async function NotesPage({ searchParams }: { searchParams: Promis
         You can also message these to your Telegram bot.
       </p>
       <form action={addNoteAction} className="card mb-8 space-y-3 p-4">
-        <textarea name="text" rows={4} required placeholder="e.g. Moved our invoice PDF generation to a background job. Page load dropped from 4s to 1.2s. Mistake: I first cached it, which hid the real problem." className="input" />
+        <textarea name="text" rows={4} required placeholder="e.g. Moved our invoice PDF generation to a background job. Page load dropped from 4s to 1.2s. Mistake: I first cached it, which hid the real problem." className="textarea" />
         <div className="flex items-center gap-3">
           <select name="pillar" className="input w-auto" defaultValue="own_work">
             {["own_work", "learning", "nepal"].map((p) => <option key={p} value={p}>{PILLAR_LABEL[p]}</option>)}

@@ -17,7 +17,7 @@ export default async function CreatePage({ searchParams }: { searchParams: Promi
         <h1 className="mb-1 text-lg font-semibold">Create a post</h1>
         <p className="mb-4 text-sm text-muted">Give me an idea, a link, or a link with your angle. I write it for each platform, the reviewer checks it, and it goes on the calendar unless you ask for a draft.</p>
         <form action={createPostAction} className="card space-y-3 p-4 text-sm">
-          <textarea name="text" rows={5} required placeholder={"An idea: Most teams add caching before they measure. Here is what I check first.\nA link: https://example.com/article\nA link with your angle: https://example.com/article  the pricing change matters more than the model"} className="input" />
+          <textarea name="text" rows={5} required placeholder={"An idea: Most teams add caching before they measure. Here is what I check first.\nA link: https://example.com/article\nA link with your angle: https://example.com/article  the pricing change matters more than the model"} className="textarea" />
           <label className="flex items-center gap-2"><input type="checkbox" name="own" /> The link is my own article. Write it as me and include the link in the post.</label>
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
             <label className="flex items-center gap-2"><input type="checkbox" name="p_linkedin" defaultChecked /> LinkedIn</label>
