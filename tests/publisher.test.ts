@@ -22,6 +22,19 @@ describe("publishDue", () => {
     await resetDb();
     await connectAccount("x");
     await connectAccount("linkedin");
+    // These tests cover publishing mechanics, so run in auto mode (no approval step).
+    await saveSettings({ requireApproval: false });
+  });
+
+  it("holds unapproved posts while approval is required, then publishes once approved", async () => {
+    await saveSettings({ requireApproval: true });
+    const sent = fakePlatform("x", () => ({ kind: "success", externalIds: ["9"] }));
+    const p = await addPost();
+    expect((await publishDue({ now: NOW })).published).toBe(0);
+    expect(sent).toHaveLength(0);
+    await db().update(schema.posts).set({ approvedAt: NOW }).where(eq(schema.posts.id, p.id));
+    expect((await publishDue({ now: NOW })).published).toBe(1);
+    expect(sent).toHaveLength(1);
   });
 
   it("publishes due posts exactly once", async () => {
