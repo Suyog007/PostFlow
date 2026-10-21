@@ -144,3 +144,8 @@ h1, h2, h3 { text-wrap: balance; }
 @media (prefers-reduced-motion: no-preference) {
   html:has(#early-access) { scroll-behavior: smooth; }
 }
+
+/* ---- legal pages ---- */
+.legal h2 { font-size: 17px; font-weight: 600; margin-top: 28px; }
+.legal ul { list-style: disc; padding-left: 20px; display: grid; gap: 6px; }
+.legal a { text-decoration: underline; }

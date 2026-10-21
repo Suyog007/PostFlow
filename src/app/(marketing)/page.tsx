@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { isLoggedIn } from "@/server/auth";
+import { signupsOpen } from "@/server/users";
 import { Icon, Logo, PlatformGlyph } from "@/components/ui";
 import { Pricing } from "@/components/landing/pricing";
 import { WaitlistForm } from "@/components/landing/waitlist-form";
@@ -118,9 +119,12 @@ function Feature({ title, body, points, visual, flip, wide }: { title: string; b
   );
 }
 
-export default async function LandingPage({ searchParams }: { searchParams: Promise<{ plan?: string }> }) {
-  const { plan } = await searchParams;
+export default async function LandingPage({ searchParams }: { searchParams: Promise<{ plan?: string; deleted?: string }> }) {
+  const { plan, deleted } = await searchParams;
   const loggedIn = await isLoggedIn().catch(() => false);
+  const open = signupsOpen();
+  // Open: buttons lead to sign-up and checkout. Closed: they lead to the waitlist.
+  const primary = open ? { href: "/signup?plan=pro&interval=year", label: `Start ${TRIAL_DAYS}-day free trial` } : { href: "#early-access", label: "Get early access" };
 
   return (
     <div className="bg-[var(--bg)] text-[15px]">
@@ -142,7 +146,7 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
             ) : (
               <>
                 <Link href="/login" className="btn btn-ghost h-9 text-[14px]">Sign in</Link>
-                <a href="#early-access" className="btn btn-primary h-9 text-[14px]">Get early access</a>
+                <a href={primary.href} className="btn btn-primary h-9 text-[14px]">{open ? "Start free trial" : primary.label}</a>
               </>
             )}
           </div>
@@ -150,6 +154,9 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
       </header>
 
       <main>
+        {deleted && (
+          <p role="status" className="mx-auto mt-4 max-w-[1120px] rounded-md bg-[var(--good-soft)] px-4 py-2 text-[13px] text-[var(--good)]">Your account and its data were deleted, and your subscription was cancelled.</p>
+        )}
         {/* ---------- hero ---------- */}
         <section className="px-4 pb-16 pt-16 sm:pt-24">
           <div className="mx-auto max-w-[1120px]">
@@ -164,10 +171,10 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
                 PostFlow keeps your calendar filled a few days ahead with posts about your work, the news in your field and what you have learned. A second AI reviews every draft for facts and filler. Nothing goes out until you approve it.
               </p>
               <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-                <a href="#early-access" className="btn btn-primary h-11 px-5 text-[15px]">Get early access</a>
+                <a href={primary.href} className="btn btn-primary h-11 px-5 text-[15px]">{primary.label}</a>
                 <a href="#how" className="btn h-11 px-5 text-[15px]">See how it works</a>
               </div>
-              <p className="mt-4 text-[13px] text-[var(--subtle)]">{TRIAL_DAYS}-day free trial at launch · No card to join the list</p>
+              <p className="mt-4 text-[13px] text-[var(--subtle)]">{open ? "No charge during the trial · Cancel anytime" : `${TRIAL_DAYS}-day free trial at launch · No card to join the list`}</p>
             </div>
 
             {/* On phones the screenshot keeps a readable size and scrolls sideways. */}
@@ -334,7 +341,7 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
           intro="Pick by how much you post. You can change plans or cancel at any time."
           className="border-t border-[var(--line)] bg-[var(--surface)]"
         >
-          <Pricing />
+          <Pricing signupsOpen={open} />
         </Section>
 
         {/* ---------- FAQ ---------- */}
@@ -356,10 +363,12 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
         <section id="early-access" className="scroll-mt-20 border-t border-[var(--line)] bg-[var(--surface)] px-4 py-20 sm:py-24">
           <div className="mx-auto grid max-w-[1120px] items-center gap-10 lg:grid-cols-2 lg:gap-16">
             <div>
-              <p className="mb-3 text-[13px] font-semibold uppercase tracking-[0.08em] text-[var(--accent)]">Early access</p>
+              <p className="mb-3 text-[13px] font-semibold uppercase tracking-[0.08em] text-[var(--accent)]">{open ? "Get started" : "Early access"}</p>
               <h2 className="text-[30px] font-semibold leading-[1.15] tracking-tight sm:text-[38px]">Get your calendar filled before your next busy week.</h2>
               <p className="mt-4 text-[16px] leading-relaxed text-[var(--muted)] sm:text-[17px]">
-                PostFlow is opening to a small group first. Join the list and you will get an invite with a {TRIAL_DAYS}-day free trial.
+                {open
+                  ? `Create your account, connect LinkedIn or X, and drop your first note. Your ${TRIAL_DAYS}-day trial starts when you pick a plan.`
+                  : `PostFlow is opening to a small group first. Join the list and you will get an invite with a ${TRIAL_DAYS}-day free trial.`}
               </p>
               <ul className="mt-6 space-y-2.5 text-[15px]">
                 {["Set up in about ten minutes", "Approval mode on by default", "Cancel anytime"].map((x) => (
@@ -367,7 +376,17 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
                 ))}
               </ul>
             </div>
-            <WaitlistForm plan={plan} />
+            {/* The Agency plan is not for sale yet, so its button always leads to the waitlist. */}
+            {open && plan !== "agency" ? (
+              <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)] p-6 text-center">
+                <p className="text-[15px] font-medium">Start with a {TRIAL_DAYS}-day free trial</p>
+                <p className="mt-1 text-[13px] text-[var(--muted)]">Starter from $15/month, Pro from $31/month, billed yearly.</p>
+                <a href="/signup?plan=pro&interval=year" className="btn btn-primary mt-5 h-11 w-full text-[15px]">Create your account</a>
+                <p className="mt-3 text-[13px] text-[var(--muted)]">Already have one? <Link href="/login" className="underline">Sign in</Link></p>
+              </div>
+            ) : (
+              <WaitlistForm plan={plan} />
+            )}
           </div>
         </section>
       </main>
@@ -384,6 +403,8 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
               <a key={n.href} href={n.href} className="hover:text-[var(--ink)]">{n.label}</a>
             ))}
             <Link href="/login" className="hover:text-[var(--ink)]">Sign in</Link>
+            <Link href="/terms" className="hover:text-[var(--ink)]">Terms</Link>
+            <Link href="/privacy" className="hover:text-[var(--ink)]">Privacy</Link>
           </nav>
           <p className="sm:ml-auto">© {new Date().getFullYear()} PostFlow</p>
         </div>

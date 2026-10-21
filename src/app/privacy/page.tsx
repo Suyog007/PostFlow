@@ -1,0 +1,34 @@
+import type { Metadata } from "next";
+import { LegalShell } from "@/components/legal-shell";
+import { env } from "@/server/env";
+
+export const metadata: Metadata = { title: "Privacy Policy · PostFlow" };
+
+export default function PrivacyPage() {
+  const { COMPANY_NAME: company, CONTACT_EMAIL: contact } = env();
+  return (
+    <LegalShell title="Privacy Policy" updated="21 October 2026">
+      <p>This policy explains what {company} collects when you use PostFlow, why, and the choices you have.</p>
+      <h2>What we collect</h2>
+      <ul>
+        <li><strong>Account details:</strong> your name, email address and either a password (stored only as a salted hash) or your Google account identifier.</li>
+        <li><strong>Connected accounts:</strong> access tokens for LinkedIn and X that you authorise, stored encrypted (AES-256-GCM), plus your public handle. We use them only to publish the posts on your calendar and to check whether a post went out. If you link Telegram, we store your chat id.</li>
+        <li><strong>Your content:</strong> notes, links, profile and voice settings, news feeds, and the posts and reviews generated for you.</li>
+        <li><strong>Billing:</strong> handled by Stripe. We store your Stripe customer id and subscription status, never your card details.</li>
+        <li><strong>Usage:</strong> basic logs (for example sign-in attempts, errors and the number of AI calls) to run, secure and bill for the Service.</li>
+      </ul>
+      <h2>How we use it</h2>
+      <p>To provide the Service (write, review, schedule and publish your posts), to send account emails (confirmation, password reset, important notices), to process payments, to prevent abuse, and to improve reliability. We do not sell your data and do not use your content to train AI models.</p>
+      <h2>Service providers</h2>
+      <p>We share data only with providers that help run PostFlow, under their own privacy terms: Netlify (hosting), our database host, Stripe (payments), Resend (email), Fireworks AI (text generation; your notes and source material are sent to generate and review drafts), Google (if you sign in with Google), LinkedIn and X (publishing), and Telegram (if you link it).</p>
+      <h2>Retention and deletion</h2>
+      <p>We keep your data while your account exists. Deleting your account (Account page) cancels your subscription and permanently deletes your notes, posts, settings, feeds and stored tokens. Billing records are kept by Stripe as required by law. You can disconnect LinkedIn, X or Telegram at any time in Settings.</p>
+      <h2>Your rights</h2>
+      <p>Depending on where you live, you may have the right to access, correct, export or delete your personal data, and to object to some processing. Contact us to make a request.</p>
+      <h2>Security</h2>
+      <p>Connections use HTTPS, passwords are hashed, platform tokens are encrypted at rest, and sessions are signed. No system is perfectly secure; tell us right away if you suspect a problem.</p>
+      <h2>Contact</h2>
+      <p>{contact ? <>Privacy questions: <a href={`mailto:${contact}`}>{contact}</a>.</> : "Privacy questions: reply to any email from us."}</p>
+    </LegalShell>
+  );
+}
