@@ -6,7 +6,7 @@ import { formatSlots } from "@/server/slots-parse";
 import { healthChecks } from "@/server/health";
 import { isPlatformConfigured } from "@/server/platforms/accounts";
 import { env } from "@/server/env";
-import { addSourceAction, connectAction, deleteSourceAction, disconnectAction, runTickAction, saveFastLaneAction, saveProfileAction, saveSlotsAction, telegramWebhookAction, toggleSourceAction, togglePauseAction } from "@/app/actions";
+import { addSourceAction, connectAction, deleteSourceAction, disconnectAction, runTickAction, saveFastLaneAction, saveProfileAction, saveSlotsAction, telegramWebhookAction, toggleSourceAction, togglePauseAction, toggleApprovalAction, removeStyleNoteAction } from "@/app/actions";
 import { Flash } from "../flash";
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ ok?: string; error?: string; connected?: string }> }) {
@@ -35,6 +35,33 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           <form action={togglePauseAction}><button className={s.paused ? "btn-primary" : "btn-secondary"}>{s.paused ? "Resume autopilot" : "Pause everything"}</button></form>
           <form action={runTickAction}><button className="btn-secondary">Run one pass now</button></form>
         </div>
+      </section>
+
+      <section>
+        <h2 className="mb-2 text-lg font-semibold">Publishing mode</h2>
+        <div className="card flex flex-wrap items-center gap-3 p-3 text-sm">
+          <div className="min-w-0 flex-1">
+            <div className="font-medium">{s.requireApproval ? "Approval required" : "Auto mode"}</div>
+            <p className="text-muted">{s.requireApproval ? "Posts are written and scheduled, but nothing goes out until you approve it." : "Posts that pass review go out at their scheduled time without asking."}</p>
+          </div>
+          <form action={toggleApprovalAction}><button className="btn-secondary">{s.requireApproval ? "Switch to auto mode" : "Require approval"}</button></form>
+        </div>
+      </section>
+
+      <section>
+        <h2 className="mb-2 text-lg font-semibold">Wording you asked for</h2>
+        {s.styleNotes.length ? (
+          <ul className="card divide-y divide-line text-sm">
+            {s.styleNotes.map((n, i) => (
+              <li key={i} className="flex items-center gap-3 p-3">
+                <span className="min-w-0 flex-1">{n}</span>
+                <form action={removeStyleNoteAction}><input type="hidden" name="i" value={i} /><button className="btn-secondary">Remove</button></form>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-muted">None yet. When you reword a post and tick &quot;Remember this&quot;, it shows up here and every new post follows it.</p>
+        )}
       </section>
 
       <section>
