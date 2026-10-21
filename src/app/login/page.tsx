@@ -1,20 +1,32 @@
-import { LoginForm } from "./form";
-import { Logo } from "@/components/ui";
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import type { Metadata } from "next";
+import { AuthShell } from "@/components/auth-shell";
+import { Divider, GoogleButton, LoginForm } from "@/components/auth-forms";
+import { getSessionUser } from "@/server/auth";
+import { googleConfigured, safeNext } from "@/server/google";
+import { signupsOpen } from "@/server/users";
 
-export default function LoginPage() {
+export const metadata: Metadata = { title: "Sign in · PostFlow" };
+
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string; error?: string }> }) {
+  const sp = await searchParams;
+  const next = safeNext(sp.next);
+  if (await getSessionUser()) redirect(next);
   return (
-    <main className="flex min-h-screen items-center justify-center px-4">
-      <div className="w-full max-w-[340px]">
-        <div className="mb-6 flex items-center gap-2.5">
-          <Logo size={28} />
-          <span className="text-[18px] font-semibold tracking-tight">PostFlow</span>
-        </div>
-        <div className="panel p-5">
-          <h1 className="mb-1 text-[15px] font-semibold">Sign in</h1>
-          <p className="mb-4 text-[13px] text-[var(--muted)]">Your LinkedIn and X posting desk.</p>
-          <LoginForm />
-        </div>
-      </div>
-    </main>
+    <AuthShell
+      title="Sign in"
+      subtitle="Welcome back."
+      footer={signupsOpen() ? <>New to PostFlow? <Link href="/signup" className="font-medium text-[var(--ink)] underline">Start a free trial</Link></> : <>No account yet? <Link href="/#early-access" className="font-medium text-[var(--ink)] underline">Join the waitlist</Link></>}
+    >
+      {sp.error && <p role="alert" className="mb-4 rounded-md bg-[var(--bad-soft)] px-3 py-2 text-[13px] text-[var(--bad)]">{sp.error}</p>}
+      {googleConfigured() && (
+        <>
+          <GoogleButton next={next} />
+          <Divider />
+        </>
+      )}
+      <LoginForm next={next} />
+    </AuthShell>
   );
 }
