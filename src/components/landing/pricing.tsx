@@ -4,7 +4,7 @@ import { useState } from "react";
 import { PLANS, TRIAL_DAYS } from "@/lib/pricing";
 import { Icon } from "@/components/ui";
 
-export function Pricing() {
+export function Pricing({ signupsOpen = false }: { signupsOpen?: boolean }) {
   const [yearly, setYearly] = useState(true);
   return (
     <div>
@@ -55,14 +55,14 @@ export function Pricing() {
                 ))}
               </ul>
               <ul className="mt-4 flex-1 space-y-2.5 text-[14px]">
-                {p.features.map((f) => (
+                {p.bullets.map((f) => (
                   <li key={f} className="flex gap-2.5">
                     <Icon name="check" size={16} className="mt-0.5 flex-none text-[var(--good)]" />
                     <span>{f}</span>
                   </li>
                 ))}
               </ul>
-              <a href={`/?plan=${p.id}#early-access`} className={`btn mt-6 h-10 text-[14px] ${p.popular ? "btn-primary" : ""}`}>
+              <a href={signupsOpen && !p.soon ? `/signup?plan=${p.id}&interval=${yearly ? "year" : "month"}` : `/?plan=${p.id}#early-access`} className={`btn mt-6 h-10 text-[14px] ${p.popular ? "btn-primary" : ""}`}>
                 {p.soon ? "Join the waitlist" : `Start ${TRIAL_DAYS}-day trial`}
               </a>
             </div>
