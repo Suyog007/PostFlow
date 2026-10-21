@@ -33,23 +33,35 @@ every 5 min (cron)  ──►  /api/cron/tick
 
 Telegram: send any text = note (`#nepal`, `#learning` tags steer it), `/queue`, `/pause`, `/resume`.
 
-## Free-tier deployment (about 20 minutes)
+## Pages
+
+| URL | What | Who |
+| --- | --- | --- |
+| `/` | Public landing page: product tour, pricing, FAQ, early-access form | everyone |
+| `/login` | Owner sign-in | you |
+| `/calendar`, `/posts/…`, `/create`, `/notes`, `/settings` | The app | you |
+
+Early-access sign-ups land in the `waitlist` table and are listed at the bottom of **Settings**. Plans and prices live in `src/lib/pricing.ts`. Landing screenshots are real app screenshots in `public/landing/` (light and dark).
+
+## Deploying on Netlify (about 20 minutes)
 
 | Piece | Service | Cost |
 | --- | --- | --- |
-| Web app + API | Vercel (Hobby) | free |
+| Web app, API, landing page | Netlify | free tier to start |
+| Scheduler (every 5 min) | Netlify scheduled + background function (`netlify/functions/`) | see note below |
 | Database | Neon or Supabase Postgres | free |
-| Scheduler (every 5 min) | cron-job.org and/or the included GitHub Action | free |
 | Alerts + notes | Telegram bot | free |
 | Model | Fireworks | pay per use (small) |
 | LinkedIn API | developer app | free |
 | **X API** | developer app | **paid per post; check current pricing before relying on it** |
 
-1. Create a Neon database; put the pooled connection string in `DATABASE_URL` and run `npm run db:migrate` once locally with it.
-2. Import the repo in Vercel; add every variable from `.env.example` (`APP_URL` = your Vercel URL).
-3. **Scheduler:** Vercel's free cron only runs hourly, so add a free job at cron-job.org: `GET https://<app>/api/cron/tick` every 5 minutes with header `Authorization: Bearer <CRON_SECRET>`. Or add `APP_URL` and `CRON_SECRET` as GitHub repo secrets and the included workflow does it (GitHub may delay runs). Posts publish within about 5 minutes of their slot.
-4. Open the app, go to **Settings**: connect LinkedIn and X, register the Telegram webhook, set your profile and slots.
-5. Add a few notes. Watch the calendar fill.
+1. Create a Neon database; put the pooled connection string in `DATABASE_URL` and run `npm run db:migrate` once locally with it (run it again after every update that adds a migration).
+2. In Netlify: **Add new site → Import an existing project →** pick this repo. `netlify.toml` already sets the build command and Node 22.
+3. **Site configuration → Environment variables:** add every variable from `.env.example`. Set `APP_URL` to your Netlify URL (or custom domain), e.g. `https://postflow.netlify.app`.
+4. Deploy. The landing page is at `/`, sign in at `/login`.
+5. In **Settings** inside the app: connect LinkedIn and X, register the Telegram webhook, set your profile and slots.
+
+**Scheduler on Netlify.** A normal Netlify request is cut off after about 30 seconds, but one scheduler pass (collect, write, review, publish) can take minutes. So `tick-schedule` runs every 5 minutes and starts `tick-background`, a background function that may run for up to 15 minutes. Scheduled functions only run on the production deploy. Check that background functions are included in your Netlify plan. If they are not, run the scheduler from GitHub Actions instead (`npm run tick` with the same environment variables as repo secrets) or from any always-on machine with `npm run tick:loop`. Pinging `/api/cron/tick` from cron-job.org also works, but only for passes that finish within Netlify's request limit.
 
 ### Connecting accounts
 
