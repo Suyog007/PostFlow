@@ -1,17 +1,19 @@
 import { DateTime } from "luxon";
-import { desc } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
+import { requireActiveUser } from "@/server/auth";
 import { db, schema } from "@/server/db/client";
 import { getSettings } from "@/server/settings";
 import { addNoteAction, deleteNoteAction } from "@/app/actions";
 import { Flash } from "../flash";
 
-const PILLAR_LABEL: Record<string, string> = { own_work: "Something I built or did", learning: "Something I learned", nepal: "Nepal tech scene", news: "A take on news" };
+const PILLAR_LABEL: Record<string, string> = { own_work: "Something I built or did", learning: "Something I learned", local: "My local tech scene", news: "A take on news" };
 
 export default async function NotesPage({ searchParams }: { searchParams: Promise<{ ok?: string; error?: string }> }) {
   const sp = await searchParams;
+  const user = await requireActiveUser();
   const s = await getSettings();
-  const notes = await db().select().from(schema.notes).orderBy(desc(schema.notes.createdAt)).limit(100);
-  const used = new Set((await db().select({ n: schema.posts.noteId }).from(schema.posts)).map((r) => r.n));
+  const notes = await db().select().from(schema.notes).where(eq(schema.notes.userId, user.id)).orderBy(desc(schema.notes.createdAt)).limit(100);
+  const used = new Set((await db().select({ n: schema.posts.noteId }).from(schema.posts).where(eq(schema.posts.userId, user.id))).map((r) => r.n));
   return (
     <div className="max-w-3xl">
       <Flash ok={sp.ok} error={sp.error} />
@@ -24,7 +26,7 @@ export default async function NotesPage({ searchParams }: { searchParams: Promis
         <textarea name="text" rows={4} required placeholder="e.g. Moved our invoice PDF generation to a background job. Page load dropped from 4s to 1.2s. Mistake: I first cached it, which hid the real problem." className="textarea" />
         <div className="flex items-center gap-3">
           <select name="pillar" className="input w-auto" defaultValue="own_work">
-            {["own_work", "learning", "nepal"].map((p) => <option key={p} value={p}>{PILLAR_LABEL[p]}</option>)}
+            {["own_work", "learning", "local"].map((p) => <option key={p} value={p}>{p === "local" && s.profile.region ? `${s.profile.region} tech scene` : PILLAR_LABEL[p]}</option>)}
           </select>
           <button className="btn-primary">Save note</button>
         </div>

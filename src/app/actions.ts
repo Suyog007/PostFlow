@@ -4,8 +4,10 @@ import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { redirect } from "next/navigation";
 import { DateTime } from "luxon";
-import { eq } from "drizzle-orm";
-import { login, logout, requireOwner } from "@/server/auth";
+import { and, eq } from "drizzle-orm";
+import { requireActiveUser, requireOwnerUser } from "@/server/auth";
+import { withUser } from "@/server/context";
+import { assertFeature, assertFeedQuota, LimitError } from "@/server/billing/plans";
 import { db, schema } from "@/server/db/client";
 import { PILLARS, type Pillar } from "@/server/db/schema";
 import { getSettings, saveSettings } from "@/server/settings";
@@ -14,32 +16,21 @@ import { approvePost, editPost, postNow, PostError, removePost, unapprovePost, r
 import { createRequest, processRequests, type RequestMode } from "@/server/requests";
 import { addTip } from "@/server/tips";
 import { disconnectAccount, startOAuth } from "@/server/platforms/accounts";
-import { registerWebhook } from "@/server/telegram";
-import { tick } from "@/server/tick";
+import { registerWebhook, unlinkTelegram } from "@/server/telegram";
+import { runForUser, tick } from "@/server/tick";
 import { rejectAndReplace, rewordPost } from "@/server/generate";
 import { isPublicHttpUrl } from "@/server/net";
-
-export async function loginAction(_: unknown, form: FormData) {
-  const r = await login(String(form.get("password") ?? ""));
-  if (!r.ok) return { error: r.error };
-  redirect("/calendar");
-}
-
-export async function logoutAction() {
-  await logout();
-  redirect("/login");
-}
 
 function back(path: string, kind: "error" | "ok", message: string): never {
   redirect(`${path}${path.includes("?") ? "&" : "?"}${kind}=${encodeURIComponent(message)}`);
 }
 
 async function guarded(path: string, fn: () => Promise<unknown>, okMessage?: string): Promise<never> {
-  await requireOwner();
+  await requireActiveUser();
   try {
     await fn();
   } catch (err) {
-    if (err instanceof PostError || err instanceof Error) back(path, "error", err.message);
+    if (err instanceof PostError || err instanceof LimitError || err instanceof Error) back(path, "error", err.message);
     throw err;
   }
   revalidatePath("/", "layout");
@@ -87,7 +78,7 @@ export async function unapprovePostAction(form: FormData) {
 }
 export async function rejectPostAction(form: FormData) {
   const id = String(form.get("id"));
-  await requireOwner();
+  await requireActiveUser();
   let r: Awaited<ReturnType<typeof rejectAndReplace>>;
   try {
     r = await rejectAndReplace(id);
@@ -128,7 +119,8 @@ export async function createPostAction(form: FormData) {
       if (!platforms.length) throw new Error("Pick at least one platform.");
       const mode = String(form.get("mode")) as RequestMode;
       await createRequest({ text: String(form.get("text") ?? ""), platforms: [...platforms], mode: ["schedule", "soon", "draft"].includes(mode) ? mode : "schedule", own: form.get("own") === "on" });
-      after(() => processRequests({ max: 1 }).then(() => undefined));
+      const user = await requireActiveUser();
+      after(() => withUser(user.id, () => processRequests({ max: 1 }).then(() => undefined)));
     },
     "Writing it now. It shows up on the calendar (or under Drafts) within a minute or two.",
   );
@@ -155,13 +147,17 @@ export async function addNoteAction(form: FormData) {
       const pillar = String(form.get("pillar")) as Pillar;
       if (text.length < 15) throw new Error("Add a bit more detail (at least a sentence).");
       if (!PILLARS.includes(pillar)) throw new Error("Pick a category.");
-      await db().insert(schema.notes).values({ text: text.slice(0, 4000), pillar, via: "web" });
+      const user = await requireActiveUser();
+      await db().insert(schema.notes).values({ userId: user.id, text: text.slice(0, 4000), pillar, via: "web" });
     },
     "Note saved. It will be used for an upcoming slot.",
   );
 }
 export async function deleteNoteAction(form: FormData) {
-  await guarded("/notes", () => db().delete(schema.notes).where(eq(schema.notes.id, String(form.get("id")))), "Deleted.");
+  await guarded("/notes", async () => {
+    const user = await requireActiveUser();
+    await db().delete(schema.notes).where(and(eq(schema.notes.id, String(form.get("id"))), eq(schema.notes.userId, user.id)));
+  }, "Deleted.");
 }
 
 // ---- settings -------------------------------------------------------------
@@ -180,6 +176,7 @@ export async function saveProfileAction(form: FormData) {
         name: String(form.get("name") ?? ""),
         role: String(form.get("role") ?? ""),
         bio: String(form.get("bio") ?? ""),
+        region: String(form.get("region") ?? "").trim().slice(0, 60),
         voice: String(form.get("voice") ?? ""),
         avoid: String(form.get("avoid") ?? ""),
         expertise: String(form.get("expertise") ?? "").split(/[\n,]/).map((x) => x.trim()).filter(Boolean),
@@ -187,16 +184,18 @@ export async function saveProfileAction(form: FormData) {
       pillars: {
         own_work: Number(form.get("w_own_work") ?? 0),
         news: Number(form.get("w_news") ?? 0),
-        nepal: Number(form.get("w_nepal") ?? 0),
+        local: Number(form.get("w_local") ?? 0),
         learning: Number(form.get("w_learning") ?? 0),
       },
-      includeLinks: { linkedin: form.get("link_linkedin") === "on", x: form.get("link_x") === "on" },
+      // Links on X cost far more per post; only owners can turn them on.
+      includeLinks: { linkedin: form.get("link_linkedin") === "on", x: (await requireActiveUser()).isOwner && form.get("link_x") === "on" },
     });
   });
 }
 
 export async function saveFastLaneAction(form: FormData) {
   await guarded("/settings", async () => {
+    if (form.get("fl_enabled") === "on") await assertFeature("fastLane", "The fast lane");
     const platforms = (["x", "linkedin"] as const).filter((p) => form.get(`fl_${p}`) === "on");
     await saveSettings({
       fastLane: {
@@ -215,14 +214,18 @@ export async function saveSlotsAction(form: FormData) {
   await guarded("/settings", async () => saveSettings({ slots: parseSlots(String(form.get("slots") ?? "")) }));
 }
 export async function toggleApprovalAction() {
-  await guarded("/settings", async () => saveSettings({ requireApproval: !(await getSettings()).requireApproval }));
+  await guarded("/settings", async () => {
+    const s = await getSettings();
+    if (s.requireApproval) await assertFeature("autoMode", "Auto mode");
+    await saveSettings({ requireApproval: !s.requireApproval });
+  });
 }
 export async function togglePauseAction() {
   await guarded("/settings", async () => saveSettings({ paused: !(await getSettings()).paused }));
 }
 
 export async function connectAction(form: FormData) {
-  await requireOwner();
+  await requireActiveUser();
   const platform = String(form.get("platform"));
   if (platform !== "x" && platform !== "linkedin") return;
   let url: string;
@@ -237,17 +240,41 @@ export async function disconnectAction(form: FormData) {
   const platform = String(form.get("platform"));
   await guarded("/settings", () => disconnectAccount(platform as "x" | "linkedin"), "Disconnected.");
 }
-export async function telegramWebhookAction() {
-  await guarded("/settings", async () => {
-    const msg = await registerWebhook();
-    if (!/registered/i.test(msg)) throw new Error(msg);
-  }, "Telegram webhook registered. Send /start to your bot.");
+export async function unlinkTelegramAction() {
+  await guarded("/settings", () => unlinkTelegram(), "Telegram disconnected.");
 }
+/** Runs the pipeline for the signed-in user only. */
 export async function runTickAction() {
   await guarded("/settings", async () => {
+    const user = await requireActiveUser();
+    const r = await runForUser(user.id, { budgetMs: 45_000 });
+    if (r.errors.length) throw new Error(r.errors[0]);
+  }, "Checked for new material and filled open slots.");
+}
+
+// ---- admin ------------------------------------------------------------------
+
+async function adminGuarded(fn: () => Promise<unknown>, okMessage: string): Promise<never> {
+  await requireOwnerUser();
+  try {
+    await fn();
+  } catch (err) {
+    back("/admin", "error", (err as Error).message);
+  }
+  revalidatePath("/admin");
+  return back("/admin", "ok", okMessage);
+}
+export async function telegramWebhookAction() {
+  await adminGuarded(async () => {
+    const msg = await registerWebhook();
+    if (!/registered/i.test(msg)) throw new Error(msg);
+  }, "Telegram webhook registered.");
+}
+export async function adminTickAction() {
+  await adminGuarded(async () => {
     const r = await tick({ budgetMs: 45_000 });
     if (r.skipped) throw new Error(`Skipped: ${r.skipped}`);
-  }, "Ran one scheduler pass.");
+  }, "Ran one scheduler pass for all users.");
 }
 
 // ---- sources --------------------------------------------------------------
@@ -256,17 +283,24 @@ export async function addSourceAction(form: FormData) {
   await guarded("/settings", async () => {
     const url = String(form.get("url") ?? "").trim();
     if (!isPublicHttpUrl(url)) throw new Error("Enter a public http(s) feed URL.");
-    const pillar = form.get("pillar") === "nepal" ? "nepal" : "news";
-    await db().insert(schema.sources).values({ name: String(form.get("name") || new URL(url).hostname).slice(0, 80), url, pillar }).onConflictDoNothing();
+    const pillar = form.get("pillar") === "local" ? "local" : "news";
+    await assertFeedQuota();
+    const user = await requireActiveUser();
+    await db().insert(schema.sources).values({ userId: user.id, name: String(form.get("name") || new URL(url).hostname).slice(0, 80), url, pillar }).onConflictDoNothing();
   }, "Feed added.");
 }
 export async function toggleSourceAction(form: FormData) {
   const id = String(form.get("id"));
   await guarded("/settings", async () => {
-    const s = await db().query.sources.findFirst({ where: eq(schema.sources.id, id) });
-    if (s) await db().update(schema.sources).set({ enabled: !s.enabled }).where(eq(schema.sources.id, id));
+    const user = await requireActiveUser();
+    const s = await db().query.sources.findFirst({ where: and(eq(schema.sources.id, id), eq(schema.sources.userId, user.id)) });
+    if (s && !s.enabled) await assertFeedQuota();
+    if (s) await db().update(schema.sources).set({ enabled: !s.enabled }).where(and(eq(schema.sources.id, id), eq(schema.sources.userId, user.id)));
   });
 }
 export async function deleteSourceAction(form: FormData) {
-  await guarded("/settings", () => db().delete(schema.sources).where(eq(schema.sources.id, String(form.get("id")))), "Feed removed.");
+  await guarded("/settings", async () => {
+    const user = await requireActiveUser();
+    await db().delete(schema.sources).where(and(eq(schema.sources.id, String(form.get("id"))), eq(schema.sources.userId, user.id)));
+  }, "Feed removed.");
 }

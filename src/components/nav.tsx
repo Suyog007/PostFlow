@@ -11,15 +11,21 @@ const ITEMS = [
   { href: "/settings", label: "Settings", icon: "settings" },
 ] as const;
 
+const SECONDARY = [
+  { href: "/billing", label: "Billing", icon: "chart" },
+  { href: "/account", label: "Account", icon: "shield" },
+] as const;
+
 function active(path: string, href: string) {
   return href === "/calendar" ? path.startsWith("/calendar") || path.startsWith("/posts") : path.startsWith(href);
 }
 
-export function SideNav() {
+export function SideNav({ owner = false }: { owner?: boolean }) {
   const path = usePathname();
+  const items = [...ITEMS, ...SECONDARY, ...(owner ? [{ href: "/admin", label: "Admin", icon: "alert" } as const] : [])];
   return (
     <nav className="flex flex-col gap-0.5">
-      {ITEMS.map((i) => (
+      {items.map((i) => (
         <Link
           key={i.href}
           href={i.href}

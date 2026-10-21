@@ -1,21 +1,25 @@
 import Link from "next/link";
 import { DateTime } from "luxon";
-import { requireOwner } from "@/server/auth";
+import { requireActiveUser } from "@/server/auth";
+import { entitlementOf, postsThisMonth } from "@/server/billing/plans";
 import { getSettings } from "@/server/settings";
 import { lastHeartbeat } from "@/server/health";
 import { Avatar, Logo } from "@/components/ui";
 import { SideNav, TabBar } from "@/components/nav";
-import { logoutAction, togglePauseAction } from "../actions";
+import { togglePauseAction } from "../actions";
+import { logoutAction } from "../auth-actions";
 
 export const dynamic = "force-dynamic";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  await requireOwner();
+  const user = await requireActiveUser();
   const s = await getSettings();
+  const ent = entitlementOf(user);
+  const used = ent.plan === "owner" ? null : await postsThisMonth(user.id);
   const beat = await lastHeartbeat();
   const mins = beat ? Math.round((Date.now() - beat.getTime()) / 60_000) : null;
   const alive = mins !== null && mins < 30;
-  const name = s.profile.name || "You";
+  const name = s.profile.name || user.name || user.email;
   return (
     <div className="min-h-screen md:grid md:grid-cols-[224px_minmax(0,1fr)]">
       <aside className="hidden flex-col gap-6 border-r border-[var(--line)] bg-[var(--side)] p-3 md:sticky md:top-0 md:flex md:h-screen">
@@ -23,7 +27,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <Logo />
           <span className="text-[14px] font-semibold tracking-tight">PostFlow</span>
         </Link>
-        <SideNav />
+        <SideNav owner={user.isOwner} />
+        {used !== null && (
+          <Link href="/billing" className="mx-1 rounded-lg border border-[var(--line)] bg-[var(--surface)] p-3 text-[12px] hover:border-[var(--line-strong)]">
+            <div className="flex justify-between font-medium"><span>{ent.plan === "pro" ? "Pro" : "Starter"} plan</span><span className="tnum text-[var(--muted)]">{used}/{ent.quota.postsPerMonth}</span></div>
+            <div className="mt-1.5 h-1.5 rounded-full bg-[var(--side)]"><div className="h-1.5 rounded-full bg-[var(--accent)]" style={{ width: `${Math.min(100, (used / ent.quota.postsPerMonth) * 100)}%` }} /></div>
+            <div className="mt-1 text-[11px] text-[var(--subtle)]">posts this month{user.subscriptionStatus === "trialing" ? " · free trial" : ""}</div>
+          </Link>
+        )}
         <div className="mt-auto space-y-3">
           <form action={togglePauseAction} className="rounded-lg border border-[var(--line)] bg-[var(--surface)] p-3">
             <div className="flex items-center gap-2 text-[12px] font-medium">

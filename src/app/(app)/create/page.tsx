@@ -1,5 +1,8 @@
 import { DateTime } from "luxon";
+import Link from "next/link";
 import { getSettings } from "@/server/settings";
+import { requireActiveUser } from "@/server/auth";
+import { entitlementOf } from "@/server/billing/plans";
 import { recentRequests } from "@/server/requests";
 import { createPostAction, addTipAction } from "@/app/actions";
 import { Flash } from "../flash";
@@ -8,6 +11,8 @@ export const dynamic = "force-dynamic";
 
 export default async function CreatePage({ searchParams }: { searchParams: Promise<{ ok?: string; error?: string }> }) {
   const sp = await searchParams;
+  const user = await requireActiveUser();
+  const links = entitlementOf(user).features.links;
   const s = await getSettings();
   const reqs = await recentRequests(8);
   return (
@@ -18,7 +23,11 @@ export default async function CreatePage({ searchParams }: { searchParams: Promi
         <p className="mb-4 text-sm text-muted">Give me an idea, a link, or a link with your angle. I write it for each platform, the reviewer checks it, and it goes on the calendar unless you ask for a draft.</p>
         <form action={createPostAction} className="card space-y-3 p-4 text-sm">
           <textarea name="text" rows={5} required placeholder={"An idea: Most teams add caching before they measure. Here is what I check first.\nA link: https://example.com/article\nA link with your angle: https://example.com/article  the pricing change matters more than the model"} className="textarea" />
-          <label className="flex items-center gap-2"><input type="checkbox" name="own" /> The link is my own article. Write it as me and include the link in the post.</label>
+          {links ? (
+            <label className="flex items-center gap-2"><input type="checkbox" name="own" /> The link is my own article. Write it as me and include the link in the post.</label>
+          ) : (
+            <p className="text-[12px] text-[var(--muted)]">On Starter, describe the idea in your own words. Writing from a link or your own articles is part of <Link href="/billing" className="underline">Pro</Link>.</p>
+          )}
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
             <label className="flex items-center gap-2"><input type="checkbox" name="p_linkedin" defaultChecked /> LinkedIn</label>
             <label className="flex items-center gap-2"><input type="checkbox" name="p_x" defaultChecked /> X</label>

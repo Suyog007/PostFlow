@@ -1,41 +1,53 @@
 import { DateTime } from "luxon";
-import { asc } from "drizzle-orm";
+import Link from "next/link";
+import { asc, eq } from "drizzle-orm";
 import { db, schema } from "@/server/db/client";
 import { getSettings } from "@/server/settings";
 import { formatSlots } from "@/server/slots-parse";
-import { healthChecks } from "@/server/health";
+import { myChecks } from "@/server/health";
+import { requireActiveUser } from "@/server/auth";
+import { entitlementOf } from "@/server/billing/plans";
+import { telegramConfigured, telegramLinkUrl } from "@/server/telegram";
 import { isPlatformConfigured } from "@/server/platforms/accounts";
-import { env } from "@/server/env";
-import { listWaitlist } from "@/server/waitlist";
-import { addSourceAction, connectAction, deleteSourceAction, disconnectAction, runTickAction, saveFastLaneAction, saveProfileAction, saveSlotsAction, telegramWebhookAction, toggleSourceAction, togglePauseAction, toggleApprovalAction, removeStyleNoteAction } from "@/app/actions";
+import { addSourceAction, connectAction, deleteSourceAction, disconnectAction, runTickAction, saveFastLaneAction, saveProfileAction, saveSlotsAction, unlinkTelegramAction, toggleSourceAction, togglePauseAction, toggleApprovalAction, removeStyleNoteAction } from "@/app/actions";
 import { Flash } from "../flash";
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ ok?: string; error?: string; connected?: string }> }) {
   const sp = await searchParams;
+  const user = await requireActiveUser();
+  const ent = entitlementOf(user);
+  const pro = (label: string) => <Link href="/billing" className="badge badge-accent ml-1" title={`${label} is part of Pro`}>Pro</Link>;
   const s = await getSettings();
-  const checks = await healthChecks();
-  const accounts = await db().select().from(schema.platformAccounts);
-  const sources = await db().select().from(schema.sources).orderBy(asc(schema.sources.pillar), asc(schema.sources.name));
-  const waitlist = await listWaitlist();
+  const checks = await myChecks();
+  const accounts = await db().select().from(schema.platformAccounts).where(eq(schema.platformAccounts.userId, user.id));
+  const sources = await db().select().from(schema.sources).where(eq(schema.sources.userId, user.id)).orderBy(asc(schema.sources.pillar), asc(schema.sources.name));
+  const tgLink = user.telegramChatId ? null : await telegramLinkUrl();
+  const approvalOn = s.requireApproval || !ent.features.autoMode;
   const acct = (p: string) => accounts.find((a) => a.platform === p && a.status !== "disconnected");
 
   return (
     <div className="max-w-3xl space-y-8">
       <Flash ok={sp.ok ?? (sp.connected ? `Connected ${sp.connected}.` : undefined)} error={sp.error} />
+      {/* On phones the bottom tab bar has no room for these. */}
+      <nav className="flex gap-2 md:hidden">
+        <Link href="/billing" className="btn btn-sm">Billing</Link>
+        <Link href="/account" className="btn btn-sm">Account</Link>
+        {user.isOwner && <Link href="/admin" className="btn btn-sm">Admin</Link>}
+      </nav>
 
       <section>
         <h2 className="mb-2 text-lg font-semibold">Status</h2>
         <ul className="card divide-y divide-line text-sm">
           {checks.map((c) => (
             <li key={c.label} className="flex gap-3 p-3">
-              <span className={c.ok ? "text-good" : c.critical ? "text-bad" : "text-warn"}>{c.ok ? "✓" : "●"}</span>
+              <span className={c.ok ? "text-good" : "text-warn"}>{c.ok ? "✓" : "●"}</span>
               <div><span className="font-medium">{c.label}</span>{!c.ok && <p className="text-muted">{c.hint}</p>}</div>
             </li>
           ))}
         </ul>
         <div className="mt-3 flex gap-2">
           <form action={togglePauseAction}><button className={s.paused ? "btn-primary" : "btn-secondary"}>{s.paused ? "Resume autopilot" : "Pause everything"}</button></form>
-          <form action={runTickAction}><button className="btn-secondary">Run one pass now</button></form>
+          <form action={runTickAction}><button className="btn-secondary">Check for new material now</button></form>
         </div>
       </section>
 
@@ -43,10 +55,10 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <h2 className="mb-2 text-lg font-semibold">Publishing mode</h2>
         <div className="card flex flex-wrap items-center gap-3 p-3 text-sm">
           <div className="min-w-0 flex-1">
-            <div className="font-medium">{s.requireApproval ? "Approval required" : "Auto mode"}</div>
-            <p className="text-muted">{s.requireApproval ? "Posts are written and scheduled, but nothing goes out until you approve it." : "Posts that pass review go out at their scheduled time without asking."}</p>
+            <div className="font-medium">{approvalOn ? "Approval required" : "Auto mode"}{!ent.features.autoMode && pro("Auto mode")}</div>
+            <p className="text-muted">{approvalOn ? "Posts are written and scheduled, but nothing goes out until you approve it." : "Posts that pass review go out at their scheduled time without asking."}</p>
           </div>
-          <form action={toggleApprovalAction}><button className="btn-secondary">{s.requireApproval ? "Switch to auto mode" : "Require approval"}</button></form>
+          {ent.features.autoMode && <form action={toggleApprovalAction}><button className="btn-secondary">{approvalOn ? "Switch to auto mode" : "Require approval"}</button></form>}
         </div>
       </section>
 
@@ -66,7 +78,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         )}
       </section>
 
-      <section>
+      <section id="accounts" className="scroll-mt-6">
         <h2 className="mb-2 text-lg font-semibold">Accounts</h2>
         <div className="card divide-y divide-line text-sm">
           {(["linkedin", "x"] as const).map((p) => {
@@ -75,7 +87,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               <div key={p} className="flex items-center gap-3 p-3">
                 <div className="flex-1">
                   <div className="font-medium">{p === "x" ? "X" : "LinkedIn"}</div>
-                  <div className="text-muted">{a ? `${a.handle ?? "connected"}${a.status === "error" ? ` · needs reconnect: ${a.lastError}` : ""}` : isPlatformConfigured(p) ? "Not connected" : "App credentials not set on the server"}</div>
+                  <div className="text-muted">{a ? `${a.handle ?? "connected"}${a.status === "error" ? ` · needs reconnect: ${a.lastError}` : ""}` : isPlatformConfigured(p) ? "Not connected" : "Not available yet"}</div>
                 </div>
                 <form action={connectAction}><input type="hidden" name="platform" value={p} /><button className="btn-secondary" disabled={!isPlatformConfigured(p)}>{a ? "Reconnect" : "Connect"}</button></form>
                 {a && <form action={disconnectAction}><input type="hidden" name="platform" value={p} /><button className="btn-ghost">Disconnect</button></form>}
@@ -95,10 +107,10 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       </section>
 
       <section>
-        <h2 className="mb-2 text-lg font-semibold">Fast lane</h2>
+        <h2 className="mb-2 text-lg font-semibold">Fast lane{!ent.features.fastLane && pro("The fast lane")}</h2>
         <form action={saveFastLaneAction} className="card space-y-3 p-4 text-sm">
           <p className="text-muted">When a breaking story is a clear opportunity for builders, post about it soon instead of waiting for the next slot. You get the lead time below (and a Telegram Remove button) to veto it.</p>
-          <label className="flex items-center gap-2"><input type="checkbox" name="fl_enabled" defaultChecked={s.fastLane.enabled} /> Fast lane on</label>
+          <label className="flex items-center gap-2"><input type="checkbox" name="fl_enabled" defaultChecked={s.fastLane.enabled && ent.features.fastLane} disabled={!ent.features.fastLane} /> Fast lane on</label>
           <div className="grid gap-3 sm:grid-cols-3">
             <div><label className="label">Min. score (7-10)</label><input name="fl_min" type="number" min={7} max={10} defaultValue={s.fastLane.minRelevance} className="input" /></div>
             <div><label className="label">Max per day, per platform</label><input name="fl_max" type="number" min={1} max={3} defaultValue={s.fastLane.maxPerDay} className="input" /></div>
@@ -114,13 +126,14 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         </form>
       </section>
 
-      <section>
+      <section id="profile" className="scroll-mt-6">
         <h2 className="mb-2 text-lg font-semibold">You and your voice</h2>
         <form action={saveProfileAction} className="card space-y-3 p-4 text-sm">
           <div className="grid gap-3 sm:grid-cols-2">
             <div><label className="label">Name</label><input name="name" defaultValue={s.profile.name} className="input" /></div>
-            <div><label className="label">Role</label><input name="role" defaultValue={s.profile.role} className="input" /></div>
+            <div><label className="label">Role</label><input name="role" defaultValue={s.profile.role} placeholder="e.g. Founder of a dev-tools startup" className="input" /></div>
           </div>
+          <div><label className="label">Your region, for local tech scene posts (optional)</label><input name="region" defaultValue={s.profile.region} placeholder="e.g. Berlin, Nepal, Lagos" className="input" /></div>
           <div><label className="label">Short bio</label><textarea name="bio" rows={2} defaultValue={s.profile.bio} className="textarea" /></div>
           <div><label className="label">Topics you can credibly write about (comma or line separated)</label><textarea name="expertise" rows={2} defaultValue={s.profile.expertise.join(", ")} className="textarea" /></div>
           <div><label className="label">Voice</label><textarea name="voice" rows={2} defaultValue={s.profile.voice} className="textarea" /></div>
@@ -128,7 +141,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           <div>
             <label className="label">Content mix (relative weights)</label>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {([["w_own_work", "My work", s.pillars.own_work], ["w_news", "Tech news", s.pillars.news], ["w_nepal", "Nepal tech", s.pillars.nepal], ["w_learning", "Learning", s.pillars.learning]] as const).map(([n, l, v]) => (
+              {([["w_own_work", "My work", s.pillars.own_work], ["w_news", "Tech news", s.pillars.news], ["w_local", s.profile.region ? `${s.profile.region} scene` : "Local scene", s.pillars.local], ["w_learning", "Learning", s.pillars.learning]] as const).map(([n, l, v]) => (
                 <div key={n}><span className="text-xs text-muted">{l}</span><input name={n} type="number" min={0} step={1} defaultValue={v} className="input" /></div>
               ))}
             </div>
@@ -143,23 +156,34 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           <label className="flex items-center gap-2"><input type="checkbox" name="fillerPosts" defaultChecked={s.fillerPosts} /> Fill empty slots with evergreen explainers when there is nothing strong to post <span className="text-xs text-muted">(off: the slot stays empty)</span></label>
           <div className="flex gap-6">
             <label className="flex items-center gap-2"><input type="checkbox" name="link_linkedin" defaultChecked={s.includeLinks.linkedin} /> Add the news source link on LinkedIn</label>
-            <label className="flex items-center gap-2"><input type="checkbox" name="link_x" defaultChecked={s.includeLinks.x} /> Add the news source link on X <span className="text-xs text-muted">(X charges far more per post with a link)</span></label>
+            {user.isOwner && <label className="flex items-center gap-2"><input type="checkbox" name="link_x" defaultChecked={s.includeLinks.x} /> Add the news source link on X <span className="text-xs text-muted">(X charges far more per post with a link)</span></label>}
           </div>
           <button className="btn-primary">Save</button>
         </form>
       </section>
 
-      <section>
+      <section id="telegram" className="scroll-mt-6">
         <h2 className="mb-2 text-lg font-semibold">Telegram</h2>
-        <div className="card space-y-2 p-4 text-sm">
-          <p className="text-muted">Get every scheduled post in Telegram with a Remove button, and send notes to your bot to turn them into posts. Free.</p>
-          <p>Bot token: {env().TELEGRAM_BOT_TOKEN ? "set" : "not set"} · Chat id: {env().TELEGRAM_CHAT_ID ? "set" : "not set (send /start to your bot to learn it)"} · Webhook secret: {env().TELEGRAM_WEBHOOK_SECRET ? "set" : "not set"}</p>
-          <form action={telegramWebhookAction}><button className="btn-secondary">Register webhook</button></form>
+        <div className="card space-y-3 p-4 text-sm">
+          <p className="text-muted">Get every new post in Telegram with Approve and Remove buttons, and message the bot to add notes or ask for a post. Free.</p>
+          {user.telegramChatId ? (
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="flex-1 font-medium text-good">✓ Linked</span>
+              <form action={unlinkTelegramAction}><button className="btn-ghost">Disconnect</button></form>
+            </div>
+          ) : tgLink ? (
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="flex-1 text-muted">Open the link, press <strong>Start</strong> in Telegram, then come back.</span>
+              <a href={tgLink} target="_blank" rel="noopener noreferrer" className="btn btn-primary">Connect Telegram</a>
+            </div>
+          ) : (
+            <p className="text-muted">{telegramConfigured() ? "Telegram linking is being set up." : "Telegram is not available yet."}</p>
+          )}
         </div>
       </section>
 
       <section>
-        <h2 className="mb-2 text-lg font-semibold">News sources</h2>
+        <h2 className="mb-2 text-lg font-semibold">News sources <span className="text-sm font-normal text-muted">· {sources.filter((x) => x.url !== "tips://manual").length} of {ent.quota.feeds}</span></h2>
         <ul className="card divide-y divide-line text-sm">
           {sources.map((src) => (
             <li key={src.id} className="flex items-center gap-3 p-3">
@@ -176,25 +200,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <form action={addSourceAction} className="card mt-3 flex flex-wrap gap-2 p-3">
           <input name="name" placeholder="Name" className="input w-40" />
           <input name="url" placeholder="https://example.com/feed.xml" className="input min-w-60 flex-1" required />
-          <select name="pillar" className="input w-auto"><option value="news">News</option><option value="nepal">Nepal</option></select>
+          <select name="pillar" className="input w-auto"><option value="news">News</option><option value="local">{s.profile.region ? `${s.profile.region} scene` : "Local scene"}</option></select>
           <button className="btn-secondary">Add feed</button>
         </form>
-      </section>
-      <section>
-        <h2 className="mb-2 text-lg font-semibold">Early access list <span className="text-sm font-normal text-muted">· {waitlist.length}</span></h2>
-        <p className="mb-2 text-sm text-muted">People who joined from the landing page.</p>
-        <ul className="card divide-y divide-line text-sm">
-          {waitlist.map((w) => (
-            <li key={w.id} className="flex items-center gap-3 p-3">
-              <div className="min-w-0 flex-1">
-                <div className="truncate font-medium">{w.email}</div>
-                <div className="truncate text-xs text-muted">{[w.plan && `${w.plan[0].toUpperCase()}${w.plan.slice(1)} plan`, w.role].filter(Boolean).join(" · ") || "No plan picked"}</div>
-              </div>
-              <span className="text-xs text-muted">{DateTime.fromJSDate(w.createdAt).toRelative()}</span>
-            </li>
-          ))}
-          {!waitlist.length && <li className="p-3 text-muted">No sign-ups yet.</li>}
-        </ul>
       </section>
     </div>
   );

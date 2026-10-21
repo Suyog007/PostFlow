@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DateTime } from "luxon";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
+import { requireActiveUser } from "@/server/auth";
+import { entitlementOf } from "@/server/billing/plans";
 import { db, schema } from "@/server/db/client";
 import { getSettings } from "@/server/settings";
 import { approvePostAction, postNowAction, rejectPostAction, removePostAction, reschedulePostAction, resolveAction, restorePostAction, rewordPostAction, scheduleDraftAction, unapprovePostAction } from "@/app/actions";
@@ -34,15 +36,17 @@ export default async function PostPage({ params, searchParams }: { params: Promi
   const { id } = await params;
   const sp = await searchParams;
   if (!/^[0-9a-f-]{36}$/.test(id)) notFound();
-  const p = await db().query.posts.findFirst({ where: eq(schema.posts.id, id) });
+  const user = await requireActiveUser();
+  // Another user's post is simply "not found".
+  const p = await db().query.posts.findFirst({ where: and(eq(schema.posts.id, id), eq(schema.posts.userId, user.id)) });
   if (!p) notFound();
   const s = await getSettings();
-  const acct = await db().query.platformAccounts.findFirst({ where: eq(schema.platformAccounts.platform, p.platform) });
+  const acct = await db().query.platformAccounts.findFirst({ where: and(eq(schema.platformAccounts.userId, user.id), eq(schema.platformAccounts.platform, p.platform)) });
   const r = (p.review ?? {}) as ReviewData;
   const local = DateTime.fromJSDate(p.scheduledAt, { zone: s.timezone });
   const editable = ["scheduled", "failed", "cancelled", "draft"].includes(p.status);
   const open = ["scheduled", "draft"].includes(p.status);
-  const needsApproval = s.requireApproval && p.status === "scheduled" && !p.approvedAt;
+  const needsApproval = (s.requireApproval || !entitlementOf(user).features.autoMode) && p.status === "scheduled" && !p.approvedAt;
   const platformName = p.platform === "x" ? "X" : "LinkedIn";
   const name = s.profile.name || "Your Name";
   const handle = (acct?.handle ?? name.toLowerCase().replace(/[^a-z0-9]/g, "")).replace(/^@/, "");

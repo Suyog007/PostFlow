@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { DateTime } from "luxon";
-import { and, desc, eq, gte, inArray, lt } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray, lt } from "drizzle-orm";
 import { db, schema } from "@/server/db/client";
 import { getSettings } from "@/server/settings";
-import { healthChecks } from "@/server/health";
 import { recentEvents } from "@/server/events";
+import { requireActiveUser } from "@/server/auth";
+import { entitlementOf } from "@/server/billing/plans";
 import { Icon, PageHeader, PlatformGlyph, StatusBadge } from "@/components/ui";
 import { Flash } from "../flash";
 
@@ -65,10 +66,13 @@ function layoutDay(posts: Post[], tz: string, startHour: number) {
   return items;
 }
 
-export default async function CalendarPage({ searchParams }: { searchParams: Promise<{ w?: string; ok?: string; error?: string }> }) {
+export default async function CalendarPage({ searchParams }: { searchParams: Promise<{ w?: string; ok?: string; error?: string; welcome?: string }> }) {
   const sp = await searchParams;
+  const user = await requireActiveUser();
   const s = await getSettings();
-  const needsOk = (p: Post) => s.requireApproval && p.status === "scheduled" && !p.approvedAt;
+  const approvalOn = s.requireApproval || !entitlementOf(user).features.autoMode;
+  const needsOk = (p: Post) => approvalOn && p.status === "scheduled" && !p.approvedAt;
+  const mine = eq(schema.posts.userId, user.id);
   const tz = s.timezone;
   const offset = Number(sp.w ?? 0) || 0;
   const weekStart = DateTime.now().setZone(tz).startOf("week").plus({ weeks: offset });
@@ -77,12 +81,21 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const week = await db()
     .select()
     .from(schema.posts)
-    .where(and(gte(schema.posts.scheduledAt, weekStart.toJSDate()), lt(schema.posts.scheduledAt, weekEnd.toJSDate()), inArray(schema.posts.status, ["scheduled", "publishing", "published", "unconfirmed", "failed", "cancelled", "expired"])))
+    .where(and(mine, gte(schema.posts.scheduledAt, weekStart.toJSDate()), lt(schema.posts.scheduledAt, weekEnd.toJSDate()), inArray(schema.posts.status, ["scheduled", "publishing", "published", "unconfirmed", "failed", "cancelled", "expired"])))
     .orderBy(schema.posts.scheduledAt);
-  const drafts = await db().select().from(schema.posts).where(eq(schema.posts.status, "draft")).orderBy(desc(schema.posts.createdAt)).limit(6);
-  const held = (await db().select().from(schema.posts).where(and(eq(schema.posts.status, "rejected"), gte(schema.posts.createdAt, new Date(Date.now() - 3 * 86_400_000)))).orderBy(desc(schema.posts.createdAt)).limit(12)).filter((p) => p.text);
-  const upcoming = await db().select().from(schema.posts).where(and(eq(schema.posts.status, "scheduled"), gte(schema.posts.scheduledAt, new Date()))).orderBy(schema.posts.scheduledAt).limit(1);
-  const critical = (await healthChecks()).filter((c) => !c.ok && c.critical);
+  const drafts = await db().select().from(schema.posts).where(and(mine, eq(schema.posts.status, "draft"))).orderBy(desc(schema.posts.createdAt)).limit(6);
+  const held = (await db().select().from(schema.posts).where(and(mine, eq(schema.posts.status, "rejected"), gte(schema.posts.createdAt, new Date(Date.now() - 3 * 86_400_000)))).orderBy(desc(schema.posts.createdAt)).limit(12)).filter((p) => p.text);
+  const upcoming = await db().select().from(schema.posts).where(and(mine, eq(schema.posts.status, "scheduled"), gte(schema.posts.scheduledAt, new Date()))).orderBy(schema.posts.scheduledAt).limit(1);
+  // Getting started: what a new account still has to do before autopilot can write good posts.
+  const accounts = await db().select().from(schema.platformAccounts).where(eq(schema.platformAccounts.userId, user.id));
+  const [{ n: noteCount }] = await db().select({ n: count() }).from(schema.notes).where(eq(schema.notes.userId, user.id));
+  const steps = [
+    { done: accounts.some((a) => a.status === "connected"), label: "Connect LinkedIn or X", hint: "So posts can be published for you.", href: "/settings#accounts" },
+    { done: !!(s.profile.role || s.profile.expertise.length), label: "Tell PostFlow who you are", hint: "Your role, what you know well, and how you sound.", href: "/settings#profile" },
+    { done: Number(noteCount) > 0, label: "Add your first note", hint: "Something you built, fixed or learned this week.", href: "/notes" },
+    { done: !!user.telegramChatId, label: "Link Telegram (optional)", hint: "Approve posts and send notes from your phone.", href: "/settings#telegram" },
+  ];
+  const showSteps = steps.slice(0, 3).some((x) => !x.done);
   const events = await recentEvents(10);
 
   const today = DateTime.now().setZone(tz);
@@ -98,15 +111,28 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   return (
     <div>
       <Flash ok={sp.ok} error={sp.error} />
-      {critical.length > 0 && (
-        <div className="mb-4 rounded-lg border border-[var(--warn)]/30 bg-[var(--warn-soft)] px-4 py-3 text-[13px]">
-          <p className="mb-1 font-medium text-[var(--warn)]">Finish setup so autopilot can run</p>
-          <ul className="list-disc space-y-0.5 pl-5 text-[var(--muted)]">
-            {critical.map((c) => (
-              <li key={c.label}><span className="font-medium text-[var(--ink)]">{c.label}.</span> {c.hint}</li>
+      {showSteps && (
+        <section className="panel mb-5 p-4" aria-label="Getting started">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="text-[15px] font-semibold">{sp.welcome ? "Welcome to PostFlow. Three steps and autopilot takes over." : "Finish setting up"}</h2>
+            <span className="text-[12px] text-[var(--subtle)]">{steps.filter((x) => x.done).length} of {steps.length} done</span>
+          </div>
+          <ol className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            {steps.map((st, i) => (
+              <li key={st.label}>
+                <Link href={st.href} className={`flex h-full gap-3 rounded-lg border p-3 ${st.done ? "border-[var(--line)] opacity-60" : "border-[var(--line-strong)] hover:border-[var(--ink)]"}`}>
+                  <span className={`flex h-6 w-6 flex-none items-center justify-center rounded-full text-[12px] font-semibold ${st.done ? "bg-[var(--good-soft)] text-[var(--good)]" : "bg-[var(--ink)] text-[var(--bg)]"}`}>
+                    {st.done ? <Icon name="check" size={13} /> : i + 1}
+                  </span>
+                  <span>
+                    <span className={`block text-[13px] font-medium ${st.done ? "line-through" : ""}`}>{st.label}</span>
+                    <span className="block text-[12px] text-[var(--muted)]">{st.hint}</span>
+                  </span>
+                </Link>
+              </li>
             ))}
-          </ul>
-        </div>
+          </ol>
+        </section>
       )}
 
       <PageHeader
