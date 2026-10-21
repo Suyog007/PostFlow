@@ -10,9 +10,9 @@
     "db:migrate": "tsx scripts/migrate.ts",
     "tick": "tsx scripts/tick.ts",
     "tick:loop": "tsx scripts/tick.ts --loop",
-    "hash-password": "tsx scripts/hash-password.ts",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "stripe:setup": "tsx scripts/stripe-setup.ts"
   },
   "dependencies": {
     "@mozilla/readability": "^0.6.0",
