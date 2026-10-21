@@ -1,7 +1,8 @@
 import { sql } from "drizzle-orm";
-import { boolean, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
-export const PILLARS = ["own_work", "news", "nepal", "learning"] as const;
+/** "local" is the tech scene of the place the user names in their profile (for example "Nepal" or "Berlin"). */
+export const PILLARS = ["own_work", "news", "local", "learning"] as const;
 export type Pillar = (typeof PILLARS)[number];
 
 export const POST_STATUSES = [
@@ -18,15 +19,61 @@ export const POST_STATUSES = [
 ] as const;
 export type PostStatus = (typeof POST_STATUSES)[number];
 
-/** Single-row app configuration (profile, slots, pillar weights, Telegram state). */
+/** One account per customer. The owner (admin) is marked with isOwner and never billed. */
+export const users = pgTable("users", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  email: text("email").notNull().unique(), // stored lower-case
+  name: text("name").notNull().default(""),
+  passwordHash: text("password_hash"), // null when the user only signs in with Google
+  googleSub: text("google_sub").unique(),
+  emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
+  isOwner: boolean("is_owner").notNull().default(false),
+  /** Bumped on password change or "sign out everywhere"; older sessions stop working. */
+  sessionVersion: integer("session_version").notNull().default(1),
+  // Billing (mirrors Stripe; the webhook keeps it in sync)
+  stripeCustomerId: text("stripe_customer_id").unique(),
+  stripeSubscriptionId: text("stripe_subscription_id"),
+  plan: text("plan"), // starter | pro
+  billingInterval: text("billing_interval"), // month | year
+  subscriptionStatus: text("subscription_status"), // trialing | active | past_due | canceled | unpaid | incomplete ...
+  currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
+  cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
+  trialUsed: boolean("trial_used").notNull().default(false),
+  // Telegram
+  telegramChatId: text("telegram_chat_id").unique(),
+  telegramLinkCode: text("telegram_link_code").unique(),
+  /** When the scheduler last ran the writing pipeline for this user (fair round-robin). */
+  lastPipelineAt: timestamp("last_pipeline_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Single-use links sent by email (verify address, reset password). Only the hash is stored. */
+export const emailTokens = pgTable(
+  "email_tokens",
+  {
+    tokenHash: text("token_hash").primaryKey(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    purpose: text("purpose").notNull(), // verify | reset
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("email_tokens_user_idx").on(t.userId, t.createdAt)],
+);
+
+const owner = () => uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" });
+
+/** Per-user configuration (profile, slots, content mix). The id is the user id; "heartbeat" is a global row. */
 export const settings = pgTable("settings", {
-  id: text("id").primaryKey().default("main"),
+  id: text("id").primaryKey(),
   data: jsonb("data").$type<Record<string, unknown>>().notNull().default({}),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const platformAccounts = pgTable("platform_accounts", {
-  platform: text("platform").primaryKey(), // "x" | "linkedin"
+  userId: owner(),
+  platform: text("platform").notNull(), // "x" | "linkedin"
   externalUserId: text("external_user_id"),
   handle: text("handle"),
   displayName: text("display_name"),
@@ -38,10 +85,11 @@ export const platformAccounts = pgTable("platform_accounts", {
   lastError: text("last_error"),
   connectedAt: timestamp("connected_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [primaryKey({ columns: [t.userId, t.platform] })]);
 
 export const oauthStates = pgTable("oauth_states", {
   state: text("state").primaryKey(),
+  userId: owner(),
   platform: text("platform").notNull(),
   codeVerifierEnc: text("code_verifier_enc"),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
@@ -49,18 +97,20 @@ export const oauthStates = pgTable("oauth_states", {
 
 export const sources = pgTable("sources", {
   id: uuid("id").primaryKey().defaultRandom(),
+  userId: owner(),
   name: text("name").notNull(),
-  url: text("url").notNull().unique(),
+  url: text("url").notNull(),
   pillar: text("pillar").$type<Pillar>().notNull().default("news"),
   enabled: boolean("enabled").notNull().default(true),
   lastFetchedAt: timestamp("last_fetched_at", { withTimezone: true }),
   lastError: text("last_error"),
-});
+}, (t) => [uniqueIndex("sources_user_url_uq").on(t.userId, t.url)]);
 
 export const items = pgTable(
   "items",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    userId: owner(),
     sourceId: uuid("source_id").references(() => sources.id, { onDelete: "set null" }),
     url: text("url").notNull(),
     title: text("title").notNull(),
@@ -79,12 +129,13 @@ export const items = pgTable(
     status: text("status").notNull().default("new"), // new | skipped
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex("items_url_uq").on(t.url), index("items_status_idx").on(t.status, t.publishedAt)],
+  (t) => [uniqueIndex("items_user_url_uq").on(t.userId, t.url), index("items_status_idx").on(t.userId, t.status, t.publishedAt)],
 );
 
 /** The owner's own material: what they built, learned or think. The only source of first-person claims. */
 export const notes = pgTable("notes", {
   id: uuid("id").primaryKey().defaultRandom(),
+  userId: owner(),
   text: text("text").notNull(),
   pillar: text("pillar").$type<Pillar>().notNull().default("own_work"),
   via: text("via").notNull().default("web"), // web | telegram
@@ -95,6 +146,7 @@ export const posts = pgTable(
   "posts",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    userId: owner(),
     platform: text("platform").notNull(), // "x" | "linkedin"
     pillar: text("pillar").$type<Pillar>().notNull(),
     text: text("text").notNull(),
@@ -123,14 +175,16 @@ export const posts = pgTable(
   },
   (t) => [
     index("posts_due_idx").on(t.status, t.scheduledAt),
-    // One live post per platform slot.
-    uniqueIndex("posts_slot_uq").on(t.platform, t.scheduledAt).where(sql`${t.status} in ('scheduled','publishing')`),
+    index("posts_user_idx").on(t.userId, t.scheduledAt),
+    // One live post per platform slot, per user.
+    uniqueIndex("posts_slot_uq").on(t.userId, t.platform, t.scheduledAt).where(sql`${t.status} in ('scheduled','publishing')`),
   ],
 );
 
 /** "Make a post from this idea or link." Processed by the scheduler (or right away after you submit). */
 export const requests = pgTable("requests", {
   id: uuid("id").primaryKey().defaultRandom(),
+  userId: owner(),
   input: text("input").notNull(), // an idea, a link, or a link plus your angle
   mode: text("mode").notNull().default("schedule"), // schedule (next free slot) | soon (about 20 minutes) | draft (do not schedule)
   platforms: jsonb("platforms").$type<string[]>().notNull(),
@@ -148,16 +202,18 @@ export const events = pgTable(
   "events",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }), // null = system event
     at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
     kind: text("kind").notNull(),
     message: text("message").notNull(),
     postId: uuid("post_id"),
   },
-  (t) => [index("events_at_idx").on(t.at)],
+  (t) => [index("events_at_idx").on(t.userId, t.at)],
 );
 
 export const llmCalls = pgTable("llm_calls", {
   id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }), // kept for cost accounting
   task: text("task").notNull(),
   model: text("model"),
   inputTokens: integer("input_tokens"),
