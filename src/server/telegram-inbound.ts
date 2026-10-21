@@ -1,6 +1,7 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { db, schema } from "./db/client";
-import { env } from "./env";
+import { uid, withUser } from "./context";
+import { entitlementOf } from "./billing/plans";
 import { sendTo, telegramApi } from "./telegram";
 import { getSettings, saveSettings } from "./settings";
 import { approvePost, removePost, PostError, upcoming } from "./posts";
@@ -23,29 +24,64 @@ const HELP = `Make a post from something:
 /mine <link>           a link to your own article: written as you, with the link in the post
 
 Other ways to feed me:
-- Any plain text is saved as a note (what you built, learned or think). Tags: #nepal, #learning
+- Any plain text is saved as a note (what you built, learned or think). Tags: #local, #learning
 - A plain link is a story tip: I cross-check it against other publishers and post it only if it holds up
 
 /queue  upcoming posts
 /pause  stop all posting
-/resume start again`;
+/resume start again
+/unlink disconnect this chat from PostFlow`;
 
 function parseNote(text: string): { pillar: Pillar; text: string } {
-  const pillar: Pillar = /#nepal\b/i.test(text) ? "nepal" : /#(learning|learned|lesson)\b/i.test(text) ? "learning" : "own_work";
-  return { pillar, text: text.replace(/#(nepal|learning|learned|lesson)\b/gi, "").trim() };
+  // #nepal is kept as an alias of #local for accounts from the single-user version.
+  const pillar: Pillar = /#(local|nepal)\b/i.test(text) ? "local" : /#(learning|learned|lesson)\b/i.test(text) ? "learning" : "own_work";
+  return { pillar, text: text.replace(/#(local|nepal|learning|learned|lesson)\b/gi, "").trim() };
 }
 
-/** Handles one Telegram update. Only the configured owner chat is ever obeyed. */
+const NOT_LINKED = "This chat is not linked to a PostFlow account. In PostFlow, open Settings and press Connect Telegram.";
+
+/** Links a chat to the account whose one-time code it presents (from the Connect Telegram link). */
+async function linkChat(chat: number, code: string): Promise<boolean> {
+  if (!/^[A-Za-z0-9_-]{8,64}$/.test(code)) return false;
+  const user = await db().query.users.findFirst({ where: eq(schema.users.telegramLinkCode, code) });
+  if (!user) return false;
+  // A chat belongs to one account at a time.
+  await db().update(schema.users).set({ telegramChatId: null }).where(eq(schema.users.telegramChatId, String(chat)));
+  await db().update(schema.users).set({ telegramChatId: String(chat), telegramLinkCode: null, updatedAt: new Date() }).where(eq(schema.users.id, user.id));
+  return true;
+}
+
+/** Handles one Telegram update. A chat only ever acts for the one account it is linked to. */
 export async function handleTelegramUpdate(u: Update): Promise<void> {
-  const owner = env().TELEGRAM_CHAT_ID;
   const chat = u.message?.chat.id ?? u.callback_query?.message?.chat.id;
   if (!chat) return;
 
-  if (!owner || String(chat) !== owner) {
-    // Strangers learn nothing except, for /start, their own chat id (to put in the config).
-    if (u.message?.text?.startsWith("/start") && !owner) await sendTo(chat, `Your chat id is ${chat}. Set TELEGRAM_CHAT_ID to it, then redeploy.`);
+  const start = u.message?.text?.trim().match(/^\/start(?:@\w+)?\s+(\S+)$/);
+  if (start) {
+    const ok = await linkChat(chat, start[1]);
+    await sendTo(chat, ok ? `✅ Linked to PostFlow. New posts will arrive here with buttons.\n\n${HELP}` : "That link has expired or was already used. Open Settings in PostFlow and press Connect Telegram again.");
     return;
   }
+
+  const user = await db().query.users.findFirst({ where: eq(schema.users.telegramChatId, String(chat)) });
+  if (!user) {
+    if (u.message) await sendTo(chat, NOT_LINKED);
+    return;
+  }
+  if (u.message?.text?.trim() === "/unlink") {
+    await db().update(schema.users).set({ telegramChatId: null, updatedAt: new Date() }).where(eq(schema.users.id, user.id));
+    await sendTo(chat, "Unlinked. This chat will not receive PostFlow messages any more.");
+    return;
+  }
+  if (!entitlementOf(user).active) {
+    await sendTo(chat, "Your PostFlow subscription is not active, so posting is stopped. Choose a plan on the Billing page to continue.");
+    return;
+  }
+  await withUser(user.id, () => handleForUser(u, chat));
+}
+
+async function handleForUser(u: Update, chat: number): Promise<void> {
+  const userId = await uid();
 
   if (u.callback_query) {
     const data = u.callback_query.data ?? "";
@@ -61,10 +97,16 @@ export async function handleTelegramUpdate(u: Update): Promise<void> {
       // Finding and writing a replacement takes a while; acknowledge first, the new post arrives as its own message.
       await telegramApi("answerCallbackQuery", { callback_query_id: u.callback_query.id, text: "Rejected. Looking for another story…" });
       const id = data.slice(3);
-      after(async () => {
-        const r = await rejectAndReplace(id).catch((err: Error) => ({ replacementId: null, message: err.message }));
-        if (!r.replacementId) await sendTo(chat, r.message);
-      });
+      const run = () =>
+        withUser(userId, async () => {
+          const r = await rejectAndReplace(id).catch((err: Error) => ({ replacementId: null, message: err.message }));
+          if (!r.replacementId) await sendTo(chat, r.message);
+        });
+      try {
+        after(run);
+      } catch {
+        await run(); // outside a request (tests)
+      }
       return;
     } else if (data.startsWith("rm:")) {
       try {
@@ -104,7 +146,7 @@ export async function handleTelegramUpdate(u: Update): Promise<void> {
       const req = await createRequest({ text: cmd[2], mode, via: "telegram", own: cmd[1].toLowerCase() === "mine" });
       await sendTo(chat, `✍️ On it. I will write it for ${req.platforms.length > 1 ? "LinkedIn and X" : "your platform"}${mode === "draft" ? " as drafts" : ""}. Expect it here in a minute or two.`);
       try {
-        after(() => processRequests({ max: 1 }).then(() => undefined));
+        after(() => withUser(userId, () => processRequests({ max: 1 }).then(() => undefined)));
       } catch {
         // outside a request (tests): the scheduler picks it up
       }
@@ -121,8 +163,8 @@ export async function handleTelegramUpdate(u: Update): Promise<void> {
 
   const note = parseNote(text);
   if (note.text.length < 15) return void (await sendTo(chat, "That is too short to build a post from. Add a little more detail."));
-  const [row] = await db().insert(schema.notes).values({ text: note.text.slice(0, 4000), pillar: note.pillar, via: "telegram" }).returning();
-  const pending = await db().select({ id: schema.notes.id }).from(schema.notes).where(eq(schema.notes.pillar, note.pillar)).orderBy(desc(schema.notes.createdAt)).limit(50);
+  const [row] = await db().insert(schema.notes).values({ userId, text: note.text.slice(0, 4000), pillar: note.pillar, via: "telegram" }).returning();
+  const pending = await db().select({ id: schema.notes.id }).from(schema.notes).where(and(eq(schema.notes.userId, userId), eq(schema.notes.pillar, note.pillar))).orderBy(desc(schema.notes.createdAt)).limit(50);
   await sendTo(chat, `📝 Saved (${note.pillar.replace("_", " ")}). I will turn it into a post for an upcoming slot. ${pending.length} note(s) in this category.`);
   void row;
 }
