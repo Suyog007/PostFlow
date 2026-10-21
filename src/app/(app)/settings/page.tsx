@@ -6,6 +6,7 @@ import { formatSlots } from "@/server/slots-parse";
 import { healthChecks } from "@/server/health";
 import { isPlatformConfigured } from "@/server/platforms/accounts";
 import { env } from "@/server/env";
+import { listWaitlist } from "@/server/waitlist";
 import { addSourceAction, connectAction, deleteSourceAction, disconnectAction, runTickAction, saveFastLaneAction, saveProfileAction, saveSlotsAction, telegramWebhookAction, toggleSourceAction, togglePauseAction, toggleApprovalAction, removeStyleNoteAction } from "@/app/actions";
 import { Flash } from "../flash";
 
@@ -15,6 +16,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const checks = await healthChecks();
   const accounts = await db().select().from(schema.platformAccounts);
   const sources = await db().select().from(schema.sources).orderBy(asc(schema.sources.pillar), asc(schema.sources.name));
+  const waitlist = await listWaitlist();
   const acct = (p: string) => accounts.find((a) => a.platform === p && a.status !== "disconnected");
 
   return (
@@ -87,7 +89,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <h2 className="mb-2 text-lg font-semibold">Posting schedule</h2>
         <form action={saveSlotsAction} className="card space-y-2 p-4">
           <p className="text-sm text-muted">One slot per line, in {s.timezone}: <code>platform days time</code>. Autopilot fills these slots {s.horizonDays} day(s) ahead.</p>
-          <textarea name="slots" rows={5} defaultValue={formatSlots(s.slots)} className="input font-mono text-sm" />
+          <textarea name="slots" rows={5} defaultValue={formatSlots(s.slots)} className="textarea font-mono text-sm" />
           <button className="btn-primary">Save schedule</button>
         </form>
       </section>
@@ -119,10 +121,10 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <div><label className="label">Name</label><input name="name" defaultValue={s.profile.name} className="input" /></div>
             <div><label className="label">Role</label><input name="role" defaultValue={s.profile.role} className="input" /></div>
           </div>
-          <div><label className="label">Short bio</label><textarea name="bio" rows={2} defaultValue={s.profile.bio} className="input" /></div>
-          <div><label className="label">Topics you can credibly write about (comma or line separated)</label><textarea name="expertise" rows={2} defaultValue={s.profile.expertise.join(", ")} className="input" /></div>
-          <div><label className="label">Voice</label><textarea name="voice" rows={2} defaultValue={s.profile.voice} className="input" /></div>
-          <div><label className="label">Never write about</label><textarea name="avoid" rows={2} defaultValue={s.profile.avoid} className="input" /></div>
+          <div><label className="label">Short bio</label><textarea name="bio" rows={2} defaultValue={s.profile.bio} className="textarea" /></div>
+          <div><label className="label">Topics you can credibly write about (comma or line separated)</label><textarea name="expertise" rows={2} defaultValue={s.profile.expertise.join(", ")} className="textarea" /></div>
+          <div><label className="label">Voice</label><textarea name="voice" rows={2} defaultValue={s.profile.voice} className="textarea" /></div>
+          <div><label className="label">Never write about</label><textarea name="avoid" rows={2} defaultValue={s.profile.avoid} className="textarea" /></div>
           <div>
             <label className="label">Content mix (relative weights)</label>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -177,6 +179,22 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           <select name="pillar" className="input w-auto"><option value="news">News</option><option value="nepal">Nepal</option></select>
           <button className="btn-secondary">Add feed</button>
         </form>
+      </section>
+      <section>
+        <h2 className="mb-2 text-lg font-semibold">Early access list <span className="text-sm font-normal text-muted">· {waitlist.length}</span></h2>
+        <p className="mb-2 text-sm text-muted">People who joined from the landing page.</p>
+        <ul className="card divide-y divide-line text-sm">
+          {waitlist.map((w) => (
+            <li key={w.id} className="flex items-center gap-3 p-3">
+              <div className="min-w-0 flex-1">
+                <div className="truncate font-medium">{w.email}</div>
+                <div className="truncate text-xs text-muted">{[w.plan && `${w.plan[0].toUpperCase()}${w.plan.slice(1)} plan`, w.role].filter(Boolean).join(" · ") || "No plan picked"}</div>
+              </div>
+              <span className="text-xs text-muted">{DateTime.fromJSDate(w.createdAt).toRelative()}</span>
+            </li>
+          ))}
+          {!waitlist.length && <li className="p-3 text-muted">No sign-ups yet.</li>}
+        </ul>
       </section>
     </div>
   );

@@ -167,3 +167,12 @@ export const llmCalls = pgTable("llm_calls", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+
+/** Early-access sign-ups from the public landing page. */
+export const waitlist = pgTable("waitlist", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  email: text("email").notNull().unique(),
+  plan: text("plan"), // starter | pro | agency (what they were looking at)
+  role: text("role"), // optional: what they do
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
