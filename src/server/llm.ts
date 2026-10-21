@@ -1,7 +1,9 @@
 import { z } from "zod";
-import { count, gte } from "drizzle-orm";
+import { and, count, eq, gte } from "drizzle-orm";
 import { db, schema } from "./db/client";
 import { env } from "./env";
+import { currentUserId } from "./context";
+import { entitlementFor } from "./billing/plans";
 import { log } from "./log";
 
 export interface CompletionRequest {
@@ -103,13 +105,20 @@ function modelFor(role: Role): string | undefined {
   return role === "reviewer" ? e.FIREWORKS_REVIEW_MODEL ?? e.FIREWORKS_MODEL : e.FIREWORKS_MODEL;
 }
 
-async function checkBudget() {
-  const [row] = await db()
+async function checkBudget(userId: string | null) {
+  const since = new Date(Date.now() - 24 * 3_600_000);
+  const [all] = await db().select({ n: count() }).from(schema.llmCalls).where(gte(schema.llmCalls.createdAt, since));
+  if (Number(all.n) >= env().MAX_LLM_CALLS_PER_DAY_TOTAL) {
+    throw new LLMError("The service-wide daily model-call cap is reached. It resets on a rolling 24h window.", "budget");
+  }
+  if (!userId) return;
+  const cap = (await entitlementFor(userId)).quota.llmCallsPerDay;
+  const [mine] = await db()
     .select({ n: count() })
     .from(schema.llmCalls)
-    .where(gte(schema.llmCalls.createdAt, new Date(Date.now() - 24 * 3_600_000)));
-  if (Number(row.n) >= env().MAX_LLM_CALLS_PER_DAY) {
-    throw new LLMError(`Daily model-call cap reached (${env().MAX_LLM_CALLS_PER_DAY}). It resets on a rolling 24h window.`, "budget");
+    .where(and(eq(schema.llmCalls.userId, userId), gte(schema.llmCalls.createdAt, since)));
+  if (Number(mine.n) >= cap) {
+    throw new LLMError(`Daily writing limit reached (${cap} model calls). It resets on a rolling 24h window.`, "budget");
   }
 }
 
@@ -143,7 +152,8 @@ export interface TaskSpec<T extends z.ZodType> {
 export async function runTask<T extends z.ZodType>(spec: TaskSpec<T>): Promise<z.infer<T>> {
   const model = modelFor(spec.role);
   if (!model || !env().FIREWORKS_API_KEY) throw new LLMError("Set FIREWORKS_API_KEY and FIREWORKS_MODEL.", "not_configured");
-  await checkBudget();
+  const userId = await currentUserId();
+  await checkBudget(userId);
 
   const jsonSchema = z.toJSONSchema(spec.output, { target: "draft-7" }) as Record<string, unknown>;
   delete jsonSchema.$schema;
@@ -161,11 +171,12 @@ export async function runTask<T extends z.ZodType>(spec: TaskSpec<T>): Promise<z
       reasoningEffort: env().FIREWORKS_REASONING_EFFORT === "off" ? undefined : env().FIREWORKS_REASONING_EFFORT ?? "none",
     });
   } catch (err) {
-    await db().insert(schema.llmCalls).values({ task: spec.task, model, status: "error", error: String((err as Error).message).slice(0, 400) });
+    await db().insert(schema.llmCalls).values({ userId, task: spec.task, model, status: "error", error: String((err as Error).message).slice(0, 400) });
     throw err instanceof LLMError ? err : new LLMError((err as Error).message, "provider");
   }
   const parsed = spec.output.safeParse(extractJson(res.text));
   await db().insert(schema.llmCalls).values({
+    userId,
     task: spec.task,
     model,
     inputTokens: res.inputTokens,

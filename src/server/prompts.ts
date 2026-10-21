@@ -4,9 +4,9 @@ import { UNTRUSTED_NOTICE } from "./llm";
 export function profileBlock(s: Settings): string {
   const p = s.profile;
   return [
-    `Owner: ${p.name || "(name not set)"}, ${p.role}.`,
+    `Owner: ${p.name || "(name not set)"}${p.role ? `, ${p.role}` : ""}${p.region ? `, based in ${p.region}` : ""}.`,
     p.bio ? `Bio: ${p.bio}` : "",
-    `Expertise (the only topics they can speak about credibly): ${p.expertise.join("; ")}.`,
+    p.expertise.length ? `Expertise (the only topics they can speak about credibly): ${p.expertise.join("; ")}.` : "Expertise: not stated. Stay with what the material says; no evergreen teaching.",
     `Voice: ${p.voice}`,
     `Never write about: ${p.avoid}`,
     s.styleNotes.length ? `The owner's own wording feedback (follow it):\n${s.styleNotes.map((n) => `- ${n}`).join("\n")}` : "",
@@ -15,14 +15,17 @@ export function profileBlock(s: Settings): string {
     .join("\n");
 }
 
-export const ANALYST_SYSTEM = `You triage headlines for a personal LinkedIn/X account run by a software engineer from Nepal.
+export function analystSystem(s: Settings) {
+  const region = s.profile.region.trim();
+  return `You triage headlines for a personal LinkedIn/X account. The owner is described below.
 ${UNTRUSTED_NOTICE}
 For each item, judge:
-- relevance 0-10: would this owner's audience (developers, builders, founders, the Nepali tech community) care, AND can the owner add a credible take within their expertise? 0-3 = skip (celebrity, sports, politics, crime, generic roundups, pure opinion with no substance).
+- relevance 0-10: would this owner's audience (developers, builders, founders${region ? `, the ${region} tech community` : ""}) care, AND can the owner add a credible take within their expertise? 0-3 = skip (celebrity, sports, politics, crime, generic roundups, pure opinion with no substance).
   Score highest the items that open an OPPORTUNITY for builders: an API or product becoming free, cheaper or open to third parties; a platform opening to agents or integrations; a new capability that lets one developer do what used to need a team; a pricing or policy change; a market gap created by a launch or shutdown. A plain recap of events with no actionable opening for builders scores at most 5. Scores of 9-10 are rare: a clear, actionable shift a builder should act on this week.
 - urgency: "breaking" (stale after about 2 days: launches, outages, announcements, price or policy changes), "week" (stale after about a week), "evergreen" (still useful in a month: guides, analysis, research).
 - angle: one sentence naming the opportunity: who could build what because of this, and why now. Empty string if relevance < 5.
 Be strict: most items should score below 6. Return every id exactly once.`;
+}
 
 export function writerSystem(s: Settings, platform: "x" | "linkedin") {
   const platformRules =

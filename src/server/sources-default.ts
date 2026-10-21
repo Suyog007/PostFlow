@@ -1,6 +1,6 @@
 import type { Pillar } from "./db/schema";
 
-/** Starting feeds. Edit, add or disable them in Settings. */
+/** Starting feeds for every new account. Users add feeds for their own region or niche in Settings. */
 export const DEFAULT_SOURCES: { name: string; url: string; pillar: Pillar; enabled?: boolean }[] = [
   // Tech and AI news
   { name: "Hacker News (150+ points)", url: "https://hnrss.org/frontpage?points=150", pillar: "news" },
@@ -16,10 +16,4 @@ export const DEFAULT_SOURCES: { name: string; url: string; pillar: Pillar; enabl
   { name: "Cloudflare Blog", url: "https://blog.cloudflare.com/rss/", pillar: "news" },
   { name: "Simon Willison", url: "https://simonwillison.net/atom/everything/", pillar: "news" },
   { name: "The Pragmatic Engineer", url: "https://newsletter.pragmaticengineer.com/feed", pillar: "news", enabled: false },
-  // Nepal
-  { name: "Techpana", url: "https://techpana.com/feed", pillar: "nepal" },
-  { name: "Onlinekhabar English", url: "https://english.onlinekhabar.com/feed", pillar: "nepal" },
-  { name: "The Kathmandu Post", url: "https://kathmandupost.com/rss", pillar: "nepal" },
-  { name: "Khabarhub", url: "https://khabarhub.com/feed", pillar: "nepal", enabled: false },
-  { name: "The Himalayan Times", url: "https://thehimalayantimes.com/rssFeed/15", pillar: "nepal", enabled: false },
 ];

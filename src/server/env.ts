@@ -8,8 +8,20 @@ const optional = z
 const schema = z.object({
   DATABASE_URL: z.string().default("postgres://postflow@localhost:54329/postflow"),
   APP_URL: z.string().default("http://localhost:3000"),
-  APP_PASSWORD_HASH: optional,
   SESSION_SECRET: optional,
+  /** Comma-separated emails that are admins: never billed, see /admin. The first one also claims data from the single-user version. */
+  OWNER_EMAILS: z
+    .string()
+    .optional()
+    .transform((v) => (v ?? "").split(",").map((x) => x.trim().toLowerCase()).filter(Boolean)),
+  /** "true" lets anyone create an account. Otherwise the landing page shows the waitlist and only owners can sign up. */
+  SIGNUPS_OPEN: z
+    .string()
+    .optional()
+    .transform((v) => v === "true" || v === "1"),
+  /** Shown on the legal pages and in emails. */
+  COMPANY_NAME: z.string().default("PostFlow"),
+  CONTACT_EMAIL: optional,
   TOKEN_ENCRYPTION_KEY: optional,
   /** Bearer secret the external scheduler sends to /api/cron/tick. */
   CRON_SECRET: optional,
@@ -20,8 +32,23 @@ const schema = z.object({
   FIREWORKS_REVIEW_MODEL: optional,
   FIREWORKS_REASONING_EFFORT: optional,
   FIREWORKS_BASE_URL: z.string().default("https://api.fireworks.ai/inference/v1"),
-  /** Hard stop on model calls per rolling 24h, so a bug can never run up a bill. */
+  /** Owner accounts' model-call cap per rolling 24h (customers get their plan's cap). */
   MAX_LLM_CALLS_PER_DAY: z.coerce.number().default(150),
+  /** Hard stop across all users per rolling 24h, so a bug can never run up a bill. */
+  MAX_LLM_CALLS_PER_DAY_TOTAL: z.coerce.number().default(5000),
+
+  // Sign in with Google (console.cloud.google.com > APIs & Services > Credentials)
+  GOOGLE_CLIENT_ID: optional,
+  GOOGLE_CLIENT_SECRET: optional,
+
+  // Email (resend.com)
+  RESEND_API_KEY: optional,
+  /** e.g. "PostFlow <hello@yourdomain.com>" on a domain verified in Resend. */
+  EMAIL_FROM: z.string().default("PostFlow <onboarding@resend.dev>"),
+
+  // Billing (stripe.com)
+  STRIPE_SECRET_KEY: optional,
+  STRIPE_WEBHOOK_SECRET: optional,
 
   LINKEDIN_CLIENT_ID: optional,
   LINKEDIN_CLIENT_SECRET: optional,
@@ -30,8 +57,8 @@ const schema = z.object({
   X_CLIENT_SECRET: optional,
 
   TELEGRAM_BOT_TOKEN: optional,
-  /** Only messages from this chat are accepted. Send /start to the bot to learn yours. */
-  TELEGRAM_CHAT_ID: optional,
+  /** The bot's username without @, used for the "Connect Telegram" link. */
+  TELEGRAM_BOT_USERNAME: optional,
   TELEGRAM_WEBHOOK_SECRET: optional,
 });
 

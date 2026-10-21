@@ -1,6 +1,7 @@
 import Parser from "rss-parser";
 import { and, asc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { db, schema } from "./db/client";
+import { uid } from "./context";
 import { DEFAULT_SOURCES } from "./sources-default";
 import { isPublicHttpUrl, normalizeUrl } from "./net";
 import { addEvent } from "./events";
@@ -9,11 +10,12 @@ const parser = new Parser({ timeout: 15_000, headers: { "User-Agent": "Mozilla/5
 
 /** Inserts the default feeds the first time only (never re-adds ones the owner deleted). */
 export async function seedSourcesIfEmpty() {
-  const [row] = await db().select({ n: sql<number>`count(*)` }).from(schema.sources);
+  const userId = await uid();
+  const [row] = await db().select({ n: sql<number>`count(*)` }).from(schema.sources).where(eq(schema.sources.userId, userId));
   if (Number(row.n) > 0) return;
   await db()
     .insert(schema.sources)
-    .values(DEFAULT_SOURCES.map((s) => ({ name: s.name, url: s.url, pillar: s.pillar, enabled: s.enabled ?? true })))
+    .values(DEFAULT_SOURCES.map((s) => ({ userId, name: s.name, url: s.url, pillar: s.pillar, enabled: s.enabled ?? true })))
     .onConflictDoNothing();
 }
 
@@ -30,11 +32,12 @@ export interface CollectResult {
 /** Polls the stalest enabled feeds (bounded per run so one tick stays short). */
 export async function collectFeeds(opts: { maxFeeds?: number; minIntervalMinutes?: number; maxAgeDays?: number } = {}): Promise<CollectResult> {
   const { maxFeeds = 6, minIntervalMinutes = 90, maxAgeDays = 4 } = opts;
+  const userId = await uid();
   const stale = new Date(Date.now() - minIntervalMinutes * 60_000);
   const feeds = await db()
     .select()
     .from(schema.sources)
-    .where(and(eq(schema.sources.enabled, true), or(isNull(schema.sources.lastFetchedAt), lt(schema.sources.lastFetchedAt, stale))))
+    .where(and(eq(schema.sources.userId, userId), eq(schema.sources.enabled, true), or(isNull(schema.sources.lastFetchedAt), lt(schema.sources.lastFetchedAt, stale))))
     .orderBy(asc(schema.sources.lastFetchedAt))
     .limit(maxFeeds);
 
@@ -54,7 +57,7 @@ export async function collectFeeds(opts: { maxFeeds?: number; minIntervalMinutes
           return { link, title: stripHtml(it.title ?? ""), when: isNaN(when.getTime()) ? new Date() : when, summary };
         })
         .filter((r) => r.link && isPublicHttpUrl(r.link) && r.title.length > 8 && r.when.getTime() > oldest)
-        .map((r) => ({ sourceId: feed.id, url: r.link, title: r.title.slice(0, 300), summary: r.summary, pillar: feed.pillar, publishedAt: r.when }));
+        .map((r) => ({ userId, sourceId: feed.id, url: r.link, title: r.title.slice(0, 300), summary: r.summary, pillar: feed.pillar, publishedAt: r.when }));
       if (rows.length) {
         const ins = await db().insert(schema.items).values(rows).onConflictDoNothing().returning({ id: schema.items.id });
         result.inserted += ins.length;
@@ -68,6 +71,6 @@ export async function collectFeeds(opts: { maxFeeds?: number; minIntervalMinutes
   if (result.inserted) await addEvent("collect", `Found ${result.inserted} new items from ${result.fetched} feeds.`);
 
   // Housekeeping: drop stale, unused items.
-  await db().delete(schema.items).where(and(lt(schema.items.publishedAt, new Date(Date.now() - 14 * 86_400_000)), inArray(schema.items.status, ["new", "skipped"])));
+  await db().delete(schema.items).where(and(eq(schema.items.userId, userId), lt(schema.items.publishedAt, new Date(Date.now() - 14 * 86_400_000)), inArray(schema.items.status, ["new", "skipped"])));
   return result;
 }

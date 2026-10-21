@@ -1,8 +1,9 @@
 import { z } from "zod";
 import { and, desc, eq, gte, isNull } from "drizzle-orm";
 import { db, schema } from "./db/client";
+import { uid } from "./context";
 import { runTask, untrusted } from "./llm";
-import { ANALYST_SYSTEM, profileBlock } from "./prompts";
+import { analystSystem, profileBlock } from "./prompts";
 import { getSettings } from "./settings";
 import { tipsSourceId } from "./tips";
 import { addEvent } from "./events";
@@ -24,7 +25,7 @@ export async function analyzeBatch(batchSize = 15): Promise<number> {
   const rows = await db()
     .select()
     .from(schema.items)
-    .where(and(isNull(schema.items.analyzedAt), eq(schema.items.status, "new"), gte(schema.items.publishedAt, new Date(Date.now() - 4 * 86_400_000))))
+    .where(and(eq(schema.items.userId, await uid()), isNull(schema.items.analyzedAt), eq(schema.items.status, "new"), gte(schema.items.publishedAt, new Date(Date.now() - 4 * 86_400_000))))
     .orderBy(desc(schema.items.publishedAt))
     .limit(batchSize);
   if (!rows.length) return 0;
@@ -33,7 +34,7 @@ export async function analyzeBatch(batchSize = 15): Promise<number> {
   const res = await runTask({
     task: "analyze_items",
     role: "analyst",
-    system: `${ANALYST_SYSTEM}\n\n${profileBlock(s)}\nUse the bracketed index as the id.`,
+    system: `${analystSystem(s)}\n\n${profileBlock(s)}\nUse the bracketed index as the id.`,
     user: untrusted("feed items", listing, 9000),
     output: out,
     maxTokens: 1800,

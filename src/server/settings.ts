@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { db, schema } from "./db/client";
+import { uid } from "./context";
 
 const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use HH:MM (24h)");
 
@@ -19,22 +20,26 @@ export const settingsSchema = z.object({
   requireApproval: z.boolean().default(true),
   /** Wording preferences the owner gave when asking for a reword. Fed to the writer on every post. */
   styleNotes: z.array(z.string()).default([]),
-  timezone: z.string().default("Asia/Kathmandu"),
+  /** IANA timezone; set from the browser at sign-up. */
+  timezone: z.string().default("UTC"),
   profile: z
     .object({
       name: z.string().default(""),
-      role: z.string().default("Software engineer from Nepal"),
+      role: z.string().default(""),
       bio: z.string().default(""),
+      /** City, country or community for "local scene" posts, e.g. "Nepal" or "Berlin". Empty = no local posts. */
+      region: z.string().default(""),
       /** What the owner can credibly write about. Evergreen posts stay inside this list. */
-      expertise: z.array(z.string()).default(["software engineering", "AI tools for developers", "building products from Nepal"]),
+      expertise: z.array(z.string()).default([]),
       voice: z.string().default("Direct, practical and specific. Plain words. Opinionated but fair. No hype."),
       avoid: z.string().default("Politics, religion, anything about employers, unverified claims about people or companies."),
     })
     .default({
       name: "",
-      role: "Software engineer from Nepal",
+      role: "",
       bio: "",
-      expertise: ["software engineering", "AI tools for developers", "building products from Nepal"],
+      region: "",
+      expertise: [],
       voice: "Direct, practical and specific. Plain words. Opinionated but fair. No hype.",
       avoid: "Politics, religion, anything about employers, unverified claims about people or companies.",
     }),
@@ -45,8 +50,8 @@ export const settingsSchema = z.object({
   ]),
   /** Relative share of each content type. */
   pillars: z
-    .object({ own_work: z.number().min(0), news: z.number().min(0), nepal: z.number().min(0), learning: z.number().min(0) })
-    .default({ own_work: 3, news: 3, nepal: 2, learning: 1 }),
+    .object({ own_work: z.number().min(0), news: z.number().min(0), local: z.number().min(0).default(0), learning: z.number().min(0) })
+    .default({ own_work: 3, news: 3, local: 0, learning: 1 }),
   /** How many days ahead the calendar is kept filled. */
   horizonDays: z.number().int().min(1).max(14).default(3),
   /** Smallest relevance (0-10) a news item needs to become an X post. */
@@ -72,21 +77,22 @@ export const settingsSchema = z.object({
       quietEnd: hhmm.default("07:00"),
     })
     .default({ enabled: true, minRelevance: 9, maxPerDay: 1, leadMinutes: 45, platforms: ["x", "linkedin"], quietStart: "23:00", quietEnd: "07:00" }),
-  telegram: z.object({ updateOffset: z.number().default(0) }).default({ updateOffset: 0 }),
 });
 
 export type Settings = z.infer<typeof settingsSchema>;
 
+/** The current user's settings (defaults filled in). */
 export async function getSettings(): Promise<Settings> {
-  const row = await db().query.settings.findFirst({ where: eq(schema.settings.id, "main") });
+  const row = await db().query.settings.findFirst({ where: eq(schema.settings.id, await uid()) });
   return settingsSchema.parse(row?.data ?? {});
 }
 
 export async function saveSettings(patch: Partial<Settings>): Promise<Settings> {
+  const id = await uid();
   const next = settingsSchema.parse({ ...(await getSettings()), ...patch });
   await db()
     .insert(schema.settings)
-    .values({ id: "main", data: next, updatedAt: new Date() })
+    .values({ id, data: next, updatedAt: new Date() })
     .onConflictDoUpdate({ target: schema.settings.id, set: { data: next, updatedAt: new Date() } });
   return next;
 }

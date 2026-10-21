@@ -3,6 +3,7 @@ import { and, eq, lt } from "drizzle-orm";
 import { db, schema } from "../db/client";
 import { env } from "../env";
 import { decryptSecret, encryptSecret, randomToken } from "../crypto";
+import { uid } from "../context";
 import type { AccountCredentials, Platform, PlatformClient } from "./types";
 import { xClient, xFetchMe, X_AUTHORIZE_URL, X_SCOPES, X_TOKEN_URL } from "./x";
 import { linkedinClient, linkedinFetchMe, LINKEDIN_AUTHORIZE_URL, LINKEDIN_SCOPES, LINKEDIN_TOKEN_URL } from "./linkedin";
@@ -46,7 +47,7 @@ export async function startOAuth(platform: Platform): Promise<string> {
   await db().delete(schema.oauthStates).where(lt(schema.oauthStates.expiresAt, new Date()));
   await db()
     .insert(schema.oauthStates)
-    .values({ state, platform, codeVerifierEnc: encryptSecret(verifier), expiresAt: new Date(Date.now() + 10 * 60_000) });
+    .values({ state, userId: await uid(), platform, codeVerifierEnc: encryptSecret(verifier), expiresAt: new Date(Date.now() + 10 * 60_000) });
 
   if (platform === "x") {
     const u = new URL(X_AUTHORIZE_URL);
@@ -104,9 +105,10 @@ async function tokenRequest(platform: Platform, params: Record<string, string>):
 
 /** Validates state (single use, unexpired, same user and platform) and stores encrypted tokens. */
 export async function completeOAuth(platform: Platform, state: string, code: string) {
+  const userId = await uid();
   const [row] = await db()
     .delete(schema.oauthStates)
-    .where(and(eq(schema.oauthStates.state, state), eq(schema.oauthStates.platform, platform)))
+    .where(and(eq(schema.oauthStates.state, state), eq(schema.oauthStates.platform, platform), eq(schema.oauthStates.userId, userId)))
     .returning();
   if (!row || row.expiresAt < new Date()) throw new Error("The authorization request expired or is invalid. Try connecting again.");
 
@@ -130,30 +132,36 @@ export async function completeOAuth(platform: Platform, state: string, code: str
   };
   await db()
     .insert(schema.platformAccounts)
-    .values({ platform, ...values })
-    .onConflictDoUpdate({ target: schema.platformAccounts.platform, set: values });
+    .values({ userId, platform, ...values })
+    .onConflictDoUpdate({ target: [schema.platformAccounts.userId, schema.platformAccounts.platform], set: values });
 }
 
 export async function disconnectAccount(platform: Platform) {
   await db()
     .update(schema.platformAccounts)
     .set({ status: "disconnected", accessTokenEnc: null, refreshTokenEnc: null, expiresAt: null, updatedAt: new Date() })
-    .where(eq(schema.platformAccounts.platform, platform));
+    .where(and(eq(schema.platformAccounts.userId, await uid()), eq(schema.platformAccounts.platform, platform)));
 }
 
 export async function markAccountError(platform: Platform, message: string) {
   await db()
     .update(schema.platformAccounts)
     .set({ status: "error", lastError: message, updatedAt: new Date() })
-    .where(eq(schema.platformAccounts.platform, platform));
+    .where(and(eq(schema.platformAccounts.userId, await uid()), eq(schema.platformAccounts.platform, platform)));
 }
 
 export class NotConnectedError extends Error {}
 
+/** The current user's connected accounts. */
+export async function myAccounts() {
+  return db().select().from(schema.platformAccounts).where(eq(schema.platformAccounts.userId, await uid()));
+}
+
 /** Returns usable credentials, refreshing the X token when it is close to expiry. */
 export async function getCredentials(platform: Platform): Promise<AccountCredentials> {
+  const userId = await uid();
   const acct = await db().query.platformAccounts.findFirst({
-    where: eq(schema.platformAccounts.platform, platform),
+    where: and(eq(schema.platformAccounts.userId, userId), eq(schema.platformAccounts.platform, platform)),
   });
   if (!acct || !acct.accessTokenEnc || !acct.externalUserId || acct.status === "disconnected") {
     throw new NotConnectedError(`${platform === "x" ? "X" : "LinkedIn"} is not connected.`);
@@ -177,7 +185,7 @@ export async function getCredentials(platform: Platform): Promise<AccountCredent
         lastError: null,
         updatedAt: new Date(),
       })
-      .where(eq(schema.platformAccounts.platform, platform));
+      .where(and(eq(schema.platformAccounts.userId, userId), eq(schema.platformAccounts.platform, platform)));
     return { accessToken: tok.access_token, externalUserId: acct.externalUserId };
   } catch (err) {
     const msg = `Token refresh failed: ${(err as Error).message}. Reconnect the account.`;

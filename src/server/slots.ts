@@ -1,6 +1,7 @@
 import { DateTime } from "luxon";
 import { and, eq, gt, inArray } from "drizzle-orm";
 import { db, schema } from "./db/client";
+import { uid } from "./context";
 import type { Settings, Slot } from "./settings";
 
 export interface SlotTime {
@@ -50,7 +51,7 @@ export async function nextFreeSlot(settings: Pick<Settings, "slots" | "timezone"
   const live = await db()
     .select({ at: schema.posts.scheduledAt })
     .from(schema.posts)
-    .where(and(eq(schema.posts.platform, platform), inArray(schema.posts.status, ["scheduled", "publishing", "published", "unconfirmed"]), gt(schema.posts.scheduledAt, after)));
+    .where(and(eq(schema.posts.userId, await uid()), eq(schema.posts.platform, platform), inArray(schema.posts.status, ["scheduled", "publishing", "published", "unconfirmed"]), gt(schema.posts.scheduledAt, after)));
   const taken = new Set(live.map((l) => l.at.getTime()));
   return slotsBetween(settings, after, new Date(after.getTime() + 14 * 86_400_000)).find((s) => s.platform === platform && !taken.has(s.at.getTime()))?.at ?? null;
 }

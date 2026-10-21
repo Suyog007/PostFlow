@@ -1,8 +1,15 @@
 import { z } from "zod";
 import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lte, notInArray, sql } from "drizzle-orm";
 import { db, schema } from "./db/client";
+import { uid } from "./context";
+import { assertPostQuota, entitlementFor, LimitError } from "./billing/plans";
 import type { Pillar } from "./db/schema";
 import { runTask, untrusted, LLMError } from "./llm";
+
+/** Filter: rows that belong to the current user. */
+async function mine<T extends { userId: unknown }>(t: T) {
+  return eq(t.userId as never, await uid());
+}
 import { getSettings, saveSettings, type Settings } from "./settings";
 import { REVIEWER_SYSTEM, profileBlock, writerSystem } from "./prompts";
 import { runChecks, type Check } from "./checks";
@@ -44,7 +51,7 @@ async function usedIds(platform: Platform) {
   const rows = await db()
     .select({ itemId: schema.posts.itemId, noteId: schema.posts.noteId })
     .from(schema.posts)
-    .where(eq(schema.posts.platform, platform));
+    .where(and(await mine(schema.posts), eq(schema.posts.platform, platform)));
   return {
     items: new Set(rows.map((r) => r.itemId).filter((x): x is string => !!x)),
     notes: new Set(rows.map((r) => r.noteId).filter((x): x is string => !!x)),
@@ -82,6 +89,7 @@ async function candidateItems(platform: Platform, s: Settings, pillar: Pillar | 
     .from(schema.items)
     .where(
       and(
+        await mine(schema.items),
         eq(schema.items.status, "new"),
         isNotNull(schema.items.analyzedAt),
         gte(schema.items.relevance, platform === "linkedin" ? s.linkedinMinRelevance : s.minRelevance),
@@ -109,7 +117,7 @@ async function pickVerified(items: ItemRow[], maxChecks = 4): Promise<{ it: Item
 
 async function pickNote(platform: Platform, pillar: Pillar) {
   const used = await usedIds(platform);
-  const rows = await db().select().from(schema.notes).where(eq(schema.notes.pillar, pillar)).orderBy(asc(schema.notes.createdAt)).limit(40);
+  const rows = await db().select().from(schema.notes).where(and(await mine(schema.notes), eq(schema.notes.pillar, pillar))).orderBy(asc(schema.notes.createdAt)).limit(40);
   return rows.find((n) => !used.notes.has(n.id));
 }
 
@@ -119,7 +127,7 @@ async function pickEvergreenTopic(s: Settings, platform: Platform): Promise<Mate
   const recent = await db()
     .select({ topic: schema.posts.topic, text: schema.posts.text })
     .from(schema.posts)
-    .where(and(eq(schema.posts.platform, platform), eq(schema.posts.pillar, "learning")))
+    .where(and(await mine(schema.posts), eq(schema.posts.platform, platform), eq(schema.posts.pillar, "learning")))
     .orderBy(desc(schema.posts.createdAt))
     .limit(25);
   const res = await runTask({
@@ -150,11 +158,11 @@ async function pickByPillar(platform: Platform, pillar: Pillar, s: Settings, now
     const n = await pickNote(platform, "learning");
     return n ? noteMaterial(n) : pickEvergreenTopic(s, platform);
   }
-  if (pillar === "news" || pillar === "nepal") {
+  if (pillar === "news" || pillar === "local") {
     const hit = await pickVerified(await candidateItems(platform, s, pillar, now, slotAt));
     if (hit) return itemMaterial(hit.it, hit.v);
-    if (pillar === "nepal") {
-      const n = await pickNote(platform, "nepal");
+    if (pillar === "local") {
+      const n = await pickNote(platform, "local");
       return n ? noteMaterial(n) : null;
     }
   }
@@ -166,7 +174,7 @@ async function pillarOrder(s: Settings, now: Date): Promise<Pillar[]> {
   const rows = await db()
     .select({ pillar: schema.posts.pillar, n: sql<number>`count(*)` })
     .from(schema.posts)
-    .where(and(gte(schema.posts.scheduledAt, new Date(now.getTime() - 14 * 86_400_000)), notInArray(schema.posts.status, ["rejected", "cancelled"])))
+    .where(and(await mine(schema.posts), gte(schema.posts.scheduledAt, new Date(now.getTime() - 14 * 86_400_000)), notInArray(schema.posts.status, ["rejected", "cancelled"])))
     .groupBy(schema.posts.pillar);
   const counts = new Map(rows.map((r) => [r.pillar, Number(r.n)]));
   const total = [...counts.values()].reduce((a, b) => a + b, 0) || 1;
@@ -187,6 +195,7 @@ async function urgentCapReached(platform: Platform, at: Date): Promise<boolean> 
     .from(schema.posts)
     .where(
       and(
+        await mine(schema.posts),
         eq(schema.posts.platform, platform),
         isNotNull(schema.posts.expiresAt),
         eq(schema.posts.fast, false),
@@ -303,7 +312,7 @@ async function recentTexts(platform: Platform) {
   const rows = await db()
     .select({ text: schema.posts.text })
     .from(schema.posts)
-    .where(and(eq(schema.posts.platform, platform), inArray(schema.posts.status, ["scheduled", "published", "publishing", "unconfirmed"])))
+    .where(and(await mine(schema.posts), eq(schema.posts.platform, platform), inArray(schema.posts.status, ["scheduled", "published", "publishing", "unconfirmed"])))
     .orderBy(desc(schema.posts.scheduledAt))
     .limit(25);
   return rows.map((r) => r.text);
@@ -322,6 +331,8 @@ export interface Produced {
 }
 
 export async function produceForSlot(platform: Platform, at: Date, m: Material, s: Settings, maxRounds = 3, opts: { fast?: boolean; requested?: "schedule" | "draft" } = {}): Promise<Produced> {
+  await assertPostQuota();
+  const userId = await uid();
   const recent = await recentTexts(platform);
   // For your own article the link is part of the post, so length checks and the reviewer see it.
   const compose = (t: string) => (m.ownUrl ? (platform === "linkedin" ? `${t}\n\n${m.ownUrl}` : `${t} ${m.ownUrl}`) : t);
@@ -349,6 +360,7 @@ export async function produceForSlot(platform: Platform, at: Date, m: Material, 
   const [row] = await db()
     .insert(schema.posts)
     .values({
+      userId,
       platform,
       pillar: m.pillar,
       text: finalText,
@@ -371,7 +383,8 @@ export async function produceForSlot(platform: Platform, at: Date, m: Material, 
     await notifyText(`📝 Draft ready for ${platform === "x" ? "X" : "LinkedIn"}${verdict.approved ? "" : " (the reviewer had concerns: " + verdict.reasons[0] + ")"}\n\n${finalText}\n\nOpen the app to edit it or put it on the calendar.`).catch(() => {});
   } else if (verdict.approved) {
     await addEvent("scheduled", `${opts.fast ? "Fast lane: " : ""}${platform === "x" ? "X" : "LinkedIn"} post scheduled for ${formatLocal(at, s.timezone)}: ${m.label.slice(0, 80)}`, row.id);
-    await notifyScheduled(row, s.timezone, s.requireApproval).catch(() => {});
+    const needsApproval = s.requireApproval || !(await entitlementFor(userId)).features.autoMode;
+    await notifyScheduled(row, s.timezone, needsApproval).catch(() => {});
   } else {
     await addEvent("rejected", `Reviewer rejected a ${platform} draft (${m.label.slice(0, 60)}): ${verdict.reasons[0] ?? ""}`, row.id);
   }
@@ -381,11 +394,11 @@ export async function produceForSlot(platform: Platform, at: Date, m: Material, 
 /** Rebuilds what a post was written from, so it can be rewritten without new facts. */
 async function materialForPost(p: typeof schema.posts.$inferSelect): Promise<Material> {
   if (p.itemId) {
-    const it = await db().query.items.findFirst({ where: eq(schema.items.id, p.itemId) });
+    const it = await db().query.items.findFirst({ where: and(eq(schema.items.id, p.itemId), await mine(schema.items)) });
     if (it) return itemMaterial(it, (it.verification as Verification | null) ?? undefined);
   }
   if (p.noteId) {
-    const n = await db().query.notes.findFirst({ where: eq(schema.notes.id, p.noteId) });
+    const n = await db().query.notes.findFirst({ where: and(eq(schema.notes.id, p.noteId), await mine(schema.notes)) });
     if (n) return noteMaterial(n);
   }
   if (p.topic) return { kind: "evergreen", pillar: p.pillar, source: `Topic: ${p.topic}\n(Evergreen explainer: use only well-established, widely known facts.)`, label: p.topic, topic: p.topic, firstPerson: false };
@@ -398,7 +411,7 @@ async function materialForPost(p: typeof schema.posts.$inferSelect): Promise<Mat
  * The result goes back to "needs approval"; the reviewer re-checks facts, and its concerns are shown rather than blocking.
  */
 export async function rewordPost(id: string, feedback: string, remember: boolean): Promise<{ text: string; reasons: string[] }> {
-  const p = await db().query.posts.findFirst({ where: eq(schema.posts.id, id) });
+  const p = await db().query.posts.findFirst({ where: and(eq(schema.posts.id, id), await mine(schema.posts)) });
   if (!p) throw new Error("Post not found.");
   if (!["scheduled", "draft", "rejected"].includes(p.status)) throw new Error(`A ${p.status} post cannot be reworded.`);
   const note = feedback.trim().slice(0, 500);
@@ -438,7 +451,7 @@ export async function rewordPost(id: string, feedback: string, remember: boolean
 
 /** The owner rejected a post: drop it and write a different one for the same platform. Its story is not reused. */
 export async function rejectAndReplace(id: string): Promise<{ replacementId: string | null; message: string }> {
-  const p = await db().query.posts.findFirst({ where: eq(schema.posts.id, id) });
+  const p = await db().query.posts.findFirst({ where: and(eq(schema.posts.id, id), await mine(schema.posts)) });
   if (!p) throw new Error("Post not found.");
   if (!["scheduled", "draft"].includes(p.status)) throw new Error(`A ${p.status} post cannot be rejected.`);
   await db().update(schema.posts).set({ status: "declined", approvedAt: null, updatedAt: new Date() }).where(eq(schema.posts.id, id));
@@ -477,7 +490,7 @@ async function bumpForUrgent(platform: Platform, s: Settings, now: Date, freeSlo
   const victim = await db()
     .select()
     .from(schema.posts)
-    .where(and(eq(schema.posts.platform, platform), eq(schema.posts.status, "scheduled"), eq(schema.posts.userEdited, false), isNull(schema.posts.expiresAt), gte(schema.posts.scheduledAt, new Date(now.getTime() + 30 * 60_000)), lte(schema.posts.scheduledAt, new Date(urgent.getTime() - 3_600_000))))
+    .where(and(await mine(schema.posts), eq(schema.posts.platform, platform), eq(schema.posts.status, "scheduled"), eq(schema.posts.userEdited, false), isNull(schema.posts.expiresAt), gte(schema.posts.scheduledAt, new Date(now.getTime() + 30 * 60_000)), lte(schema.posts.scheduledAt, new Date(urgent.getTime() - 3_600_000))))
     .orderBy(asc(schema.posts.scheduledAt))
     .limit(1);
   if (!victim[0]) return false;
@@ -503,7 +516,7 @@ async function fastLaneTime(platform: Platform, s: Settings, now: Date): Promise
     const clash = await db()
       .select({ id: schema.posts.id })
       .from(schema.posts)
-      .where(and(eq(schema.posts.platform, platform), eq(schema.posts.scheduledAt, at), inArray(schema.posts.status, ["scheduled", "publishing"])));
+      .where(and(await mine(schema.posts), eq(schema.posts.platform, platform), eq(schema.posts.scheduledAt, at), inArray(schema.posts.status, ["scheduled", "publishing"])));
     if (!clash.length) break;
     at = new Date(at.getTime() + 60_000);
   }
@@ -514,12 +527,13 @@ export async function runFastLane(s: Settings, now: Date): Promise<{ produced: n
   const out = { produced: 0, rejected: 0 };
   const f = s.fastLane;
   if (!f.enabled) return out;
+  if (!(await entitlementFor(await uid())).features.fastLane) return out;
   const since = new Date(now.getTime() - 24 * 3_600_000);
   for (const platform of f.platforms) {
     const recent = await db()
       .select({ status: schema.posts.status })
       .from(schema.posts)
-      .where(and(eq(schema.posts.platform, platform), eq(schema.posts.fast, true), gte(schema.posts.createdAt, since)));
+      .where(and(await mine(schema.posts), eq(schema.posts.platform, platform), eq(schema.posts.fast, true), gte(schema.posts.createdAt, since)));
     if (recent.filter((r) => r.status !== "rejected").length >= f.maxPerDay) continue;
     if (recent.filter((r) => r.status === "rejected").length >= FAST_MAX_REJECTED_PER_DAY) continue;
 
@@ -556,7 +570,7 @@ export async function fillCalendar(opts: { max?: number; now?: Date; deadline?: 
     res.produced += f.produced;
     res.rejected += f.rejected;
   } catch (err) {
-    if (err instanceof LLMError) return { ...res, idle: err.message };
+    if (err instanceof LLMError || err instanceof LimitError) return { ...res, idle: err.message };
     throw err;
   }
 
@@ -572,7 +586,7 @@ export async function fillCalendar(opts: { max?: number; now?: Date; deadline?: 
     const taken = await db()
       .select({ platform: schema.posts.platform, at: schema.posts.scheduledAt, status: schema.posts.status })
       .from(schema.posts)
-      .where(and(gte(schema.posts.scheduledAt, from), lte(schema.posts.scheduledAt, to)));
+      .where(and(await mine(schema.posts), gte(schema.posts.scheduledAt, from), lte(schema.posts.scheduledAt, to)));
     const occupied = new Set(taken.filter((t) => (LIVE as readonly string[]).includes(t.status)).map((t) => `${t.platform}@${t.at.getTime()}`));
     const attempts = new Map<string, number>();
     for (const t of taken.filter((t) => t.status === "rejected")) attempts.set(`${t.platform}@${t.at.getTime()}`, (attempts.get(`${t.platform}@${t.at.getTime()}`) ?? 0) + 1);
@@ -593,7 +607,7 @@ export async function fillCalendar(opts: { max?: number; now?: Date; deadline?: 
     try {
       material = await chooseMaterial(target.platform, target.at, s, now);
     } catch (err) {
-      if (err instanceof LLMError) return { ...res, idle: err.message };
+      if (err instanceof LLMError || err instanceof LimitError) return { ...res, idle: err.message };
       throw err;
     }
     if (!material) {
@@ -610,7 +624,7 @@ export async function fillCalendar(opts: { max?: number; now?: Date; deadline?: 
       }
       // Items that were rejected are not retried for this platform (the post row records the use).
     } catch (err) {
-      if (err instanceof LLMError) return { ...res, idle: err.message };
+      if (err instanceof LLMError || err instanceof LimitError) return { ...res, idle: err.message };
       throw err;
     }
   }

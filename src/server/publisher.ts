@@ -1,5 +1,7 @@
 import { and, eq, gt, inArray, lt, sql } from "drizzle-orm";
 import { db, schema } from "./db/client";
+import { uid } from "./context";
+import { entitlementFor } from "./billing/plans";
 import { getSettings } from "./settings";
 import { getCredentials, getPlatformClient, markAccountError, NotConnectedError } from "./platforms/accounts";
 import { ReconcileNotSupported, type Platform } from "./platforms/types";
@@ -16,6 +18,7 @@ const RETRY_BACKOFF_MS = 10 * 60_000;
 const MAX_LATE_MS = 6 * 3_600_000;
 
 async function claimNext(now: Date, requireApproval: boolean): Promise<PostRow | null> {
+  const userId = await uid();
   const nowIso = now.toISOString();
   const approved = requireApproval ? sql`and approved_at is not null` : sql``;
   const backoff = new Date(now.getTime() - RETRY_BACKOFF_MS).toISOString();
@@ -23,7 +26,7 @@ async function claimNext(now: Date, requireApproval: boolean): Promise<PostRow |
     update posts set status = 'publishing', claimed_at = ${nowIso}::timestamptz, attempts = attempts + 1, updated_at = ${nowIso}::timestamptz
     where id = (
       select id from posts
-      where status = 'scheduled' and scheduled_at <= ${nowIso}::timestamptz and (claimed_at is null or claimed_at < ${backoff}::timestamptz) ${approved}
+      where user_id = ${userId}::uuid and status = 'scheduled' and scheduled_at <= ${nowIso}::timestamptz and (claimed_at is null or claimed_at < ${backoff}::timestamptz) ${approved}
       order by scheduled_at
       limit 1
       for update skip locked
@@ -103,10 +106,12 @@ export async function publishDue(opts: { now?: Date; max?: number } = {}): Promi
   const now = opts.now ?? new Date();
   const s = await getSettings();
   if (s.paused) return { published: 0, handled: 0 };
+  // Auto mode (publishing without approval) is a paid feature; without it, approval is always required.
+  const requireApproval = s.requireApproval || !(await entitlementFor(await uid())).features.autoMode;
   let published = 0;
   let handled = 0;
   for (let i = 0; i < (opts.max ?? 5); i++) {
-    const post = await claimNext(now, s.requireApproval);
+    const post = await claimNext(now, requireApproval);
     if (!post) break;
     handled++;
     try {
@@ -122,12 +127,13 @@ export async function publishDue(opts: { now?: Date; max?: number } = {}): Promi
 
 /** Crashed publishes become "unconfirmed"; X posts that did land are found on the timeline. */
 export async function reconcile(now = new Date()) {
+  const userId = await uid();
   await db()
     .update(schema.posts)
     .set({ status: "unconfirmed", error: "Publisher stopped mid-attempt.", updatedAt: now })
-    .where(and(eq(schema.posts.status, "publishing"), lt(schema.posts.claimedAt, new Date(now.getTime() - 10 * 60_000))));
+    .where(and(eq(schema.posts.userId, userId), eq(schema.posts.status, "publishing"), lt(schema.posts.claimedAt, new Date(now.getTime() - 10 * 60_000))));
 
-  const pending = await db().query.posts.findMany({ where: and(eq(schema.posts.status, "unconfirmed"), eq(schema.posts.platform, "x")), limit: 5 });
+  const pending = await db().query.posts.findMany({ where: and(eq(schema.posts.userId, userId), eq(schema.posts.status, "unconfirmed"), eq(schema.posts.platform, "x")), limit: 5 });
   for (const p of pending) {
     try {
       const creds = await getCredentials("x");

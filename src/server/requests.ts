@@ -1,5 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
 import { db, schema } from "./db/client";
+import { uid } from "./context";
+import { assertFeature } from "./billing/plans";
 import { getSettings, type Settings } from "./settings";
 import { fetchArticle } from "./net";
 import { produceForSlot, type Material } from "./generate";
@@ -19,17 +21,19 @@ export async function createRequest(input: { text: string; platforms?: Platform[
   const text = input.text.trim();
   if (text.length < 8) throw new Error("Give me a bit more to work with: an idea in a sentence or two, or a link.");
   const platforms = (input.platforms?.length ? input.platforms : ["linkedin", "x"]) as Platform[];
+  if (URL_RE.test(text) || input.own) await assertFeature("links", "Writing posts from a link");
   const [row] = await db()
     .insert(schema.requests)
-    .values({ input: text.slice(0, 4000), mode: input.mode ?? "schedule", platforms, via: input.via ?? "web", own: !!input.own })
+    .values({ userId: await uid(), input: text.slice(0, 4000), mode: input.mode ?? "schedule", platforms, via: input.via ?? "web", own: !!input.own })
     .returning();
   return row;
 }
 
 async function claimNext(): Promise<RequestRow | null> {
+  const userId = await uid();
   const rows = await db().execute(sql`
     update requests set status = 'processing'
-    where id = (select id from requests where status = 'pending' order by created_at limit 1 for update skip locked)
+    where id = (select id from requests where user_id = ${userId}::uuid and status = 'pending' order by created_at limit 1 for update skip locked)
     returning id`);
   const id = (rows[0] as { id?: string } | undefined)?.id;
   return id ? (await db().query.requests.findFirst({ where: eq(schema.requests.id, id) })) ?? null : null;
@@ -80,7 +84,7 @@ async function slotTime(platform: Platform, mode: RequestMode, s: Settings, now:
       const clash = await db()
         .select({ id: schema.posts.id })
         .from(schema.posts)
-        .where(and(eq(schema.posts.platform, platform), eq(schema.posts.scheduledAt, at), sql`${schema.posts.status} in ('scheduled','publishing')`));
+        .where(and(eq(schema.posts.userId, await uid()), eq(schema.posts.platform, platform), eq(schema.posts.scheduledAt, at), sql`${schema.posts.status} in ('scheduled','publishing')`));
       if (!clash.length) return at;
       at = new Date(at.getTime() + 60_000);
     }
@@ -123,7 +127,8 @@ export async function processRequests(opts: { max?: number; now?: Date; deadline
   return done;
 }
 
-export function recentRequests(limit = 10) {
-  return db().query.requests.findMany({ orderBy: (r, { desc }) => [desc(r.createdAt)], limit });
+export async function recentRequests(limit = 10) {
+  const userId = await uid();
+  return db().query.requests.findMany({ where: (r, { eq }) => eq(r.userId, userId), orderBy: (r, { desc }) => [desc(r.createdAt)], limit });
 }
 

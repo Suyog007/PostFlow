@@ -1,5 +1,6 @@
 import { and, eq, gt, inArray } from "drizzle-orm";
 import { db, schema } from "./db/client";
+import { uid } from "./context";
 import { addEvent } from "./events";
 import { runChecks } from "./checks";
 import { getSettings } from "./settings";
@@ -7,11 +8,14 @@ import { nextFreeSlot } from "./slots";
 
 export class PostError extends Error {}
 
-async function load(id: string) {
-  const p = await db().query.posts.findFirst({ where: eq(schema.posts.id, id) });
+/** Loads one of the current user's posts. Another user's post id is "not found". */
+export async function loadPost(id: string) {
+  if (!/^[0-9a-f-]{36}$/i.test(id)) throw new PostError("Post not found.");
+  const p = await db().query.posts.findFirst({ where: and(eq(schema.posts.id, id), eq(schema.posts.userId, await uid())) });
   if (!p) throw new PostError("Post not found.");
   return p;
 }
+const load = loadPost;
 
 /** Removing is the owner's veto: it never publishes afterwards. */
 export async function removePost(id: string) {
@@ -47,7 +51,7 @@ export async function reschedulePost(id: string, at: Date) {
   const clash = await db()
     .select({ id: schema.posts.id })
     .from(schema.posts)
-    .where(and(eq(schema.posts.platform, p.platform), eq(schema.posts.scheduledAt, at), inArray(schema.posts.status, ["scheduled", "publishing"])));
+    .where(and(eq(schema.posts.userId, p.userId), eq(schema.posts.platform, p.platform), eq(schema.posts.scheduledAt, at), inArray(schema.posts.status, ["scheduled", "publishing"])));
   if (clash.some((c) => c.id !== id)) throw new PostError("Another post already uses that exact time on this platform.");
   await db().update(schema.posts).set({ scheduledAt: at, status: "scheduled", error: null, attempts: 0, claimedAt: null, userEdited: true, updatedAt: new Date() }).where(eq(schema.posts.id, id));
 }
@@ -60,7 +64,7 @@ export async function postNow(id: string) {
     const clash = await db()
       .select({ id: schema.posts.id })
       .from(schema.posts)
-      .where(and(eq(schema.posts.platform, p.platform), eq(schema.posts.scheduledAt, at), inArray(schema.posts.status, ["scheduled", "publishing"])));
+      .where(and(eq(schema.posts.userId, p.userId), eq(schema.posts.platform, p.platform), eq(schema.posts.scheduledAt, at), inArray(schema.posts.status, ["scheduled", "publishing"])));
     if (!clash.some((c) => c.id !== id)) break;
     at = new Date(at.getTime() - 1000);
   }
@@ -93,9 +97,9 @@ export async function resolveUnconfirmed(id: string, published: boolean) {
     .where(eq(schema.posts.id, id));
 }
 
-export function upcoming(limit = 20) {
+export async function upcoming(limit = 20) {
   return db().query.posts.findMany({
-    where: and(eq(schema.posts.status, "scheduled"), gt(schema.posts.scheduledAt, new Date())),
+    where: and(eq(schema.posts.userId, await uid()), eq(schema.posts.status, "scheduled"), gt(schema.posts.scheduledAt, new Date())),
     orderBy: schema.posts.scheduledAt,
     limit,
   });
