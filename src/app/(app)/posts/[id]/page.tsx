@@ -49,7 +49,7 @@ export default async function PostPage({ params, searchParams }: { params: Promi
 
   return (
     <div className="max-w-[1100px]">
-      <Link href="/" className="mb-3 inline-flex items-center gap-1 text-[13px] text-[var(--muted)] hover:text-[var(--ink)]"><Icon name="left" size={14} />Calendar</Link>
+      <Link href="/calendar" className="mb-3 inline-flex items-center gap-1 text-[13px] text-[var(--muted)] hover:text-[var(--ink)]"><Icon name="left" size={14} />Calendar</Link>
       <Flash ok={sp.ok} error={sp.error} />
 
       <div className="mb-4 flex flex-wrap items-center gap-2.5">
@@ -121,7 +121,7 @@ export default async function PostPage({ params, searchParams }: { params: Promi
             <div className="panel-body space-y-3">
               <div>
                 <label className="label" htmlFor="feedback">What doesn&apos;t sound like you</label>
-                <textarea id="feedback" name="feedback" rows={3} required maxLength={500} className="input" placeholder={'e.g. "too formal, I talk casually" or "don\'t start with the company name"'} />
+                <textarea id="feedback" name="feedback" rows={3} required maxLength={500} className="textarea" placeholder={'e.g. "too formal, I talk casually" or "don\'t start with the company name"'} />
               </div>
               <label className="flex items-center gap-2 text-[13px]"><input type="checkbox" name="remember" defaultChecked />Remember this for future posts</label>
               <SubmitButton className="btn" pending="Rewriting…"><Icon name="pencil" size={14} />Reword it</SubmitButton>

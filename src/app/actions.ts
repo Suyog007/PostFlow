@@ -22,7 +22,7 @@ import { isPublicHttpUrl } from "@/server/net";
 export async function loginAction(_: unknown, form: FormData) {
   const r = await login(String(form.get("password") ?? ""));
   if (!r.ok) return { error: r.error };
-  redirect("/");
+  redirect("/calendar");
 }
 
 export async function logoutAction() {
@@ -95,7 +95,7 @@ export async function rejectPostAction(form: FormData) {
     back(`/posts/${id}`, "error", (err as Error).message);
   }
   revalidatePath("/", "layout");
-  back(r.replacementId ? `/posts/${r.replacementId}` : "/", "ok", r.message);
+  back(r.replacementId ? `/posts/${r.replacementId}` : "/calendar", "ok", r.message);
 }
 export async function rewordPostAction(form: FormData) {
   const id = String(form.get("id"));

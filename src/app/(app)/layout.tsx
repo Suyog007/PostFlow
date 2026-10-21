@@ -19,7 +19,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <div className="min-h-screen md:grid md:grid-cols-[224px_minmax(0,1fr)]">
       <aside className="hidden flex-col gap-6 border-r border-[var(--line)] bg-[var(--side)] p-3 md:sticky md:top-0 md:flex md:h-screen">
-        <Link href="/" className="flex items-center gap-2 px-2 pt-1.5">
+        <Link href="/calendar" className="flex items-center gap-2 px-2 pt-1.5">
           <Logo />
           <span className="text-[14px] font-semibold tracking-tight">PostFlow</span>
         </Link>

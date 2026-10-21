@@ -6,7 +6,7 @@ import { getSettings } from "@/server/settings";
 import { healthChecks } from "@/server/health";
 import { recentEvents } from "@/server/events";
 import { Icon, PageHeader, PlatformGlyph, StatusBadge } from "@/components/ui";
-import { Flash } from "./flash";
+import { Flash } from "../flash";
 
 type Post = typeof schema.posts.$inferSelect;
 
@@ -113,16 +113,16 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
         title={`${weekStart.toFormat("d LLL")} – ${weekEnd.minus({ days: 1 }).toFormat("d LLL yyyy")}`}
         description={
           upcoming[0] ? (
-            <>Next up: <PlatformGlyph platform={upcoming[0].platform} size={12} /> {DateTime.fromJSDate(upcoming[0].scheduledAt, { zone: tz }).toFormat("ccc HH:mm")}. {scheduledCount} scheduled and {postedCount} posted this week. Everything scheduled goes out unless you remove it.</>
+            <>Next up: <span className="inline-block align-[-1px]"><PlatformGlyph platform={upcoming[0].platform} size={12} /></span> {DateTime.fromJSDate(upcoming[0].scheduledAt, { zone: tz }).toFormat("ccc HH:mm")}. {scheduledCount} scheduled and {postedCount} posted this week. Everything scheduled goes out unless you remove it.</>
           ) : (
             <>Nothing scheduled yet. Autopilot fills open slots up to {s.horizonDays} days ahead.</>
           )
         }
         actions={
           <div className="flex items-center gap-1.5">
-            <Link href={`/?w=${offset - 1}`} className="btn btn-sm" aria-label="Previous week"><Icon name="left" size={14} /></Link>
-            <Link href="/" className="btn btn-sm">Today</Link>
-            <Link href={`/?w=${offset + 1}`} className="btn btn-sm" aria-label="Next week"><Icon name="right" size={14} /></Link>
+            <Link href={`/calendar?w=${offset - 1}`} className="btn btn-sm" aria-label="Previous week"><Icon name="left" size={14} /></Link>
+            <Link href="/calendar" className="btn btn-sm">Today</Link>
+            <Link href={`/calendar?w=${offset + 1}`} className="btn btn-sm" aria-label="Next week"><Icon name="right" size={14} /></Link>
             <Link href="/create" className="btn btn-primary btn-sm ml-1"><Icon name="create" size={14} />New post</Link>
           </div>
         }

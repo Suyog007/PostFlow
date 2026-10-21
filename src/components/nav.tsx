@@ -5,14 +5,14 @@ import { usePathname } from "next/navigation";
 import { Icon } from "./ui";
 
 const ITEMS = [
-  { href: "/", label: "Calendar", icon: "calendar" },
+  { href: "/calendar", label: "Calendar", icon: "calendar" },
   { href: "/create", label: "Create", icon: "create" },
   { href: "/notes", label: "Notes", icon: "notes" },
   { href: "/settings", label: "Settings", icon: "settings" },
 ] as const;
 
 function active(path: string, href: string) {
-  return href === "/" ? path === "/" || path.startsWith("/posts") : path.startsWith(href);
+  return href === "/calendar" ? path.startsWith("/calendar") || path.startsWith("/posts") : path.startsWith(href);
 }
 
 export function SideNav() {
