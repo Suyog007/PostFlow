@@ -6,7 +6,7 @@ import { addTip, tipsSourceId } from "../src/server/tips";
 import { saveSettings } from "../src/server/settings";
 import { sharedPhrase } from "../src/server/checks";
 import { setNewsSearchForTests } from "../src/server/verify";
-import { GOOD_REVIEW, fakeLLM, resetDb } from "./helpers";
+import { GOOD_REVIEW, fakeLLM, resetDb, me } from "./helpers";
 
 const NOW = new Date("2026-10-21T03:00:00Z");
 const BOTH = [{ platform: "x" as const, days: [1, 2, 3, 4, 5, 6, 7], time: "09:30" }, { platform: "linkedin" as const, days: [1, 2, 3, 4, 5, 6, 7], time: "09:30" }];
@@ -15,14 +15,14 @@ const FAST_OFF = { enabled: false, minRelevance: 9, maxPerDay: 1, leadMinutes: 4
 async function addItem(title: string, relevance: number, urgency = "evergreen") {
   const [it] = await db()
     .insert(schema.items)
-    .values({ url: `https://example.com/${encodeURIComponent(title)}`, title, summary: `${title} summary text`, pillar: "news", publishedAt: new Date(NOW.getTime() - 3_600_000), relevance, urgency, analyzedAt: NOW })
+    .values({ userId: me(), url: `https://example.com/${encodeURIComponent(title)}`, title, summary: `${title} summary text`, pillar: "news", publishedAt: new Date(NOW.getTime() - 3_600_000), relevance, urgency, analyzedAt: NOW })
     .returning();
   return it;
 }
 
 beforeEach(async () => {
   await resetDb();
-  await saveSettings({ slots: BOTH, horizonDays: 1, fastLane: FAST_OFF, pillars: { own_work: 0, news: 1, nepal: 0, learning: 0 } });
+  await saveSettings({ slots: BOTH, horizonDays: 1, fastLane: FAST_OFF, pillars: { own_work: 0, news: 1, local: 0, learning: 0 } });
 });
 
 describe("skipping weak stories", () => {
@@ -35,7 +35,7 @@ describe("skipping weak stories", () => {
   });
 
   it("leaves the slot empty when nothing is worth posting, instead of filling it with an explainer", async () => {
-    await saveSettings({ pillars: { own_work: 1, news: 1, nepal: 0, learning: 1 } });
+    await saveSettings({ pillars: { own_work: 1, news: 1, local: 0, learning: 1 } });
     const calls = fakeLLM(() => ({}));
     const r = await fillCalendar({ now: NOW, max: 3 });
     expect(await db().select().from(schema.posts)).toHaveLength(0);
@@ -44,7 +44,7 @@ describe("skipping weak stories", () => {
   });
 
   it("fills with evergreen explainers only when filler is switched on", async () => {
-    await saveSettings({ pillars: { own_work: 0, news: 1, nepal: 0, learning: 1 }, fillerPosts: true });
+    await saveSettings({ pillars: { own_work: 0, news: 1, local: 0, learning: 1 }, fillerPosts: true });
     fakeLLM((req) => (req.schemaName === "pick_topic" ? { topic: "Idempotency keys", angle: "one lesson" } : req.schemaName === "write_post" ? { text: "Idempotency keys make retries safe: send a key, store the result, return it again." } : GOOD_REVIEW));
     await fillCalendar({ now: NOW, max: 1 });
     expect((await db().select().from(schema.posts)).length).toBe(1);

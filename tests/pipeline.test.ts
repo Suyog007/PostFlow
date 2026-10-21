@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { db, schema } from "../src/server/db/client";
 import { fillCalendar } from "../src/server/generate";
 import { saveSettings } from "../src/server/settings";
-import { GOOD_REVIEW, fakeLLM, resetDb } from "./helpers";
+import { GOOD_REVIEW, fakeLLM, resetDb, me } from "./helpers";
 
 // Wed 2026-10-21 03:00Z = 08:45 Kathmandu. Next X slot 09:30 NPT = 03:45Z.
 const NOW = new Date("2026-10-21T03:00:00Z");
@@ -11,8 +11,8 @@ const ONE_X_SLOT = [{ platform: "x" as const, days: [1, 2, 3, 4, 5, 6, 7], time:
 
 async function setup(horizonDays = 1) {
   await resetDb();
-  await saveSettings({ slots: ONE_X_SLOT, horizonDays, pillars: { own_work: 1, news: 0, nepal: 0, learning: 0 } });
-  await db().insert(schema.notes).values({ text: "This week I cut our cold-start time from 4s to 1.2s by lazy-loading the PDF renderer.", pillar: "own_work" });
+  await saveSettings({ slots: ONE_X_SLOT, horizonDays, pillars: { own_work: 1, news: 0, local: 0, learning: 0 } });
+  await db().insert(schema.notes).values({ userId: me(), text: "This week I cut our cold-start time from 4s to 1.2s by lazy-loading the PDF renderer.", pillar: "own_work" });
 }
 
 const GOOD_POST = "Cut our cold start from 4s to 1.2s this week. The fix was boring: lazy-load the PDF renderer instead of importing it at the top of the module.";
@@ -75,7 +75,7 @@ describe("fillCalendar", () => {
   });
 
   it("gives up on a slot after 3 rejected attempts instead of looping", async () => {
-    await db().insert(schema.notes).values([{ text: "Second note about something I shipped on Friday with real detail.", pillar: "own_work" }, { text: "Third note about another thing I shipped with real detail.", pillar: "own_work" }, { text: "Fourth note about yet another thing I built with real detail.", pillar: "own_work" }]);
+    await db().insert(schema.notes).values([{ userId: me(), text: "Second note about something I shipped on Friday with real detail.", pillar: "own_work" }, { userId: me(), text: "Third note about another thing I shipped with real detail.", pillar: "own_work" }, { userId: me(), text: "Fourth note about yet another thing I built with real detail.", pillar: "own_work" }]);
     fakeLLM((req) => (req.schemaName === "write_post" ? { text: GOOD_POST } : { ...GOOD_REVIEW, worth_posting: 2 }));
     for (let i = 0; i < 5; i++) await fillCalendar({ now: NOW, max: 3 });
     const rows = await db().select().from(schema.posts);
@@ -101,13 +101,13 @@ describe("fillCalendar", () => {
 describe("time-sensitive news", () => {
   beforeEach(async () => {
     await resetDb();
-    await saveSettings({ slots: ONE_X_SLOT, horizonDays: 3, minRelevance: 6, pillars: { own_work: 1, news: 1, nepal: 0, learning: 0 }, fastLane: { enabled: false, minRelevance: 9, maxPerDay: 1, leadMinutes: 45, platforms: ["x"], quietStart: "23:00", quietEnd: "07:00" } });
+    await saveSettings({ slots: ONE_X_SLOT, horizonDays: 3, minRelevance: 6, pillars: { own_work: 1, news: 1, local: 0, learning: 0 }, fastLane: { enabled: false, minRelevance: 9, maxPerDay: 1, leadMinutes: 45, platforms: ["x"], quietStart: "23:00", quietEnd: "07:00" } });
   });
 
   async function addItem(title: string, urgency: "breaking" | "week" | "evergreen", ageHours: number, relevance = 8) {
     const [it] = await db()
       .insert(schema.items)
-      .values({ url: `https://example.com/${encodeURIComponent(title)}`, title, summary: `${title} summary with enough detail to write about it.`, pillar: "news", publishedAt: new Date(NOW.getTime() - ageHours * 3_600_000), relevance, urgency, analyzedAt: NOW })
+      .values({ userId: me(), url: `https://example.com/${encodeURIComponent(title)}`, title, summary: `${title} summary with enough detail to write about it.`, pillar: "news", publishedAt: new Date(NOW.getTime() - ageHours * 3_600_000), relevance, urgency, analyzedAt: NOW })
       .returning();
     return it;
   }
@@ -133,7 +133,7 @@ describe("time-sensitive news", () => {
   it("bumps an unedited evergreen post to make room for breaking news", async () => {
     await saveSettings({ horizonDays: 1 });
     // The only slot in the next day is already taken by an evergreen post.
-    await db().insert(schema.posts).values({ platform: "x", pillar: "learning", text: "Evergreen text", status: "scheduled", scheduledAt: new Date("2026-10-21T03:45:00Z") });
+    await db().insert(schema.posts).values({ userId: me(), platform: "x", pillar: "learning", text: "Evergreen text", status: "scheduled", scheduledAt: new Date("2026-10-21T03:45:00Z") });
     await addItem("Fresh breaking launch", "breaking", 1, 9);
     fakeLLM((req) => (req.schemaName === "write_post" ? { text: "Breaking launch. According to the announcement, builders should look at it today." } : GOOD_REVIEW));
     await fillCalendar({ now: NOW, max: 1 });
@@ -145,7 +145,7 @@ describe("time-sensitive news", () => {
 
   it("does not bump a post the owner edited", async () => {
     await saveSettings({ horizonDays: 1 });
-    await db().insert(schema.posts).values({ platform: "x", pillar: "learning", text: "Mine", status: "scheduled", scheduledAt: new Date("2026-10-21T03:45:00Z"), userEdited: true });
+    await db().insert(schema.posts).values({ userId: me(), platform: "x", pillar: "learning", text: "Mine", status: "scheduled", scheduledAt: new Date("2026-10-21T03:45:00Z"), userEdited: true });
     await addItem("Fresh breaking launch", "breaking", 1, 9);
     fakeLLM((req) => (req.schemaName === "write_post" ? { text: "x" } : GOOD_REVIEW));
     await fillCalendar({ now: NOW, max: 1 });
@@ -153,8 +153,8 @@ describe("time-sensitive news", () => {
   });
 
   it("caps time-sensitive posts so owner notes still get slots", async () => {
-    await saveSettings({ horizonDays: 1, pillars: { own_work: 1, news: 1, nepal: 0, learning: 0 }, slots: [{ platform: "x", days: [1, 2, 3, 4, 5, 6, 7], time: "09:30" }, { platform: "x", days: [1, 2, 3, 4, 5, 6, 7], time: "12:30" }, { platform: "x", days: [1, 2, 3, 4, 5, 6, 7], time: "15:30" }] });
-    await db().insert(schema.notes).values([{ text: "Note one: shipped the billing export and it halved support tickets for us.", pillar: "own_work" }, { text: "Note two: found that our cron drifted by 40s a day until we pinned the clock.", pillar: "own_work" }]);
+    await saveSettings({ horizonDays: 1, pillars: { own_work: 1, news: 1, local: 0, learning: 0 }, slots: [{ platform: "x", days: [1, 2, 3, 4, 5, 6, 7], time: "09:30" }, { platform: "x", days: [1, 2, 3, 4, 5, 6, 7], time: "12:30" }, { platform: "x", days: [1, 2, 3, 4, 5, 6, 7], time: "15:30" }] });
+    await db().insert(schema.notes).values([{ userId: me(), text: "Note one: shipped the billing export and it halved support tickets for us.", pillar: "own_work" }, { userId: me(), text: "Note two: found that our cron drifted by 40s a day until we pinned the clock.", pillar: "own_work" }]);
     for (const t of ["Breaking story number one about developer tools", "Breaking story number two about cloud pricing", "Breaking story number three about open models"]) await addItem(t, "breaking", 1, 9);
     const texts = ["Vendor launch today. According to the announcement, deploys need far less config now.", "Our billing export halved support tickets. Boring work, measurable result, worth repeating.", "Cron drifted forty seconds a day until we pinned the clock source. Check yours."];
     let n = 0;

@@ -4,14 +4,14 @@ import { db, schema } from "../src/server/db/client";
 import { publishDue } from "../src/server/publisher";
 import { removePost, editPost, reschedulePost } from "../src/server/posts";
 import { saveSettings } from "../src/server/settings";
-import { connectAccount, fakePlatform, resetDb } from "./helpers";
+import { connectAccount, fakePlatform, resetDb, me } from "./helpers";
 
 const NOW = new Date("2026-10-21T04:00:00Z");
 
 async function addPost(over: Partial<typeof schema.posts.$inferInsert> = {}) {
   const [p] = await db()
     .insert(schema.posts)
-    .values({ platform: "x", pillar: "own_work", text: "Hello world, this is a post.", status: "scheduled", scheduledAt: new Date("2026-10-21T03:45:00Z"), ...over })
+    .values({ userId: me(), platform: "x", pillar: "own_work", text: "Hello world, this is a post.", status: "scheduled", scheduledAt: new Date("2026-10-21T03:45:00Z"), ...over })
     .returning();
   return p;
 }

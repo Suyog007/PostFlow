@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { db, schema } from "../src/server/db/client";
 import { ensureVerification, evaluate, registrableDomain, sameStory, setNewsSearchForTests } from "../src/server/verify";
-import { resetDb } from "./helpers";
+import { resetDb, me } from "./helpers";
 
 const m = (domain: string, title: string) => ({ domain, title, url: `https://${domain}/a` });
 
@@ -40,7 +40,7 @@ describe("evaluate", () => {
 describe("ensureVerification", () => {
   it("fails closed when the search is down, and caches a confirmed result", async () => {
     await resetDb();
-    const [it] = await db().insert(schema.items).values({ url: "https://ifreedomain.com/offer", title: "iFreeDomain is giving free domains for one year", summary: "", publishedAt: new Date() }).returning();
+    const [it] = await db().insert(schema.items).values({ userId: me(), url: "https://ifreedomain.com/offer", title: "iFreeDomain is giving free domains for one year", summary: "", publishedAt: new Date() }).returning();
     setNewsSearchForTests(async () => {
       throw new Error("down");
     });

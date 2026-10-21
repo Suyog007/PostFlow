@@ -4,7 +4,7 @@ import { db, schema } from "../src/server/db/client";
 import { fillCalendar } from "../src/server/generate";
 import { saveSettings } from "../src/server/settings";
 import { afterQuietHours } from "../src/server/slots";
-import { GOOD_REVIEW, fakeLLM, resetDb } from "./helpers";
+import { GOOD_REVIEW, fakeLLM, resetDb, me } from "./helpers";
 
 const NOW = new Date("2026-10-21T03:00:00Z"); // 08:45 Kathmandu
 const EVENING_SLOT = [{ platform: "x" as const, days: [1, 2, 3, 4, 5, 6, 7], time: "19:30" }];
@@ -18,7 +18,7 @@ const POSTS = [
 async function addItem(title: string, over: Partial<typeof schema.items.$inferInsert> = {}) {
   const [it] = await db()
     .insert(schema.items)
-    .values({ url: `https://example.com/${encodeURIComponent(title)}`, title, summary: `${title}: enough summary text to write about it.`, pillar: "news", publishedAt: new Date(NOW.getTime() - 2 * 3_600_000), relevance: 9, urgency: "breaking", analyzedAt: NOW, ...over })
+    .values({ userId: me(), url: `https://example.com/${encodeURIComponent(title)}`, title, summary: `${title}: enough summary text to write about it.`, pillar: "news", publishedAt: new Date(NOW.getTime() - 2 * 3_600_000), relevance: 9, urgency: "breaking", analyzedAt: NOW, ...over })
       .returning();
   return it;
 }
@@ -31,7 +31,7 @@ function llm() {
 describe("fast lane", () => {
   beforeEach(async () => {
     await resetDb();
-    await saveSettings({ slots: EVENING_SLOT, horizonDays: 1, pillars: { own_work: 0, news: 1, nepal: 0, learning: 0 }, fastLane: { enabled: true, minRelevance: 9, maxPerDay: 1, leadMinutes: 45, platforms: ["x"], quietStart: "23:00", quietEnd: "07:00" } });
+    await saveSettings({ slots: EVENING_SLOT, horizonDays: 1, pillars: { own_work: 0, news: 1, local: 0, learning: 0 }, fastLane: { enabled: true, minRelevance: 9, maxPerDay: 1, leadMinutes: 45, platforms: ["x"], quietStart: "23:00", quietEnd: "07:00" } });
   });
 
   it("schedules an extra post about 45 minutes out, outside the normal slots", async () => {

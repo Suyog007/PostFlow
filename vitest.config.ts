@@ -10,7 +10,7 @@ export default defineConfig({
       TOKEN_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString("base64"),
       FIREWORKS_API_KEY: "test",
       FIREWORKS_MODEL: "test-model",
-      TELEGRAM_CHAT_ID: "42",
+      SESSION_SECRET: "test-session-secret-that-is-long-enough-123",
       VITEST: "1",
     },
     fileParallelism: false,
