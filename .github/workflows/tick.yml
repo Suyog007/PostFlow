@@ -1,9 +1,8 @@
-# Free scheduler: pings the app every 5 minutes so it can publish due posts and write new ones.
-# GitHub may delay scheduled runs by several minutes under load; cron-job.org (free) is a good second pinger.
+# Manual scheduler run: pings the app once so it publishes due posts and writes new ones.
+# On Netlify the scheduler runs on its own (netlify/functions/tick-schedule.mts), so this is manual-only.
+# To use GitHub as the scheduler instead, add back:  schedule: [{ cron: "*/5 * * * *" }]
 name: tick
 on:
-  schedule:
-    - cron: "*/5 * * * *"
   workflow_dispatch:
 jobs:
   tick:
