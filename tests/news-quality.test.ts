@@ -35,7 +35,7 @@ describe("skipping weak stories", () => {
   });
 
   it("leaves the slot empty when nothing is worth posting, instead of filling it with an explainer", async () => {
-    await saveSettings({ pillars: { own_work: 1, news: 1, local: 0, learning: 1 } });
+    await saveSettings({ pillars: { own_work: 1, news: 1, local: 0, learning: 1 }, fillerPosts: false });
     const calls = fakeLLM(() => ({}));
     const r = await fillCalendar({ now: NOW, max: 3 });
     expect(await db().select().from(schema.posts)).toHaveLength(0);
@@ -48,6 +48,16 @@ describe("skipping weak stories", () => {
     fakeLLM((req) => (req.schemaName === "pick_topic" ? { topic: "Idempotency keys", angle: "one lesson" } : req.schemaName === "write_post" ? { text: "Idempotency keys make retries safe: send a key, store the result, return it again." } : GOOD_REVIEW));
     await fillCalendar({ now: NOW, max: 1 });
     expect((await db().select().from(schema.posts)).length).toBe(1);
+  });
+
+  it("with no 'my work' notes, that share goes to explainers instead of leaving slots empty", async () => {
+    await saveSettings({ pillars: { own_work: 3, news: 3, local: 0, learning: 1 } });
+    await addItem("A strong story about a database release for developers", 9);
+    fakeLLM((req) => (req.schemaName === "pick_topic" ? { topic: "Idempotency keys", angle: "one lesson" } : req.schemaName === "write_post" ? { text: "Idempotency keys make retries safe: send a key, store the result, return it again." } : GOOD_REVIEW));
+    await fillCalendar({ now: NOW, max: 2 });
+    const rows = await db().select().from(schema.posts);
+    expect(rows).toHaveLength(2);
+    expect(rows.map((r) => r.pillar)).toContain("learning");
   });
 
   it("does not waste rewrites on a story the reviewer finds not worth posting", async () => {

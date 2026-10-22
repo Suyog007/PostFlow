@@ -169,6 +169,12 @@ async function pickByPillar(platform: Platform, pillar: Pillar, s: Settings, now
   return null;
 }
 
+/** Weeks with nothing built are normal: with no unused "my work" notes, that share goes to explainers on the owner's topics. */
+async function effectivePillars(s: Settings, platform: Platform): Promise<Settings> {
+  if (!s.fillerPosts || !s.pillars.own_work || (await pickNote(platform, "own_work"))) return s;
+  return { ...s, pillars: { ...s.pillars, own_work: 0, learning: s.pillars.learning + s.pillars.own_work } };
+}
+
 /** Pillars ordered by how far they are below their target share over the recent window. */
 async function pillarOrder(s: Settings, now: Date): Promise<Pillar[]> {
   const rows = await db()
@@ -217,7 +223,7 @@ export async function chooseMaterial(platform: Platform, slotAt: Date, s: Settin
     .map((x) => x.it);
   const hit = await pickVerified(urgent);
   if (hit) return itemMaterial(hit.it, hit.v);
-  const order = await pillarOrder(s, now);
+  const order = await pillarOrder(await effectivePillars(s, platform), now);
   for (const [i, p] of order.entries()) {
     // An evergreen explainer in place of a missing story is filler. Only your own "learning" notes qualify unless filler is switched on.
     if (p === "learning" && i > 0 && !s.fillerPosts) {

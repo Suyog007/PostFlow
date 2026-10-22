@@ -58,8 +58,8 @@ export const settingsSchema = z.object({
   minRelevance: z.number().int().min(1).max(10).default(7),
   /** LinkedIn is stricter: a weak story is skipped there rather than posted for the sake of posting. */
   linkedinMinRelevance: z.number().int().min(1).max(10).default(8),
-  /** When no strong material exists for a slot, leave the slot empty (false) or fill it with an evergreen explainer (true). */
-  fillerPosts: z.boolean().default(false),
+  /** When no strong material exists for a slot, fill it with an evergreen explainer on the owner's topics (true) or leave it empty (false). */
+  fillerPosts: z.boolean().default(true),
   /** Domains of your own sites (portfolio, blog). A link to one of these is treated as your own article: written as its author, with the link included. */
   ownDomains: z.array(z.string()).default([]),
   /** Links in posts. Off by default: the post names its source in words. */
