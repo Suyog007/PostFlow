@@ -50,14 +50,14 @@ describe("skipping weak stories", () => {
     expect((await db().select().from(schema.posts)).length).toBe(1);
   });
 
-  it("with no 'my work' notes, that share goes to explainers instead of leaving slots empty", async () => {
+  it("with no 'my work' notes and explainers off, posts come from news only", async () => {
     await saveSettings({ pillars: { own_work: 3, news: 3, local: 0, learning: 1 } });
     await addItem("A strong story about a database release for developers", 9);
-    fakeLLM((req) => (req.schemaName === "pick_topic" ? { topic: "Idempotency keys", angle: "one lesson" } : req.schemaName === "write_post" ? { text: "Idempotency keys make retries safe: send a key, store the result, return it again." } : GOOD_REVIEW));
-    await fillCalendar({ now: NOW, max: 2 });
+    const calls = fakeLLM((req) => (req.schemaName === "write_post" ? { text: "A database release landed today. According to the notes, it speeds up backups for small teams." } : GOOD_REVIEW));
+    await fillCalendar({ now: NOW, max: 3 });
     const rows = await db().select().from(schema.posts);
-    expect(rows).toHaveLength(2);
-    expect(rows.map((r) => r.pillar)).toContain("learning");
+    expect(rows.map((r) => r.pillar)).toEqual(["news", "news"]);
+    expect(calls.filter((c) => c.schemaName === "pick_topic")).toHaveLength(0);
   });
 
   it("does not waste rewrites on a story the reviewer finds not worth posting", async () => {

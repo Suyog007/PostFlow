@@ -156,7 +156,8 @@ async function pickByPillar(platform: Platform, pillar: Pillar, s: Settings, now
   }
   if (pillar === "learning") {
     const n = await pickNote(platform, "learning");
-    return n ? noteMaterial(n) : pickEvergreenTopic(s, platform);
+    // Evergreen explainers only when the owner switched them on; otherwise only their own learning notes.
+    return n ? noteMaterial(n) : s.fillerPosts ? pickEvergreenTopic(s, platform) : null;
   }
   if (pillar === "news" || pillar === "local") {
     const hit = await pickVerified(await candidateItems(platform, s, pillar, now, slotAt));
@@ -169,10 +170,10 @@ async function pickByPillar(platform: Platform, pillar: Pillar, s: Settings, now
   return null;
 }
 
-/** Weeks with nothing built are normal: with no unused "my work" notes, that share goes to explainers on the owner's topics. */
+/** Weeks with nothing built are normal: with no unused "my work" notes, that share goes to news. */
 async function effectivePillars(s: Settings, platform: Platform): Promise<Settings> {
-  if (!s.fillerPosts || !s.pillars.own_work || (await pickNote(platform, "own_work"))) return s;
-  return { ...s, pillars: { ...s.pillars, own_work: 0, learning: s.pillars.learning + s.pillars.own_work } };
+  if (!s.pillars.own_work || (await pickNote(platform, "own_work"))) return s;
+  return { ...s, pillars: { ...s.pillars, own_work: 0, news: s.pillars.news + s.pillars.own_work } };
 }
 
 /** Pillars ordered by how far they are below their target share over the recent window. */
@@ -224,13 +225,7 @@ export async function chooseMaterial(platform: Platform, slotAt: Date, s: Settin
   const hit = await pickVerified(urgent);
   if (hit) return itemMaterial(hit.it, hit.v);
   const order = await pillarOrder(await effectivePillars(s, platform), now);
-  for (const [i, p] of order.entries()) {
-    // An evergreen explainer in place of a missing story is filler. Only your own "learning" notes qualify unless filler is switched on.
-    if (p === "learning" && i > 0 && !s.fillerPosts) {
-      const n = await pickNote(platform, "learning");
-      if (n) return noteMaterial(n);
-      continue;
-    }
+  for (const p of order) {
     const m = await pickByPillar(platform, p, s, now, slotAt);
     if (m) return m;
   }
