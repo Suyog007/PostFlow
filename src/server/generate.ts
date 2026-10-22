@@ -254,10 +254,12 @@ function sanitize(text: string): string {
 }
 
 async function write(m: Material, platform: Platform, s: Settings, recent: string[], feedback?: { previous: string; notes: string[] }): Promise<string> {
+  // Recent posts come first and are labelled as style-only: placed after the material, the model sometimes wrote about them instead.
   const user = [
+    recent.length ? `STYLE CONTRAST ONLY (your recent posts; NOT material for this post, never write about their subjects). Do not reuse their openings, phrases or structure:\n${recent.slice(0, 8).map((r) => `- ${r.replace(/\s+/g, " ").slice(0, 140)}`).join("\n")}\n` : "",
     describeMaterial(m),
-    recent.length ? `Your recent posts. Do not reuse their openings, phrases or structure; this one must read differently:\n${recent.slice(0, 8).map((r) => `- ${r.replace(/\s+/g, " ").slice(0, 140)}`).join("\n")}` : "",
-    feedback ? `\nYour previous draft:\n"""${feedback.previous}"""\nAn editor rejected it for these reasons. Fix every one, keep what worked, do not add new facts:\n${feedback.notes.map((n) => `- ${n}`).join("\n")}` : "\nWrite the post.",
+    feedback ? `\nYour previous draft:\n"""${feedback.previous}"""\nAn editor rejected it for these reasons. Fix every one, keep what worked, do not add new facts:\n${feedback.notes.map((n) => `- ${n}`).join("\n")}` : "",
+    "\nWrite the post about the material above and nothing else.",
   ].join("\n");
   const res = await runTask({ task: "write_post", role: "writer", system: writerSystem(s, platform), user, output: writerOut, maxTokens: 900, temperature: 0.7 });
   return sanitize(res.text);
