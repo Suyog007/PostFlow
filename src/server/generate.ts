@@ -426,30 +426,40 @@ export async function produceForSlot(platform: Platform, at: Date, m: Material, 
   const recent = await recentTexts(platform);
   // For your own article the link is part of the post, so length checks and the reviewer see it.
   const compose = (t: string) => (m.ownUrl ? (platform === "linkedin" ? `${t}\n\n${m.ownUrl}` : `${t} ${m.ownUrl}`) : t);
-  const move = m.kind !== "news" ? undefined : m.mustKnow ? "explain" : await pickMove();
-  let w = await write(m, platform, s, recent, undefined, move);
-  let text = w.text;
-  let verdict: Verdict = { approved: false, reasons: [] };
-  let lastReview: Review | null = null;
-  let checks: Check[] = [];
-  const rounds: { text: string; reasons: string[] }[] = [];
+  // One draft, reviewed and revised up to `rounds` times.
+  const attempt = async (move: Move | undefined, rounds: number) => {
+    let w = await write(m, platform, s, recent, undefined, move);
+    let text = w.text;
+    let verdict: Verdict = { approved: false, reasons: [] };
+    let lastReview: Review | null = null;
+    let checks: Check[] = [];
+    const log: { text: string; reasons: string[] }[] = [];
+    for (let round = 0; round < rounds; round++) {
+      checks = runChecks(compose(text), platform, recent);
+      lastReview = await review(m, compose(text), platform, recent, { evidence: w.evidence });
+      verdict = gate(lastReview, checks, m);
+      log.push({ text, reasons: verdict.reasons });
+      if (verdict.approved || round === rounds - 1) break;
+      // A story that is simply not worth posting will not be rescued by rewording; skip it.
+      if (!opts.requested && lastReview.worth_posting <= 4) break;
+      w = await write(m, platform, s, recent, { previous: text, notes: [...verdict.reasons, lastReview.revision_instructions].filter(Boolean) }, move);
+      text = w.text;
+    }
+    return { move, text, evidence: w.evidence, verdict, lastReview, checks, rounds: log.length };
+  };
 
-  for (let round = 0; round < maxRounds; round++) {
-    checks = runChecks(compose(text), platform, recent);
-    lastReview = await review(m, compose(text), platform, recent, { evidence: w.evidence });
-    verdict = gate(lastReview, checks, m);
-    rounds.push({ text, reasons: verdict.reasons });
-    if (verdict.approved || round === maxRounds - 1) break;
-    // A story that is simply not worth posting will not be rescued by rewording; skip it.
-    if (!opts.requested && lastReview.worth_posting <= 4) break;
-    w = await write(m, platform, s, recent, { previous: text, notes: [...verdict.reasons, lastReview.revision_instructions].filter(Boolean) }, move);
-    text = w.text;
-  }
+  // Must-know stories (a big bug, an attack, an outage) get two versions: a normal take and a plain explainer.
+  // The one that passes review goes on the calendar; the other is offered on the post page as an alternative.
+  const main = await attempt(m.kind === "news" ? await pickMove() : undefined, maxRounds);
+  const other = m.mustKnow ? await attempt("explain", 2) : null;
+  const [chosen, alt] = other && !main.verdict.approved && other.verdict.approved ? [other, main] : [main, other];
+  const { move, text, verdict, lastReview, checks } = chosen;
+  const alternative = alt ? { text: m.ownUrl ? compose(alt.text) : withLink(alt.text, m, platform, s), move: alt.move, approved: alt.verdict.approved, reasons: alt.verdict.reasons, evidence: alt.evidence, review: alt.lastReview } : null;
 
   const finalText = m.ownUrl ? compose(text) : verdict.approved ? withLink(text, m, platform, s) : text;
   // Posts you asked for are never thrown away: if the reviewer is unhappy or you wanted a draft, you get a draft.
   const status: "scheduled" | "rejected" | "draft" = opts.requested ? (verdict.approved && opts.requested === "schedule" ? "scheduled" : "draft") : verdict.approved ? "scheduled" : "rejected";
-  const reviewJson = { ...lastReview, checks, verdict, evidence: w.evidence, move, rounds: rounds.length, material: { kind: m.kind, label: m.label }, verification: m.verification ?? null, reviewedAt: new Date().toISOString() } as Record<string, unknown>;
+  const reviewJson = { ...lastReview, checks, verdict, evidence: chosen.evidence, move, alternative, rounds: chosen.rounds, material: { kind: m.kind, label: m.label }, verification: m.verification ?? null, reviewedAt: new Date().toISOString() } as Record<string, unknown>;
   const [row] = await db()
     .insert(schema.posts)
     .values({
@@ -482,6 +492,34 @@ export async function produceForSlot(platform: Platform, at: Date, m: Material, 
     await addEvent("rejected", `Reviewer rejected a ${platform} draft (${m.label.slice(0, 60)}): ${verdict.reasons[0] ?? ""}`, row.id);
   }
   return { status, postId: row.id, reasons: verdict.reasons };
+}
+
+/** Swaps a post with its alternative version (normal take vs plain explainer). The swapped-out text becomes the alternative. */
+export async function swapToAlternative(id: string): Promise<{ message: string }> {
+  const p = await db().query.posts.findFirst({ where: and(eq(schema.posts.id, id), await mine(schema.posts)) });
+  if (!p) throw new Error("Post not found.");
+  if (!["scheduled", "draft", "rejected"].includes(p.status)) throw new Error(`A ${p.status} post cannot be changed.`);
+  type Alt = { text: string; move?: string; approved: boolean; reasons: string[]; evidence?: Evidence[]; review?: Review | null };
+  const r = (p.review ?? {}) as Record<string, unknown> & { alternative?: Alt | null; verdict?: Verdict; move?: string; evidence?: Evidence[] };
+  const alt = r.alternative;
+  if (!alt) throw new Error("This post has no other version.");
+  const current: Alt = { text: p.text, move: r.move, approved: r.verdict?.approved ?? p.status !== "rejected", reasons: r.verdict?.reasons ?? [], evidence: r.evidence, review: null };
+  const verdict: Verdict = { approved: alt.approved, reasons: alt.reasons };
+  // A held-back post whose other version passed review goes back on the calendar.
+  const status = p.status === "rejected" && alt.approved ? "scheduled" : p.status;
+  await db()
+    .update(schema.posts)
+    .set({
+      text: alt.text,
+      status,
+      approvedAt: null,
+      review: { ...r, ...(alt.review ?? {}), verdict, move: alt.move, evidence: alt.evidence, alternative: current },
+      error: alt.approved ? null : `Reviewer: ${alt.reasons.join(" | ")}`.slice(0, 500),
+      updatedAt: new Date(),
+    })
+    .where(eq(schema.posts.id, id));
+  await addEvent("swapped", `Switched a ${p.platform === "x" ? "X" : "LinkedIn"} post to its ${alt.move === "explain" ? "plain explainer" : "normal"} version.`, id);
+  return { message: alt.move === "explain" ? "Switched to the plain explainer." : "Switched to the normal version." };
 }
 
 /** Rebuilds what a post was written from, so it can be rewritten without new facts. */

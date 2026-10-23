@@ -6,7 +6,7 @@ import { requireActiveUser } from "@/server/auth";
 import { entitlementOf } from "@/server/billing/plans";
 import { db, schema } from "@/server/db/client";
 import { getSettings } from "@/server/settings";
-import { approvePostAction, recheckPostAction, postNowAction, rejectPostAction, removePostAction, reschedulePostAction, resolveAction, restorePostAction, rewordPostAction, scheduleDraftAction, unapprovePostAction } from "@/app/actions";
+import { approvePostAction, recheckPostAction, swapVersionAction, postNowAction, rejectPostAction, removePostAction, reschedulePostAction, resolveAction, restorePostAction, rewordPostAction, scheduleDraftAction, unapprovePostAction } from "@/app/actions";
 import { SubmitButton } from "@/components/submit-button";
 import { PostEditor } from "@/components/post-editor";
 import { Icon, PlatformGlyph, StatusBadge } from "@/components/ui";
@@ -21,6 +21,8 @@ interface ReviewData {
   verification?: Verif | null;
   evidence?: { claim: string; quote: string; found: boolean }[];
   rechecked?: number;
+  move?: string;
+  alternative?: { text: string; move?: string; approved: boolean; reasons: string[] } | null;
 }
 
 function Meter({ label, value }: { label: string; value?: number }) {
@@ -63,6 +65,7 @@ export default async function PostPage({ params, searchParams }: { params: Promi
         <h1 className="text-[18px] font-semibold tracking-tight">{platformName} post</h1>
         <StatusBadge status={p.status} needsApproval={needsApproval} />
         {p.fast && <span className="badge badge-warn"><Icon name="bolt" size={11} />Fast lane</span>}
+        {r.alternative && <span className="badge">2 versions</span>}
         {p.expiresAt && <span className="badge badge-warn"><Icon name="clock" size={11} />Stale after {DateTime.fromJSDate(p.expiresAt, { zone: s.timezone }).toFormat("ccc d LLL HH:mm")}</span>}
         <span className="text-[13px] text-[var(--muted)] tnum">{p.status === "draft" ? "Not scheduled" : local.toFormat("cccc d LLL, HH:mm")}</span>
         {p.url && <a href={p.url} target="_blank" rel="noreferrer" className="btn btn-sm ml-auto"><Icon name="external" size={13} />View live post</a>}
@@ -124,6 +127,24 @@ export default async function PostPage({ params, searchParams }: { params: Promi
               <button className="btn">Move</button>
             </div>
           </form>
+        )}
+
+        {r.alternative && (open || p.status === "rejected") && (
+          <section className="panel">
+            <div className="panel-head"><Icon name="draft" size={15} />{r.alternative.move === "explain" ? "Other version: explained simply" : "Other version: a normal take"}</div>
+            <div className="panel-body space-y-3 text-[13px]">
+              <p className="whitespace-pre-wrap break-words rounded-md border border-[var(--line)] bg-[var(--raised)] p-3">{r.alternative.text}</p>
+              {r.alternative.approved ? (
+                <p className="text-[12px] text-[var(--good)]">Passed review too.</p>
+              ) : (
+                <p className="text-[12px] text-[var(--warn)]">The reviewer had concerns: {r.alternative.reasons.join(" · ")}</p>
+              )}
+              <form action={swapVersionAction}>
+                <input type="hidden" name="id" value={p.id} />
+                <button className="btn"><Icon name="check" size={14} />Use this version instead</button>
+              </form>
+            </div>
+          </section>
         )}
 
         {(open || p.status === "rejected") && (

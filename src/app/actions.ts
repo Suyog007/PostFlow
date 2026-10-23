@@ -19,7 +19,7 @@ import { disconnectAccount, startOAuth } from "@/server/platforms/accounts";
 import { registerWebhook, unlinkTelegram } from "@/server/telegram";
 import { fillNowForUser, runForUser, startBackgroundFill, tick } from "@/server/tick";
 import { addEvent } from "@/server/events";
-import { fillNowDays, recheckPost, rejectAndReplace, rewordPost } from "@/server/generate";
+import { fillNowDays, recheckPost, rejectAndReplace, rewordPost, swapToAlternative } from "@/server/generate";
 import { isPublicHttpUrl } from "@/server/net";
 
 function back(path: string, kind: "error" | "ok", message: string): never {
@@ -93,6 +93,13 @@ export async function rewordPostAction(form: FormData) {
   const id = String(form.get("id"));
   await guarded(`/posts/${id}`, () => rewordPost(id, String(form.get("feedback") ?? ""), form.get("remember") === "on"), "Reworded. Check it and approve when it sounds like you.");
 }
+/** Swap a post with its other version (normal take vs plain explainer). */
+export async function swapVersionAction(form: FormData) {
+  const id = String(form.get("id"));
+  if (!/^[0-9a-f-]{36}$/i.test(id)) back("/calendar", "error", "Post not found.");
+  await guarded(`/posts/${id}`, () => swapToAlternative(id), "Switched versions. Approve it when you are happy.");
+}
+
 /** A second, more careful review of a post the reviewer held back. */
 export async function recheckPostAction(form: FormData) {
   const id = String(form.get("id"));

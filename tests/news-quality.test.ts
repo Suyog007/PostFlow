@@ -1,3 +1,4 @@
+import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db, schema } from "../src/server/db/client";
 import { fillCalendar } from "../src/server/generate";
@@ -170,23 +171,54 @@ describe("big stories", () => {
 });
 
 describe("must-know stories", () => {
-  it("are labelled by the scorer and explained in plain words, with room on LinkedIn", async () => {
+  it("are labelled by the scorer and get two versions: a normal take and a plain explainer you can switch to", async () => {
     await saveSettings({ slots: BOTH, horizonDays: 1 });
-    const [it] = await db().insert(schema.items).values({ userId: me(), url: "https://theregister.com/php2shell", title: "PHP2Shell lets attackers run code on unpatched PHP servers", summary: "A flaw in PHP lets attackers run code. Patch to 8.4.9.", pillar: "news", publishedAt: new Date(Date.now() - 3_600_000) }).returning();
+    await db().insert(schema.items).values({ userId: me(), url: "https://theregister.com/php2shell", title: "PHP2Shell lets attackers run code on unpatched PHP servers", summary: "A flaw in PHP lets attackers run code. Patch to 8.4.9.", pillar: "news", publishedAt: new Date(Date.now() - 3_600_000) });
     let calls = fakeLLM(() => ({ items: [{ id: "0", relevance: 9, urgency: "week", angle: "PHP servers can be taken over; patch now", kind: "must_know" }] }));
     await analyzeBatch();
     expect((await db().select().from(schema.items))[0].kind).toBe("must_know");
-    const texts = ["PHP had a bug that lets a stranger run their own code on your server, per The Register. Patch to 8.4.9 today.", "Think of PHP2Shell as a spare key left under every PHP doormat, per The Register: attackers can run code on unpatched servers. Update to 8.4.9."];
-    let k = 0;
-    calls = fakeLLM((req) => (req.schemaName === "write_post" ? { text: texts[k++ % 2] } : GOOD_REVIEW));
+    const normal = ["PHP2Shell is the reminder that old runtimes are attack surface too, per The Register. Patch to 8.4.9 before the weekend.", "The Register says PHP2Shell gives attackers code execution on unpatched PHP. Worth a look at every forgotten PHP box you own."];
+    const simple = ["Think of PHP2Shell as a spare key under every PHP doormat, per The Register: strangers can run their own code on unpatched servers. Update to 8.4.9.", "PHP had a bug that let a stranger run their own code on your server, per The Register. If your site runs PHP, update to 8.4.9 today."];
+    let n = 0;
+    let e = 0;
+    calls = fakeLLM((req) => (req.schemaName === "write_post" ? { text: req.user.includes("Explain it simply") ? simple[e++ % 2] : normal[n++ % 2] } : GOOD_REVIEW));
     await fillCalendar({ max: 2 });
     const writes = calls.filter((c) => c.schemaName === "write_post");
-    expect(writes.length).toBeGreaterThanOrEqual(2);
-    expect(writes.every((w) => w.user.includes("Explain it simply"))).toBe(true);
-    expect(writes.find((w) => w.system.includes("LinkedIn"))!.system).toContain("at most 700 characters");
-    const moves = (await db().select().from(schema.posts)).map((p) => (p.review as { move?: string }).move);
-    expect(new Set(moves)).toEqual(new Set(["explain"]));
-    expect(it.id).toBeTruthy();
+    expect(writes.some((w) => w.user.includes("Explain it simply"))).toBe(true);
+    expect(writes.some((w) => !w.user.includes("Explain it simply"))).toBe(true);
+    expect(writes.find((w) => w.user.includes("Explain it simply") && w.system.includes("LinkedIn"))!.system).toContain("at most 700 characters");
+    const posts = await db().select().from(schema.posts);
+    expect(posts.length).toBe(2);
+    const p = posts[0];
+    const alt = (p.review as { alternative: { text: string; move: string; approved: boolean } }).alternative;
+    expect(alt.move).toBe("explain");
+    expect(alt.approved).toBe(true);
+    expect(normal).toContain(p.text);
+
+    const { swapToAlternative } = await import("../src/server/generate");
+    await swapToAlternative(p.id);
+    const after = (await db().select().from(schema.posts).where(eq(schema.posts.id, p.id)))[0];
+    expect(after.text).toBe(alt.text);
+    expect((after.review as { move: string; alternative: { text: string } }).move).toBe("explain");
+    expect((after.review as { alternative: { text: string } }).alternative.text).toBe(p.text);
+    // And back again.
+    await swapToAlternative(p.id);
+    expect((await db().select().from(schema.posts).where(eq(schema.posts.id, p.id)))[0].text).toBe(p.text);
+  });
+
+  it("when only the explainer passes review, it is the one scheduled", async () => {
+    await saveSettings({ slots: [BOTH[0]], horizonDays: 1 });
+    await db().insert(schema.items).values({ userId: me(), url: "https://theregister.com/php2shell", title: "PHP2Shell lets attackers run code on unpatched PHP servers", summary: "A flaw in PHP lets attackers run code. Patch to 8.4.9.", pillar: "news", publishedAt: new Date(Date.now() - 3_600_000), relevance: 9, urgency: "week", kind: "must_know", analyzedAt: new Date() });
+    fakeLLM((req) =>
+      req.schemaName === "write_post"
+        ? { text: req.user.includes("Explain it simply") ? "PHP had a bug that let a stranger run their own code on your server, per The Register. Update to 8.4.9 today." : "PHP2Shell is bad, per The Register. Patch to 8.4.9 soon." }
+        : req.user.includes("let a stranger") ? GOOD_REVIEW : { ...GOOD_REVIEW, worth_posting: 3, issues: ["Says nothing."] },
+    );
+    await fillCalendar({ max: 1 });
+    const [p] = await db().select().from(schema.posts);
+    expect(p.status).toBe("scheduled");
+    expect(p.text).toMatch(/let a stranger/);
+    expect((p.review as { alternative: { approved: boolean } }).alternative.approved).toBe(false);
   });
 });
 
