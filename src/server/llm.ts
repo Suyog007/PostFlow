@@ -100,6 +100,13 @@ export function llmConfigured() {
 
 export type Role = "writer" | "reviewer" | "analyst";
 
+/** The reviewer thinks a bit longer by default: on low effort it misread "I'd expect..." as a claim of fact. */
+function effortFor(role: Role): string | undefined {
+  const e = env();
+  const v = role === "reviewer" ? e.FIREWORKS_REVIEW_REASONING_EFFORT ?? (e.FIREWORKS_REASONING_EFFORT ? "medium" : undefined) ?? "none" : e.FIREWORKS_REASONING_EFFORT ?? "none";
+  return v === "off" ? undefined : v;
+}
+
 function modelFor(role: Role): string | undefined {
   const e = env();
   return role === "reviewer" ? e.FIREWORKS_REVIEW_MODEL ?? e.FIREWORKS_MODEL : e.FIREWORKS_MODEL;
@@ -168,7 +175,7 @@ export async function runTask<T extends z.ZodType>(spec: TaskSpec<T>): Promise<z
       schemaName: spec.task.replace(/[^a-zA-Z0-9_]/g, "_"),
       maxTokens: spec.maxTokens,
       temperature: spec.temperature ?? 0.4,
-      reasoningEffort: env().FIREWORKS_REASONING_EFFORT === "off" ? undefined : env().FIREWORKS_REASONING_EFFORT ?? "none",
+      reasoningEffort: effortFor(spec.role),
     });
   } catch (err) {
     await db().insert(schema.llmCalls).values({ userId, task: spec.task, model, status: "error", error: String((err as Error).message).slice(0, 400) });

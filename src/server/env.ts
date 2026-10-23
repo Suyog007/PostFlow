@@ -31,6 +31,8 @@ const schema = z.object({
   /** Optional stronger model for the reviewer. Defaults to FIREWORKS_MODEL. */
   FIREWORKS_REVIEW_MODEL: optional,
   FIREWORKS_REASONING_EFFORT: optional,
+  /** Reasoning effort for the reviewer. Defaults to "medium" when FIREWORKS_REASONING_EFFORT is set. */
+  FIREWORKS_REVIEW_REASONING_EFFORT: optional,
   FIREWORKS_BASE_URL: z.string().default("https://api.fireworks.ai/inference/v1"),
   /** Owner accounts' model-call cap per rolling 24h (customers get their plan's cap). */
   MAX_LLM_CALLS_PER_DAY: z.coerce.number().default(150),
