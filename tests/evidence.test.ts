@@ -34,7 +34,7 @@ describe("writer's evidence", () => {
     await addItem();
     const calls = fakeLLM((req) =>
       req.schemaName === "write_post"
-        ? { text: "Acme DB 2.0 is out, Acme says backups are 3x faster. I'd expect small teams to switch this month.", evidence: [{ claim: "Backups are 3x faster", quote: "Backups are now 3x faster" }, { claim: "It is free", quote: "free for everyone" }] }
+        ? { text: "Acme DB 2.0 is out, Acme says backups are 3x faster. Small teams with big nightly backups should look first.", evidence: [{ claim: "Backups are 3x faster", quote: "Backups are now 3x faster" }, { claim: "It is free", quote: "free for everyone" }] }
         : GOOD_REVIEW,
     );
     await fillCalendar({ max: 1 });
@@ -56,7 +56,7 @@ describe("check again", () => {
         userId: me(),
         platform: "x",
         pillar: "news",
-        text: "Acme DB 2.0 is out, Acme says backups are 3x faster. I'd expect small teams to switch this month.",
+        text: "Acme DB 2.0 is out, Acme says backups are 3x faster. Small teams with big nightly backups should look first.",
         status: "rejected",
         scheduledAt: new Date(Date.now() + 5 * 3_600_000),
         itemId: it.id,

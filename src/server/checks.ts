@@ -30,6 +30,16 @@ const BANNED: [RegExp, string][] = [
   [/\bin conclusion\b/i, "in conclusion"],
 ];
 
+/** Opinion templates that make a feed read as machine-written when every post uses them. */
+const STOCK_OPINION: [RegExp, string][] = [
+  [/\bi(?:'d| would)? expect\b/i, "I'd expect"],
+  [/\bin my view\b/i, "In my view"],
+  [/\ba (?:wave|surge|flood|wave of new) of\b/i, "a wave of"],
+  [/\bguessing we'll see\b/i, "guessing we'll see"],
+  [/\bthis could (?:lead to|pave the way)\b/i, "this could lead to"],
+  [/\bit will be interesting to see\b/i, "it will be interesting to see"],
+];
+
 const URL_RE = /https?:\/\/\S+/g;
 const HASHTAG_RE = /#[\p{L}\p{N}_]+/gu;
 const EMOJI_RE = /\p{Extended_Pictographic}/gu;
@@ -54,6 +64,9 @@ export function runChecks(text: string, platform: "x" | "linkedin", recent: stri
   if (hits.length) {
     checks.push({ code: "slop_phrases", severity: hits.length >= 2 ? "block" : "warn", message: `Cliché or machine-sounding phrasing: ${hits.join(", ")}.` });
   }
+  const flat = body.replace(/[\u2018\u2019]/g, "'");
+  const stock = STOCK_OPINION.filter(([re]) => re.test(flat)).map(([, l]) => `"${l}"`);
+  if (stock.length) checks.push({ code: "stock_opinion", severity: "block", message: `Uses ${stock.join(", ")}, a stock phrase that makes every post sound the same. Make the point in your own words.` });
   if ((body.match(HASHTAG_RE) ?? []).length > 2) checks.push({ code: "hashtags", severity: "block", message: "More than 2 hashtags." });
   const emojiMax = platform === "linkedin" ? 5 : 2;
   if ((body.match(EMOJI_RE) ?? []).length > emojiMax) checks.push({ code: "emoji", severity: "block", message: `More than ${emojiMax} emoji for ${platform === "x" ? "X" : "LinkedIn"}.` });

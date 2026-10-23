@@ -66,7 +66,7 @@ describe("skipping weak stories", () => {
     const at = new Date("2026-10-21T03:45:00Z");
     const rejected = (hoursAgo: number) => ({ userId: me(), platform: "x", pillar: "news" as const, text: "old", status: "rejected" as const, scheduledAt: at, createdAt: new Date(NOW.getTime() - hoursAgo * 3_600_000) });
     await db().insert(schema.posts).values([rejected(1), rejected(1), rejected(1)]);
-    fakeLLM((req) => (req.schemaName === "write_post" ? { text: "Acme shipped a database release today. I'd expect small teams to try it for faster backups." } : GOOD_REVIEW));
+    fakeLLM((req) => (req.schemaName === "write_post" ? { text: "Acme shipped a database release today. Small teams with nightly backups get the most out of this one." } : GOOD_REVIEW));
     await fillCalendar({ now: NOW, max: 1 });
     expect((await db().select().from(schema.posts)).filter((p) => p.status === "scheduled")).toHaveLength(0);
     await db().update(schema.posts).set({ createdAt: new Date(NOW.getTime() - 5 * 3_600_000) });
@@ -86,7 +86,7 @@ describe("skipping weak stories", () => {
     const { getSettings } = await import("../src/server/settings");
     const tomorrow = slotsBetween(await getSettings(), new Date(Date.now() + 20 * 60_000), new Date(Date.now() + 3 * 86_400_000))[0].at;
     await db().insert(schema.posts).values([1, 2, 3].map(() => ({ userId: me(), platform: "x", pillar: "news" as const, text: "old", status: "rejected" as const, scheduledAt: tomorrow })));
-    fakeLLM((req) => (req.schemaName === "write_post" ? { text: "Acme shipped a database release today. I'd expect small teams to try it for faster backups." } : GOOD_REVIEW));
+    fakeLLM((req) => (req.schemaName === "write_post" ? { text: "Acme shipped a database release today. Small teams with nightly backups get the most out of this one." } : GOOD_REVIEW));
     const r = await fillNowForUser(me(), { budgetMs: 30_000 });
     expect(r?.produced).toBeGreaterThanOrEqual(1);
     const live = (await db().select().from(schema.posts)).filter((p) => p.status === "scheduled");
@@ -131,6 +131,28 @@ describe("tips", () => {
     const [it] = await db().select().from(schema.items);
     expect(it.sourceId).toBe(tipsId);
     expect(it.relevance).toBe(8);
+  });
+});
+
+describe("stock opinion phrases", () => {
+  it("blocks the templates that make every post sound machine-written", async () => {
+    const { runChecks } = await import("../src/server/checks");
+    for (const t of ["Acme shipped X. I\u2019d expect teams to try it.", "Acme shipped X. In my view this matters.", "Acme shipped X, so a wave of tools will follow.", "Acme shipped X. I expect teams to adopt it."]) {
+      expect(runChecks(t, "x").some((c) => c.code === "stock_opinion" && c.severity === "block")).toBe(true);
+    }
+    expect(runChecks("Acme shipped X. Small teams with big nightly backups should look first.", "x").some((c) => c.code === "stock_opinion")).toBe(false);
+  });
+
+  it("each news post gets a move, and the next post gets a different one", async () => {
+    await saveSettings({ slots: [BOTH[0]], horizonDays: 3 });
+    await addItem("A strong story about a database release for developers", 9);
+    await addItem("Another strong story about a new open source CI runner", 9);
+    const calls = fakeLLM((req) => (req.schemaName === "write_post" ? { text: "Acme shipped a database release today. Small teams with big nightly backups should look first." } : GOOD_REVIEW));
+    await fillCalendar({ now: NOW, max: 2 });
+    const moves = (await db().select().from(schema.posts)).map((p) => (p.review as { move?: string }).move);
+    expect(moves).toHaveLength(2);
+    expect(new Set(moves).size).toBe(2);
+    expect(calls.filter((c) => c.schemaName === "write_post").every((c) => c.user.includes("THIS POST'S MOVE"))).toBe(true);
   });
 });
 
