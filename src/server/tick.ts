@@ -74,7 +74,12 @@ async function pipelinePhase(out: TickResult, deadline: number) {
   }
   if (Date.now() < deadline) {
     try {
-      out.analyzed += await analyzeBatch();
+      // Work through a backlog a few batches at a time, leaving room for writing.
+      for (let i = 0; i < 3 && Date.now() < deadline - 45_000; i++) {
+        const n = await analyzeBatch();
+        out.analyzed += n;
+        if (n === 0) break;
+      }
     } catch (err) {
       out.errors.push(`analyze: ${(err as Error).message}`);
     }
@@ -145,8 +150,7 @@ export async function fillNowForUser(userId: string, opts: { budgetMs?: number }
           await addEvent("fill_done", "Fill skipped: the AI model is not configured.");
           return null;
         }
-        await analyzeBatch().catch(() => 0);
-        await analyzeBatch().catch(() => 0);
+        for (let i = 0; i < 8 && Date.now() < deadline - 5 * 60_000; i++) if (!(await analyzeBatch().catch(() => 0))) break;
         let f: FillResult;
         try {
           f = await fillCalendar({ max: 30, deadline, retryFailedSince: since, horizonDays: fillNowDays(s) });
