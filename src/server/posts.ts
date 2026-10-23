@@ -53,7 +53,7 @@ export async function reschedulePost(id: string, at: Date) {
     .from(schema.posts)
     .where(and(eq(schema.posts.userId, p.userId), eq(schema.posts.platform, p.platform), eq(schema.posts.scheduledAt, at), inArray(schema.posts.status, ["scheduled", "publishing"])));
   if (clash.some((c) => c.id !== id)) throw new PostError("Another post already uses that exact time on this platform.");
-  await db().update(schema.posts).set({ scheduledAt: at, status: "scheduled", error: null, attempts: 0, claimedAt: null, userEdited: true, updatedAt: new Date() }).where(eq(schema.posts.id, id));
+  await db().update(schema.posts).set({ scheduledAt: at, status: "scheduled", error: null, attempts: 0, claimedAt: null, userEdited: true, remindedAt: null, updatedAt: new Date() }).where(eq(schema.posts.id, id));
 }
 
 export async function postNow(id: string) {

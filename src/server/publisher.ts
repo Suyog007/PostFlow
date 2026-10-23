@@ -6,7 +6,7 @@ import { getSettings } from "./settings";
 import { getCredentials, getPlatformClient, markAccountError, NotConnectedError } from "./platforms/accounts";
 import { ReconcileNotSupported, type Platform } from "./platforms/types";
 import { addEvent } from "./events";
-import { notifyProblem, notifyPublished, notifyText } from "./telegram";
+import { myTelegramChat, notifyProblem, notifyPublished, notifyReminder, notifyText } from "./telegram";
 import { formatLocal, nextFreeSlot } from "./slots";
 import { log } from "./log";
 
@@ -112,6 +112,22 @@ async function publishOne(post: PostRow, now: Date): Promise<"published" | "othe
   return "other";
 }
 
+/** How long before posting the heads-up goes out. The scheduler runs every 5 minutes, so it arrives 5 to 10 minutes ahead. */
+export const REMIND_MINUTES = 10;
+
+/** One Telegram heads-up per post, shortly before it goes out. Does nothing until Telegram is linked. */
+async function sendReminders(now: Date, blocks: boolean, timezone: string) {
+  if (!(await myTelegramChat())) return;
+  const due = await db()
+    .update(schema.posts)
+    .set({ remindedAt: now })
+    .where(and(eq(schema.posts.userId, await uid()), eq(schema.posts.status, "scheduled"), isNull(schema.posts.remindedAt), gt(schema.posts.scheduledAt, now), lte(schema.posts.scheduledAt, new Date(now.getTime() + REMIND_MINUTES * 60_000))))
+    .returning();
+  for (const post of due) {
+    await notifyReminder(post, timezone, blocks, Math.max(1, Math.round((post.scheduledAt.getTime() - now.getTime()) / 60_000))).catch(() => {});
+  }
+}
+
 /** Posts everything that is due. Never runs while paused. */
 export async function publishDue(opts: { now?: Date; max?: number } = {}): Promise<{ published: number; handled: number }> {
   const now = opts.now ?? new Date();
@@ -119,6 +135,7 @@ export async function publishDue(opts: { now?: Date; max?: number } = {}): Promi
   if (s.paused) return { published: 0, handled: 0 };
   // Auto mode (publishing without approval) is a paid feature; without it, approval is always required.
   const requireApproval = approvalGate(s, (await entitlementFor(await uid())).features.autoMode).blocks;
+  await sendReminders(now, requireApproval, s.timezone).catch((err) => log.warn("reminder_failed", { error: (err as Error).message }));
   let published = 0;
   let handled = 0;
   // Approval required: a post nobody approved before its time is skipped, and the calendar moves on to the next one.

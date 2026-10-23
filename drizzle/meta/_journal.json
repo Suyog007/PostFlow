@@ -57,6 +57,13 @@
       "when": 1792722777955,
       "tag": "0007_post_slot",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792723786647,
+      "tag": "0008_post_reminder",
+      "breakpoints": true
     }
   ]
 }

@@ -155,6 +155,8 @@ export const posts = pgTable(
     scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull(),
     /** The calendar slot this post was planned for, kept when it is posted early so nothing else fills that slot. */
     slotAt: timestamp("slot_at", { withTimezone: true }),
+    /** When the heads-up message before posting was sent (so it is sent once). */
+    remindedAt: timestamp("reminded_at", { withTimezone: true }),
     /** Time-sensitive posts are dropped, not published late, once this passes. */
     expiresAt: timestamp("expires_at", { withTimezone: true }),
     itemId: uuid("item_id").references(() => items.id, { onDelete: "set null" }),

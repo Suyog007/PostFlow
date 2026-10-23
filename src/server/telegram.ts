@@ -88,8 +88,26 @@ export async function notifyScheduled(post: PostRow, tz: string, requireApproval
   );
 }
 
+/** Sent a few minutes before a post goes out, so you can check it at that moment: approve, remove, reject or post it right away. */
+export async function notifyReminder(post: PostRow, tz: string, blocks: boolean, minutes: number) {
+  const when = `${label(post.platform)} · ${formatLocal(post.scheduledAt, tz)}`;
+  const inTxt = minutes <= 1 ? "in about a minute" : `in about ${minutes} minutes`;
+  const head = `⏰ Going out ${inTxt}\n${when}\n\n${post.text}\n\n`;
+  if (blocks && !post.approvedAt) {
+    await notifyText(`${head}Not approved yet. If you do nothing it is skipped.`, [
+      [{ text: "✅ Approve", data: `ok:${post.id}` }, { text: "🗑 Remove", data: `rm:${post.id}` }],
+      [{ text: "🔁 Reject, find another", data: `rj:${post.id}` }, { text: "🚀 Post now", data: `pn:${post.id}` }],
+    ]);
+    return;
+  }
+  await notifyText(`${head}${post.approvedAt ? "Approved. " : ""}It goes out on time unless you remove it.`, [
+    [{ text: "🗑 Remove", data: `rm:${post.id}` }, { text: "🔁 Reject, find another", data: `rj:${post.id}` }],
+  ]);
+}
+
 export async function notifyPublished(post: PostRow) {
-  await notifyText(`✅ Posted on ${label(post.platform)}${post.url ? `\n${post.url}` : ""}`);
+  const snippet = post.text.replace(/\s+/g, " ").slice(0, 110);
+  await notifyText(`✅ Posted on ${label(post.platform)}\n"${snippet}${post.text.length > 110 ? "…" : ""}"${post.url ? `\n${post.url}` : ""}`);
 }
 
 export async function notifyProblem(post: PostRow, message: string) {

@@ -1,0 +1,1 @@
+ALTER TABLE "posts" ADD COLUMN "reminded_at" timestamp with time zone;

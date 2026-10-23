@@ -69,6 +69,77 @@ describe("publishDue", () => {
     expect(notices).toHaveLength(1);
   });
 
+  describe("heads-up before posting", () => {
+    async function withTelegram<T>(fn: (sent: { text: string; buttons?: { text: string }[][] }[]) => Promise<T>) {
+      process.env.TELEGRAM_BOT_TOKEN = "123:test";
+      const { resetEnvCache } = await import("../src/server/env");
+      resetEnvCache();
+      const sent: { text: string; buttons?: { text: string }[][] }[] = [];
+      const realFetch = globalThis.fetch;
+      globalThis.fetch = (async (_u: string, init?: { body?: string }) => {
+        const b = JSON.parse(init?.body ?? "{}");
+        if (b.text) sent.push({ text: b.text, buttons: b.reply_markup?.inline_keyboard });
+        return new Response(JSON.stringify({ ok: true }));
+      }) as typeof fetch;
+      try {
+        return await fn(sent);
+      } finally {
+        globalThis.fetch = realFetch;
+        delete process.env.TELEGRAM_BOT_TOKEN;
+        resetEnvCache();
+      }
+    }
+
+    it("sends one message about ten minutes before, with Approve and Remove, and not for far-off or already-reminded posts", async () => {
+      await saveSettings({ requireApproval: true });
+      fakePlatform("x", () => ({ kind: "success", externalIds: ["1"] }));
+      const soon = await addPost({ scheduledAt: new Date(NOW.getTime() + 8 * 60_000), text: "A post going out in eight minutes." });
+      await addPost({ scheduledAt: new Date(NOW.getTime() + 3 * 3_600_000), text: "A post going out much later." });
+      await withTelegram(async (sent) => {
+        await publishDue({ now: NOW });
+        const r = sent.filter((m) => m.text.includes("Going out"));
+        expect(r).toHaveLength(1);
+        expect(r[0].text).toContain("A post going out in eight minutes.");
+        expect(r[0].text).toContain("in about 8 minutes");
+        expect(r[0].text).toContain("Not approved yet. If you do nothing it is skipped.");
+        expect(r[0].buttons!.flat().map((b) => b.text)).toEqual(["✅ Approve", "🗑 Remove", "🔁 Reject, find another", "🚀 Post now"]);
+        await publishDue({ now: new Date(NOW.getTime() + 60_000) });
+        expect(sent.filter((m) => m.text.includes("Going out"))).toHaveLength(1); // only once
+      });
+      expect((await get(soon.id)).remindedAt).not.toBeNull();
+    });
+
+    it("an approved post's reminder says so, and the posted message follows when it goes out", async () => {
+      await saveSettings({ requireApproval: true });
+      fakePlatform("x", () => ({ kind: "success", externalIds: ["1"], url: "https://x.com/me/status/1" }));
+      const p = await addPost({ scheduledAt: new Date(NOW.getTime() + 6 * 60_000), text: "Approved and ready.", approvedAt: NOW });
+      await withTelegram(async (sent) => {
+        await publishDue({ now: NOW });
+        expect(sent.find((m) => m.text.includes("Going out"))!.text).toContain("Approved. It goes out on time unless you remove it.");
+        await publishDue({ now: new Date(NOW.getTime() + 7 * 60_000) });
+        const done = sent.find((m) => m.text.startsWith("✅ Posted on X"))!;
+        expect(done.text).toContain("Approved and ready.");
+        expect(done.text).toContain("https://x.com/me/status/1");
+      });
+      expect((await get(p.id)).status).toBe("published");
+    });
+
+    it("a rescheduled post gets a fresh heads-up", async () => {
+      fakePlatform("x", () => ({ kind: "success", externalIds: ["1"] }));
+      const base = Date.now();
+      const p = await addPost({ scheduledAt: new Date(base + 8 * 60_000) });
+      await withTelegram(async (sent) => {
+        await publishDue({ now: new Date(base) });
+        const { reschedulePost } = await import("../src/server/posts");
+        await reschedulePost(p.id, new Date(base + 3 * 3_600_000));
+        await publishDue({ now: new Date(base + 60_000) });
+        expect(sent.filter((m) => m.text.includes("Going out"))).toHaveLength(1); // far off again: nothing new yet
+        await publishDue({ now: new Date(base + 3 * 3_600_000 - 8 * 60_000) });
+        expect(sent.filter((m) => m.text.includes("Going out"))).toHaveLength(2);
+      });
+    });
+  });
+
   it("publishes due posts exactly once", async () => {
     const sent = fakePlatform("x", () => ({ kind: "success", externalIds: ["123"], url: "https://x.com/i/web/status/123" }));
     const p = await addPost();

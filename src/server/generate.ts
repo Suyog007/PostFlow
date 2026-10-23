@@ -489,8 +489,12 @@ export async function produceForSlot(platform: Platform, at: Date, m: Material, 
     await notifyText(`📝 Draft ready for ${platform === "x" ? "X" : "LinkedIn"}${verdict.approved ? "" : " (the reviewer had concerns: " + verdict.reasons[0] + ")"}\n\n${finalText}\n\nOpen the app to edit it or put it on the calendar.`).catch(() => {});
   } else if (verdict.approved) {
     await addEvent("scheduled", `${opts.fast ? "Fast lane: " : ""}${platform === "x" ? "X" : "LinkedIn"} post scheduled for ${formatLocal(at, s.timezone)}: ${m.label.slice(0, 80)}`, row.id);
-    const gate_ = approvalGate(s, (await entitlementFor(userId)).features.autoMode);
-    await notifyScheduled(row, s.timezone, gate_.blocks).catch(() => {});
+    // Ordinary posts get one heads-up shortly before they go out (see sendReminders). A fast-lane post goes out soon, so it is announced now.
+    if (opts.fast) {
+      const gate_ = approvalGate(s, (await entitlementFor(userId)).features.autoMode);
+      await db().update(schema.posts).set({ remindedAt: new Date() }).where(eq(schema.posts.id, row.id));
+      await notifyScheduled(row, s.timezone, gate_.blocks).catch(() => {});
+    }
   } else {
     await addEvent("rejected", `Reviewer rejected a ${platform} draft (${m.label.slice(0, 60)}): ${verdict.reasons[0] ?? ""}`, row.id);
   }
