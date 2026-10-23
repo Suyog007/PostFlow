@@ -1,7 +1,7 @@
 import { and, desc, eq } from "drizzle-orm";
 import { db, schema } from "./db/client";
 import { uid, withUser } from "./context";
-import { entitlementFor, entitlementOf } from "./billing/plans";
+import { approvalGate, entitlementFor, entitlementOf } from "./billing/plans";
 import { DateTime } from "luxon";
 import { sendTo, telegramApi } from "./telegram";
 import { getSettings, saveSettings } from "./settings";
@@ -168,8 +168,10 @@ async function handleForUser(u: Update, chat: number): Promise<void> {
   if (text === "/queue") {
     const q = await upcoming(40);
     if (!q.length) return void (await sendTo(chat, "Nothing scheduled yet."));
-    const approvalOn = s.requireApproval || !(await entitlementFor(userId)).features.autoMode;
-    const waiting = (p: (typeof q)[number]) => approvalOn && !p.approvedAt;
+    const gate_ = approvalGate(s, (await entitlementFor(userId)).features.autoMode);
+    const approvalOn = gate_.blocks;
+    const waiting = (p: (typeof q)[number]) => gate_.blocks && !p.approvedAt;
+    const tag = (p: (typeof q)[number]) => (gate_.blocks ? (p.approvedAt ? " · ✅ approved" : " · ⏳ needs your OK") : gate_.silentPass ? (p.approvedAt ? " · ✅ approved" : " · 🕒 goes out on time unless you reject it") : "");
     const now = DateTime.now().setZone(s.timezone);
     const dayLabel = (d: DateTime) => {
       const diff = Math.round(d.startOf("day").diff(now.startOf("day"), "days").days);
@@ -184,7 +186,7 @@ async function handleForUser(u: Update, chat: number): Promise<void> {
       days.get(key)!.posts.push(p);
     }
     const nWaiting = q.filter(waiting).length;
-    await sendTo(chat, `🗓 ${q.length} scheduled post${q.length === 1 ? "" : "s"} over ${days.size} day${days.size === 1 ? "" : "s"}${approvalOn ? (nWaiting ? ` · ${nWaiting} waiting for your OK` : " · all approved") : ""}`);
+    await sendTo(chat, `🗓 ${q.length} scheduled post${q.length === 1 ? "" : "s"} over ${days.size} day${days.size === 1 ? "" : "s"}${approvalOn ? (nWaiting ? ` · ${nWaiting} waiting for your OK` : " · all approved") : gate_.silentPass ? " · unapproved ones go out on time unless you reject them" : ""}`);
     let n = 0;
     for (const day of days.values()) {
       // One message per day, with the full text of every post and its own buttons.
@@ -193,7 +195,7 @@ async function handleForUser(u: Update, chat: number): Promise<void> {
       day.posts.forEach((p, i) => {
         n++;
         const time = DateTime.fromJSDate(p.scheduledAt, { zone: s.timezone }).toFormat("HH:mm");
-        body += `\n\n${i + 1}. ${p.platform === "x" ? "X" : "LinkedIn"} · ${time}${approvalOn ? (p.approvedAt ? " · ✅ approved" : " · ⏳ needs your OK") : ""}\n${p.text}`;
+        body += `\n\n${i + 1}. ${p.platform === "x" ? "X" : "LinkedIn"} · ${time}${tag(p)}\n${p.text}`;
         const row = [];
         if (waiting(p)) row.push({ text: `✅ Approve ${i + 1}`, data: `ok:${p.id}` });
         row.push({ text: `🚀 Now ${i + 1}`, data: `pn:${p.id}` });
@@ -206,7 +208,7 @@ async function handleForUser(u: Update, chat: number): Promise<void> {
         await sendTo(chat, `📅 ${day.label}`);
         for (const [i, p] of day.posts.entries()) {
           const time = DateTime.fromJSDate(p.scheduledAt, { zone: s.timezone }).toFormat("HH:mm");
-          await sendTo(chat, `${i + 1}. ${p.platform === "x" ? "X" : "LinkedIn"} · ${time}${approvalOn ? (p.approvedAt ? " · ✅ approved" : " · ⏳ needs your OK") : ""}\n${p.text}`, [rows[i]]);
+          await sendTo(chat, `${i + 1}. ${p.platform === "x" ? "X" : "LinkedIn"} · ${time}${tag(p)}\n${p.text}`, [rows[i]]);
         }
       }
     }

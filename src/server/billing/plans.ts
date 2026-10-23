@@ -48,6 +48,15 @@ export function entitlementOf(u: Pick<UserRow, "isOwner" | "plan" | "subscriptio
   return { active: true, plan: plan.id as "starter" | "pro", quota: plan.quota, features: plan.features };
 }
 
+/**
+ * `blocks`: an unapproved post is held back at its time. `prompts`: the owner is asked to approve each post.
+ * With "approve if silent", the owner is still asked, but silence lets the post go out.
+ * Without auto mode (Starter), approval is always required.
+ */
+export function approvalGate(s: { requireApproval: boolean; approveIfSilent: boolean }, autoMode: boolean) {
+  return { blocks: !autoMode || (s.requireApproval && !s.approveIfSilent), prompts: !autoMode || s.requireApproval, silentPass: autoMode && s.requireApproval && s.approveIfSilent };
+}
+
 export async function entitlementFor(userId: string): Promise<Entitlement> {
   const u = await db().query.users.findFirst({ where: eq(schema.users.id, userId) });
   return u ? entitlementOf(u) : NONE;

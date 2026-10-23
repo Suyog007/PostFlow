@@ -37,6 +37,38 @@ describe("publishDue", () => {
     expect(sent).toHaveLength(1);
   });
 
+  it("with 'approve if silent', an unanswered post still goes out on time, and a rejected one does not", async () => {
+    await saveSettings({ requireApproval: true, approveIfSilent: true });
+    const sent = fakePlatform("x", () => ({ kind: "success", externalIds: ["9"] }));
+    const silent = await addPost();
+    const removed = await addPost({ scheduledAt: new Date("2026-10-21T03:44:00Z") });
+    await db().update(schema.posts).set({ status: "cancelled" }).where(eq(schema.posts.id, removed.id));
+    expect((await publishDue({ now: NOW })).published).toBe(1);
+    expect(sent).toHaveLength(1);
+    expect(await get(silent.id)).toMatchObject({ status: "published" });
+    expect((await get(removed.id)).status).toBe("cancelled");
+  });
+
+  it("approve-if-silent never lifts the approval requirement of a plan without auto mode", async () => {
+    await saveSettings({ requireApproval: true, approveIfSilent: true });
+    await db().update(schema.users).set({ plan: "starter" }).where(eq(schema.users.id, me()));
+    const sent = fakePlatform("x", () => ({ kind: "success", externalIds: ["9"] }));
+    await addPost();
+    expect((await publishDue({ now: NOW })).published).toBe(0);
+    expect(sent).toHaveLength(0);
+  });
+
+  it("a platform that is not connected is skipped quietly: one notice a day, the rest carries on", async () => {
+    await db().delete(schema.platformAccounts);
+    const _db = db;
+    const [a, b] = [await addPost(), await addPost({ scheduledAt: new Date("2026-10-21T03:44:00Z") })];
+    await publishDue({ now: NOW });
+    expect((await get(a.id)).status).toBe("failed");
+    expect((await get(b.id)).status).toBe("failed");
+    const notices = (await _db().select().from(schema.events)).filter((e) => e.kind === "not_connected_x");
+    expect(notices).toHaveLength(1);
+  });
+
   it("publishes due posts exactly once", async () => {
     const sent = fakePlatform("x", () => ({ kind: "success", externalIds: ["123"], url: "https://x.com/i/web/status/123" }));
     const p = await addPost();

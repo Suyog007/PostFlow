@@ -2,7 +2,7 @@ import { z } from "zod";
 import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lte, notInArray, sql } from "drizzle-orm";
 import { db, schema } from "./db/client";
 import { uid } from "./context";
-import { assertPostQuota, entitlementFor, LimitError } from "./billing/plans";
+import { approvalGate, assertPostQuota, entitlementFor, LimitError } from "./billing/plans";
 import type { Pillar } from "./db/schema";
 import { runTask, untrusted, LLMError } from "./llm";
 
@@ -489,8 +489,8 @@ export async function produceForSlot(platform: Platform, at: Date, m: Material, 
     await notifyText(`📝 Draft ready for ${platform === "x" ? "X" : "LinkedIn"}${verdict.approved ? "" : " (the reviewer had concerns: " + verdict.reasons[0] + ")"}\n\n${finalText}\n\nOpen the app to edit it or put it on the calendar.`).catch(() => {});
   } else if (verdict.approved) {
     await addEvent("scheduled", `${opts.fast ? "Fast lane: " : ""}${platform === "x" ? "X" : "LinkedIn"} post scheduled for ${formatLocal(at, s.timezone)}: ${m.label.slice(0, 80)}`, row.id);
-    const needsApproval = s.requireApproval || !(await entitlementFor(userId)).features.autoMode;
-    await notifyScheduled(row, s.timezone, needsApproval).catch(() => {});
+    const gate_ = approvalGate(s, (await entitlementFor(userId)).features.autoMode);
+    await notifyScheduled(row, s.timezone, gate_.blocks || (gate_.prompts && !gate_.silentPass), gate_.silentPass).catch(() => {});
   } else {
     await addEvent("rejected", `Reviewer rejected a ${platform} draft (${m.label.slice(0, 60)}): ${verdict.reasons[0] ?? ""}`, row.id);
   }

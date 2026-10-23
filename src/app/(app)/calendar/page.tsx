@@ -5,7 +5,7 @@ import { db, schema } from "@/server/db/client";
 import { getSettings } from "@/server/settings";
 import { recentEvents } from "@/server/events";
 import { requireActiveUser } from "@/server/auth";
-import { entitlementOf } from "@/server/billing/plans";
+import { approvalGate, entitlementOf } from "@/server/billing/plans";
 import { Icon, PageHeader, PlatformGlyph, StatusBadge } from "@/components/ui";
 import { Flash } from "../flash";
 import { fillCalendarAction } from "@/app/actions";
@@ -90,7 +90,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const sp = await searchParams;
   const user = await requireActiveUser();
   const s = await getSettings();
-  const approvalOn = s.requireApproval || !entitlementOf(user).features.autoMode;
+  const approvalOn = approvalGate(s, entitlementOf(user).features.autoMode).blocks;
   const needsOk = (p: Post) => approvalOn && p.status === "scheduled" && !p.approvedAt;
   const mine = eq(schema.posts.userId, user.id);
   const tz = s.timezone;

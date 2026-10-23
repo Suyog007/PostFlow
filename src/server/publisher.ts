@@ -1,7 +1,7 @@
 import { and, eq, gt, inArray, lt, sql } from "drizzle-orm";
 import { db, schema } from "./db/client";
 import { uid } from "./context";
-import { entitlementFor } from "./billing/plans";
+import { approvalGate, entitlementFor } from "./billing/plans";
 import { getSettings } from "./settings";
 import { getCredentials, getPlatformClient, markAccountError, NotConnectedError } from "./platforms/accounts";
 import { ReconcileNotSupported, type Platform } from "./platforms/types";
@@ -72,7 +72,18 @@ async function publishOne(post: PostRow, now: Date): Promise<"published" | "othe
   } catch (err) {
     const msg = err instanceof NotConnectedError ? err.message : `Could not load credentials: ${(err as Error).message}`;
     await setStatus(post.id, { status: "failed", error: msg });
-    await notifyProblem(post, msg);
+    await addEvent("failed", `${platform === "x" ? "X" : "LinkedIn"} post not published: ${msg}`, post.id);
+    // One notice a day per platform, not one per post: the rest of the flow carries on regardless.
+    if (err instanceof NotConnectedError) {
+      const kind = `not_connected_${platform}`;
+      const recent = await db().query.events.findFirst({ where: and(eq(schema.events.userId, post.userId), eq(schema.events.kind, kind), gt(schema.events.at, new Date(now.getTime() - 24 * 3_600_000))) });
+      if (!recent) {
+        await addEvent(kind, `${platform === "x" ? "X" : "LinkedIn"} is not connected, so posts for it are not published. Connect it in Settings and put posts back on the calendar.`);
+        await notifyText(`ℹ️ ${platform === "x" ? "X" : "LinkedIn"} is not connected, so its posts are being skipped. Everything else carries on. Connect it in Settings when you are ready.`);
+      }
+    } else {
+      await notifyProblem(post, msg);
+    }
     return "other";
   }
 
@@ -107,7 +118,7 @@ export async function publishDue(opts: { now?: Date; max?: number } = {}): Promi
   const s = await getSettings();
   if (s.paused) return { published: 0, handled: 0 };
   // Auto mode (publishing without approval) is a paid feature; without it, approval is always required.
-  const requireApproval = s.requireApproval || !(await entitlementFor(await uid())).features.autoMode;
+  const requireApproval = approvalGate(s, (await entitlementFor(await uid())).features.autoMode).blocks;
   let published = 0;
   let handled = 0;
   for (let i = 0; i < (opts.max ?? 5); i++) {

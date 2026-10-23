@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { DateTime } from "luxon";
 import { and, eq } from "drizzle-orm";
 import { requireActiveUser } from "@/server/auth";
-import { entitlementOf } from "@/server/billing/plans";
+import { approvalGate, entitlementOf } from "@/server/billing/plans";
 import { db, schema } from "@/server/db/client";
 import { getSettings } from "@/server/settings";
 import { approvePostAction, recheckPostAction, swapVersionAction, postNowAction, rejectPostAction, removePostAction, reschedulePostAction, resolveAction, restorePostAction, rewordPostAction, scheduleDraftAction, unapprovePostAction } from "@/app/actions";
@@ -50,7 +50,7 @@ export default async function PostPage({ params, searchParams }: { params: Promi
   const local = DateTime.fromJSDate(p.scheduledAt, { zone: s.timezone });
   const editable = ["scheduled", "failed", "cancelled", "draft"].includes(p.status);
   const open = ["scheduled", "draft"].includes(p.status);
-  const needsApproval = (s.requireApproval || !entitlementOf(user).features.autoMode) && p.status === "scheduled" && !p.approvedAt;
+  const needsApproval = approvalGate(s, entitlementOf(user).features.autoMode).blocks && p.status === "scheduled" && !p.approvedAt;
   const platformName = p.platform === "x" ? "X" : "LinkedIn";
   const name = s.profile.name || "Your Name";
   const handle = (acct?.handle ?? name.toLowerCase().replace(/[^a-z0-9]/g, "")).replace(/^@/, "");
