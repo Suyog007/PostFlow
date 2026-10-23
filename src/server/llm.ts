@@ -139,6 +139,7 @@ function extractJson(text: string): unknown {
     if (a >= 0 && b > a) {
       try {
         return JSON.parse(t.slice(a, b + 1));
+        // fixmyslop-ignore[slop/empty-catch] last-resort parse of model output; failure falls through to the caller's null result, which is handled
       } catch {}
     }
     return null;

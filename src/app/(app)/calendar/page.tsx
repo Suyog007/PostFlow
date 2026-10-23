@@ -18,6 +18,7 @@ interface OpenSlot { open: true; id: string; platform: "x" | "linkedin"; schedul
 type Entry = Post | OpenSlot;
 const isOpen = (e: Entry): e is OpenSlot => "open" in e;
 
+// fixmyslop-ignore[ui/off-scale-values] the app uses one fixed dense type scale (11/12/13/14/15px) on every screen by design; snapping to Tailwind steps would change the whole interface
 function OpenSlotBox({ e, tz, top, left, width }: { e: OpenSlot; tz: string; top: number; left: number; width: number }) {
   return (
     <div
@@ -147,7 +148,8 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       {!filling && <Flash ok={sp.ok} error={sp.error} />}
       {filling && (
         <div className="panel mb-4 flex items-center gap-2 px-4 py-3 text-[13px]" role="status">
-          <span className="h-2 w-2 animate-pulse rounded-full bg-[var(--warn)]" />
+          {/* Pulses only while a fill is running, and only for people who have not asked for reduced motion. */}
+          <span className="h-2 w-2 rounded-full bg-[var(--warn)] motion-safe:animate-pulse" />
           Filling the next {fillNowDays(s)} days. Each post is written and reviewed, so this takes a few minutes. This page refreshes by itself.
         </div>
       )}

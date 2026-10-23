@@ -37,6 +37,7 @@ export function registrableDomain(urlOrHost: string): string {
   let host = urlOrHost;
   try {
     host = new URL(urlOrHost).hostname;
+    // fixmyslop-ignore[slop/empty-catch] the input may already be a bare hostname, not a URL; it is used as given
   } catch {}
   host = host.toLowerCase().replace(/^www\./, "");
   const parts = host.split(".");

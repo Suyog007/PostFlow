@@ -8,7 +8,7 @@ import { ReconcileNotSupported, type Platform } from "./platforms/types";
 import { addEvent } from "./events";
 import { myTelegramChat, notifyProblem, notifyPublished, notifyReminder, notifyText } from "./telegram";
 import { formatLocal, nextFreeSlot } from "./slots";
-import { log } from "./log";
+import { log, warnOnError } from "./log";
 
 type PostRow = typeof schema.posts.$inferSelect;
 
@@ -124,7 +124,7 @@ async function sendReminders(now: Date, blocks: boolean, timezone: string) {
     .where(and(eq(schema.posts.userId, await uid()), eq(schema.posts.status, "scheduled"), isNull(schema.posts.remindedAt), gt(schema.posts.scheduledAt, now), lte(schema.posts.scheduledAt, new Date(now.getTime() + REMIND_MINUTES * 60_000))))
     .returning();
   for (const post of due) {
-    await notifyReminder(post, timezone, blocks, Math.max(1, Math.round((post.scheduledAt.getTime() - now.getTime()) / 60_000))).catch(() => {});
+    await notifyReminder(post, timezone, blocks, Math.max(1, Math.round((post.scheduledAt.getTime() - now.getTime()) / 60_000))).catch(warnOnError("reminder_notify_failed", { postId: post.id }));
   }
 }
 

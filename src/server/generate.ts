@@ -14,6 +14,7 @@ import { getSettings, saveSettings, type Settings } from "./settings";
 import { REVIEWER_SYSTEM, profileBlock, writerSystem } from "./prompts";
 import { runChecks, type Check } from "./checks";
 import { afterQuietHours, slotsBetween, formatLocal, nextFreeSlot } from "./slots";
+import { warnOnError } from "./log";
 import { sameStory, storyIndex } from "./stories";
 import { fetchArticleText } from "./net";
 import { addEvent } from "./events";
@@ -486,14 +487,14 @@ export async function produceForSlot(platform: Platform, at: Date, m: Material, 
 
   if (status === "draft") {
     await addEvent("draft", `Draft ready for ${platform === "x" ? "X" : "LinkedIn"}: ${m.label.slice(0, 80)}`, row.id);
-    await notifyText(`📝 Draft ready for ${platform === "x" ? "X" : "LinkedIn"}${verdict.approved ? "" : " (the reviewer had concerns: " + verdict.reasons[0] + ")"}\n\n${finalText}\n\nOpen the app to edit it or put it on the calendar.`).catch(() => {});
+    await notifyText(`📝 Draft ready for ${platform === "x" ? "X" : "LinkedIn"}${verdict.approved ? "" : " (the reviewer had concerns: " + verdict.reasons[0] + ")"}\n\n${finalText}\n\nOpen the app to edit it or put it on the calendar.`).catch(warnOnError("notify_failed", { what: "draft ready" }));
   } else if (verdict.approved) {
     await addEvent("scheduled", `${opts.fast ? "Fast lane: " : ""}${platform === "x" ? "X" : "LinkedIn"} post scheduled for ${formatLocal(at, s.timezone)}: ${m.label.slice(0, 80)}`, row.id);
     // Ordinary posts get one heads-up shortly before they go out (see sendReminders). A fast-lane post goes out soon, so it is announced now.
     if (opts.fast) {
       const gate_ = approvalGate(s, (await entitlementFor(userId)).features.autoMode);
       await db().update(schema.posts).set({ remindedAt: new Date() }).where(eq(schema.posts.id, row.id));
-      await notifyScheduled(row, s.timezone, gate_.blocks).catch(() => {});
+      await notifyScheduled(row, s.timezone, gate_.blocks).catch(warnOnError("notify_failed", { what: "fast-lane post" }));
     }
   } else {
     await addEvent("rejected", `Reviewer rejected a ${platform} draft (${m.label.slice(0, 60)}): ${verdict.reasons[0] ?? ""}`, row.id);
@@ -848,7 +849,7 @@ export async function fillCalendar(opts: { max?: number; now?: Date; deadline?: 
       else {
         res.rejected++;
         const n = (attempts.get(`${target.platform}@${target.at.getTime()}`) ?? 0) + 1;
-        if (n >= MAX_ATTEMPTS_PER_SLOT) await notifyText(`I could not write a post good enough for ${formatLocal(target.at, s.timezone)} (${target.platform}). I will try that slot again in a few hours, when new stories have come in. A note about what you worked on also helps.`).catch(() => {});
+        if (n >= MAX_ATTEMPTS_PER_SLOT) await notifyText(`I could not write a post good enough for ${formatLocal(target.at, s.timezone)} (${target.platform}). I will try that slot again in a few hours, when new stories have come in. A note about what you worked on also helps.`).catch(warnOnError("notify_failed", { what: "slot gave up" }));
       }
       // Items that were rejected are not retried for this platform (the post row records the use).
     } catch (err) {

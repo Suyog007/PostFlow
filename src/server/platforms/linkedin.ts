@@ -93,6 +93,7 @@ export const linkedinClient: PlatformClient = {
       let message = `HTTP ${res.status}`;
       try {
         message = (JSON.parse(text_) as { message?: string }).message ?? message;
+        // fixmyslop-ignore[slop/empty-catch] the error body may not be JSON; the HTTP status message set above is the fallback
       } catch {}
       if (res.status >= 500) return { kind: "ambiguous", error: `LinkedIn server error: ${message}`, httpStatus: res.status };
       return {
@@ -141,6 +142,7 @@ export const linkedinClient: PlatformClient = {
     let message = `HTTP ${res.status}`;
     try {
       message = (JSON.parse(text2) as { message?: string }).message ?? message;
+      // fixmyslop-ignore[slop/empty-catch] the error body may not be JSON; the HTTP status message set above is the fallback
     } catch {}
     if (res.status >= 500) return { kind: "ambiguous", error: `LinkedIn server error: ${message}`, httpStatus: res.status };
     return {

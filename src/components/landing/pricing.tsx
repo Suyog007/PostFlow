@@ -33,6 +33,7 @@ export function Pricing({ signupsOpen = false }: { signupsOpen?: boolean }) {
         {PLANS.map((p) => {
           const price = yearly ? p.yearly : p.monthly;
           return (
+            // fixmyslop-ignore[ui/neon-glow] neutral grey elevation on the recommended plan only, no colour
             <div
               key={p.id}
               className={`relative flex flex-col rounded-2xl border bg-[var(--surface)] p-6 ${p.popular ? "border-[var(--ink)] shadow-[0_1px_0_var(--line),0_12px_32px_-12px_rgba(16,24,40,.18)]" : "border-[var(--line)]"}`}

@@ -10,7 +10,7 @@ import { publishDue, reconcile } from "./publisher";
 import { llmConfigured } from "./llm";
 import { getSettings } from "./settings";
 import { addEvent } from "./events";
-import { log } from "./log";
+import { log, warnOnError } from "./log";
 import { recordHeartbeat } from "./health";
 import { withUser } from "./context";
 import { activePlatforms, entitledUsers } from "./billing/plans";
@@ -65,7 +65,7 @@ async function pipelinePhase(out: TickResult, deadline: number) {
       out.errors.push(`requests: ${(err as Error).message}`);
     }
   }
-  await seedSourcesIfEmpty().catch(() => {});
+  await seedSourcesIfEmpty().catch(warnOnError("seed_sources_failed"));
   if (Date.now() < deadline) {
     try {
       out.collected += (await collectFeeds()).inserted;
@@ -127,7 +127,7 @@ async function withUserLock<T>(userId: string, fn: () => Promise<T>, waitMs = 0)
     try {
       return await fn();
     } finally {
-      await conn`select pg_advisory_unlock(${USER_LOCK_KEY}, hashtext(${userId}))`.catch(() => {});
+      await conn`select pg_advisory_unlock(${USER_LOCK_KEY}, hashtext(${userId}))`.catch(warnOnError("user_unlock_failed", { userId }));
     }
   } finally {
     conn.release();
@@ -154,7 +154,7 @@ export async function fillNowForUser(userId: string, opts: { budgetMs?: number }
           await addEvent("fill_done", "Fill skipped: connect LinkedIn or X in Settings first.");
           return null;
         }
-        await collectFeeds({ maxFeeds: 20, minIntervalMinutes: 30 }).catch(() => {});
+        await collectFeeds({ maxFeeds: 20, minIntervalMinutes: 30 }).catch(warnOnError("fill_now_collect_failed", { userId }));
         if (!llmConfigured()) {
           await addEvent("fill_done", "Fill skipped: the AI model is not configured.");
           return null;
@@ -215,7 +215,7 @@ export async function tick(opts: { budgetMs?: number } = {}): Promise<TickResult
     return { ...out, skipped: "another tick is running" };
   }
   try {
-    await recordHeartbeat().catch(() => {});
+    await recordHeartbeat().catch(warnOnError("heartbeat_failed"));
     const users = await entitledUsers();
     out.users = users.length;
 
@@ -235,7 +235,7 @@ export async function tick(opts: { budgetMs?: number } = {}): Promise<TickResult
     }
     return out;
   } finally {
-    await conn`select pg_advisory_unlock(${LOCK_KEY})`.catch(() => {});
+    await conn`select pg_advisory_unlock(${LOCK_KEY})`.catch(warnOnError("tick_unlock_failed"));
     conn.release();
   }
 }

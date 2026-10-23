@@ -1,4 +1,5 @@
 import { and, eq, sql } from "drizzle-orm";
+import { warnOnError } from "./log";
 import { db, schema } from "./db/client";
 import { uid } from "./context";
 import { activePlatforms, assertFeature, CONNECT_FIRST, LimitError } from "./billing/plans";
@@ -106,13 +107,13 @@ async function processOne(req: RequestRow, now: Date) {
       const out = await produceForSlot(platform, at, material, s, 3, { requested });
       ids.push(out.postId);
     }
-    if (unverifiedRisk) await notifyText("⚠️ I kept these as drafts: the claim is about a price, offer or money and other publishers do not confirm it yet. Check it, then put it on the calendar yourself.").catch(() => {});
+    if (unverifiedRisk) await notifyText("⚠️ I kept these as drafts: the claim is about a price, offer or money and other publishers do not confirm it yet. Check it, then put it on the calendar yourself.").catch(warnOnError("notify_failed", { what: "kept as drafts" }));
     await db().update(schema.requests).set({ status: "done", postIds: ids, finishedAt: new Date() }).where(eq(schema.requests.id, req.id));
     await addEvent("request", `Created ${ids.length} post(s) from your ${req.input.match(URL_RE) ? "link" : "idea"}.`);
   } catch (err) {
     const message = err instanceof LLMError ? err.message : (err as Error).message;
     await db().update(schema.requests).set({ status: "failed", error: message.slice(0, 400), finishedAt: new Date() }).where(eq(schema.requests.id, req.id));
-    await notifyText(`I could not create a post from that: ${message}`).catch(() => {});
+    await notifyText(`I could not create a post from that: ${message}`).catch(warnOnError("notify_failed", { what: "request failed" }));
   }
 }
 

@@ -10,6 +10,7 @@ export default defineConfig({
       TOKEN_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString("base64"),
       FIREWORKS_API_KEY: "test",
       FIREWORKS_MODEL: "test-model",
+      // fixmyslop-ignore[sec/hardcoded-credential] test-only dummy value used by the local test run; not a real secret
       SESSION_SECRET: "test-session-secret-that-is-long-enough-123",
       VITEST: "1",
     },

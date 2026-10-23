@@ -24,6 +24,10 @@ function write(level: "info" | "warn" | "error", msg: string, data?: Record<stri
   (level === "error" ? console.error : console.log)(line);
 }
 
+/** For best-effort side effects (a notification, a heartbeat): a failure must not stop the work, but it is logged with context. */
+export const warnOnError = (what: string, data?: Record<string, unknown>) => (err: unknown) =>
+  write("warn", what, { ...data, error: err instanceof Error ? err.message : String(err) });
+
 export const log = {
   info: (msg: string, data?: Record<string, unknown>) => write("info", msg, data),
   warn: (msg: string, data?: Record<string, unknown>) => write("warn", msg, data),

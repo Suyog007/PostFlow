@@ -6,6 +6,7 @@ import { Icon, PlatformGlyph } from "@/components/ui";
 export function Shot({ name, alt, width, height, priority, className = "" }: { name: string; alt: string; width: number; height: number; priority?: boolean; className?: string }) {
   const sizes = "(min-width: 1120px) 1040px, 100vw";
   return (
+    // fixmyslop-ignore[ui/neon-glow] neutral grey drop shadow under a screenshot, not a coloured glow
     <div className={`overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--surface)] shadow-[0_1px_0_var(--line),0_24px_48px_-24px_rgba(16,24,40,.25)] ${className}`}>
       <Image src={`/landing/${name}-light.png`} alt={alt} width={width} height={height} sizes={sizes} priority={priority} className="only-light h-auto w-full" />
       <Image src={`/landing/${name}-dark.png`} alt="" aria-hidden width={width} height={height} sizes={sizes} priority={priority} className="only-dark h-auto w-full" />
@@ -79,6 +80,7 @@ export function FlowDiagram() {
 /** Illustration of the Telegram bot, using the bot's real message format. */
 export function TelegramMock() {
   return (
+    // fixmyslop-ignore[ui/neon-glow] neutral grey drop shadow under the phone mock, not a coloured glow
     <div className="mx-auto w-full max-w-[400px] overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface)] shadow-[0_24px_48px_-24px_rgba(16,24,40,.25)]">
       <div className="flex items-center gap-3 border-b border-[var(--line)] px-4 py-3">
         <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#2aabee] text-white">
@@ -91,18 +93,23 @@ export function TelegramMock() {
       </div>
       <div className="space-y-3 bg-[var(--raised)] p-4 text-[13px] leading-relaxed">
         <div className="max-w-[88%] rounded-2xl rounded-tl-md bg-[var(--surface)] p-3 shadow-[0_1px_0_var(--line)]">
+          {/* fixmyslop-ignore[ui/emoji-icons] this mock reproduces real Telegram bot messages, whose text contains these emoji */}
           <p className="font-medium">🗓 LinkedIn · Thu 22 Oct, 09:15</p>
+          {/* fixmyslop-ignore[ui/emoji-icons] emoji belong to the example post text itself */}
           <p className="mt-2 whitespace-pre-line">{"60 people came to our meetup in Lalitpur on building with small models.\n\n💻 Most questions were about running models on cheap laptops."}</p>
           <p className="mt-2 text-[var(--muted)]">It will not be posted until you approve it.</p>
         </div>
         <div className="grid max-w-[88%] grid-cols-2 gap-1.5 text-center text-[12px] font-medium">
+          {/* fixmyslop-ignore[ui/emoji-icons] these are the bot's real button labels in Telegram */}
           <span className="rounded-lg bg-[var(--surface)] px-2 py-2 shadow-[0_1px_0_var(--line)]">✅ Approve</span>
+          {/* fixmyslop-ignore[ui/emoji-icons] these are the bot's real button labels in Telegram */}
           <span className="rounded-lg bg-[var(--surface)] px-2 py-2 shadow-[0_1px_0_var(--line)]">🔁 Reject, find another</span>
         </div>
         <div className="ml-auto max-w-[80%] rounded-2xl rounded-tr-md bg-[var(--accent)] p-3 text-[var(--accent-ink)]">
           Shipped invoice exports today. The CSV was easy, the timezone handling took all afternoon.
         </div>
         <div className="max-w-[88%] rounded-2xl rounded-tl-md bg-[var(--surface)] p-3 shadow-[0_1px_0_var(--line)]">
+          {/* fixmyslop-ignore[ui/emoji-icons] the bot's real reply text contains this emoji */}
           📝 Saved (own work). I will turn it into a post for an upcoming slot.
         </div>
       </div>
@@ -118,6 +125,7 @@ export function NewsCard() {
     { icon: "bolt", tone: "text-[var(--accent)]", title: "Fast lane", body: "Score 9/10, under 12 hours old: posted in 45 minutes, outside quiet hours." },
   ];
   return (
+    // fixmyslop-ignore[ui/neon-glow] neutral grey drop shadow under the card, not a coloured glow
     <div className="mx-auto w-full max-w-[460px] rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-5 shadow-[0_24px_48px_-24px_rgba(16,24,40,.25)]">
       <div className="flex items-center gap-2 text-[12px] text-[var(--subtle)]">
         <span className="badge badge-accent">News</span> Relevance 9/10 · 3 hours ago
