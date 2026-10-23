@@ -9,6 +9,7 @@ import { entitlementOf } from "@/server/billing/plans";
 import { Icon, PageHeader, PlatformGlyph, StatusBadge } from "@/components/ui";
 import { Flash } from "../flash";
 import { fillCalendarAction } from "@/app/actions";
+import { fillNowDays } from "@/server/generate";
 
 type Post = typeof schema.posts.$inferSelect;
 
@@ -119,7 +120,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       {filling && (
         <div className="panel mb-4 flex items-center gap-2 px-4 py-3 text-[13px]" role="status">
           <span className="h-2 w-2 animate-pulse rounded-full bg-[var(--warn)]" />
-          Filling the next {s.horizonDays} days. Each post is written and reviewed, so this takes a few minutes. This page refreshes by itself.
+          Filling the next {fillNowDays(s)} days. Each post is written and reviewed, so this takes a few minutes. This page refreshes by itself.
         </div>
       )}
       {showSteps && (
@@ -161,7 +162,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
             <Link href="/calendar" className="btn btn-sm">Today</Link>
             <Link href={`/calendar?w=${offset + 1}`} className="btn btn-sm" aria-label="Next week"><Icon name="right" size={14} /></Link>
             <form action={fillCalendarAction} className="ml-1">
-              <button className="btn btn-sm" disabled={filling} title={`Write posts now for every open slot in the next ${s.horizonDays} days, retrying slots that failed`}>
+              <button className="btn btn-sm" disabled={filling} title={`Write posts now for every open slot in the next ${fillNowDays(s)} days, retrying slots that failed`}>
                 <Icon name="bolt" size={14} />{filling ? "Filling…" : "Fill now"}
               </button>
             </form>

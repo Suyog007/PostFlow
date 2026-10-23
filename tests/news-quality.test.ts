@@ -134,6 +134,22 @@ describe("tips", () => {
   });
 });
 
+describe("fill now", () => {
+  it("fills at least 5 days ahead even when autopilot plans 3", async () => {
+    const { fillNowForUser } = await import("../src/server/tick");
+    await saveSettings({ slots: [BOTH[0]], horizonDays: 3 });
+    for (const t of ["database release", "CI runner", "edge runtime", "queue service", "auth library", "vector index"]) await addItem(`A strong story about a new ${t} for developers`, 9);
+    const lines = ["Acme shipped a database release; nightly backup jobs get much shorter.", "Bolt opened its CI runner source, which matters most to teams paying per minute.", "Edge runtimes got cold starts under ten milliseconds, per the Cinder team.", "Queues without a broker to babysit: Relay made its service generally available.", "Keyring moved auth sessions into signed cookies, so small apps drop a whole table.", "Vectorly indexes now update in place, no more nightly rebuilds for search apps."];
+    let n = 0;
+    fakeLLM((req) => (req.schemaName === "write_post" ? { text: lines[n++ % lines.length] } : GOOD_REVIEW));
+    await fillNowForUser(me(), { budgetMs: 60_000 });
+    const live = (await db().select().from(schema.posts)).filter((p) => p.status === "scheduled");
+    const furthest = Math.max(...live.map((p) => p.scheduledAt.getTime()));
+    expect(furthest - Date.now()).toBeGreaterThan(4 * 86_400_000);
+    expect(live.length).toBeGreaterThanOrEqual(5);
+  });
+});
+
 describe("stock opinion phrases", () => {
   it("blocks the templates that make every post sound machine-written", async () => {
     const { runChecks } = await import("../src/server/checks");

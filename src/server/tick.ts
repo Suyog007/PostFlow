@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { db, schema, sqlClient } from "./db/client";
 import { collectFeeds, seedSourcesIfEmpty } from "./collect";
 import { analyzeBatch } from "./analyze";
-import { fillCalendar, type FillResult } from "./generate";
+import { fillCalendar, fillNowDays, type FillResult } from "./generate";
 import { env } from "./env";
 import { processRequests } from "./requests";
 import { publishDue, reconcile } from "./publisher";
@@ -148,7 +148,7 @@ export async function fillNowForUser(userId: string, opts: { budgetMs?: number }
         await analyzeBatch().catch(() => 0);
         let f: FillResult;
         try {
-          f = await fillCalendar({ max: 20, deadline, retryFailedSince: since });
+          f = await fillCalendar({ max: 30, deadline, retryFailedSince: since, horizonDays: fillNowDays(s) });
         } catch (err) {
           await addEvent("fill_done", `Fill stopped: ${(err as Error).message}`);
           throw err;

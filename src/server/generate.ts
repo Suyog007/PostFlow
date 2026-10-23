@@ -678,8 +678,12 @@ export interface FillResult {
   idle: string | null;
 }
 
+/** "Fill now" always looks at least this many days ahead, even when autopilot plans fewer. */
+export const FILL_NOW_MIN_DAYS = 5;
+export const fillNowDays = (s: Pick<Settings, "horizonDays">) => Math.max(s.horizonDays, FILL_NOW_MIN_DAYS);
+
 /** Generates up to `max` posts for the earliest empty slots in the horizon. */
-export async function fillCalendar(opts: { max?: number; now?: Date; deadline?: number; retryFailedSince?: Date } = {}): Promise<FillResult> {
+export async function fillCalendar(opts: { max?: number; now?: Date; deadline?: number; retryFailedSince?: Date; horizonDays?: number } = {}): Promise<FillResult> {
   const { max = 1, now = new Date(), deadline = Infinity } = opts;
   const s = await getSettings();
   const res: FillResult = { produced: 0, rejected: 0, idle: null };
@@ -699,7 +703,7 @@ export async function fillCalendar(opts: { max?: number; now?: Date; deadline?: 
   let guard = 0;
   while (res.produced + res.rejected < max && Date.now() < deadline && guard++ < max + 12) {
     const from = new Date(now.getTime() + 20 * 60_000);
-    const to = new Date(now.getTime() + s.horizonDays * 86_400_000);
+    const to = new Date(now.getTime() + (opts.horizonDays ?? s.horizonDays) * 86_400_000);
     const all = slotsBetween(s, from, to);
     if (!all.length) return { ...res, idle: "no slots configured" };
 
