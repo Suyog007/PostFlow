@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { redirect } from "next/navigation";
 import { DateTime } from "luxon";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { requireActiveUser, requireOwnerUser } from "@/server/auth";
 import { withUser } from "@/server/context";
 import { assertFeature, assertFeedQuota, LimitError } from "@/server/billing/plans";
@@ -17,7 +17,8 @@ import { createRequest, processRequests, type RequestMode } from "@/server/reque
 import { addTip } from "@/server/tips";
 import { disconnectAccount, startOAuth } from "@/server/platforms/accounts";
 import { registerWebhook, unlinkTelegram } from "@/server/telegram";
-import { runForUser, tick } from "@/server/tick";
+import { fillNowForUser, runForUser, startBackgroundFill, tick } from "@/server/tick";
+import { addEvent } from "@/server/events";
 import { rejectAndReplace, rewordPost } from "@/server/generate";
 import { isPublicHttpUrl } from "@/server/net";
 
@@ -250,6 +251,21 @@ export async function runTickAction() {
     const r = await runForUser(user.id, { budgetMs: 45_000 });
     if (r.errors.length) throw new Error(r.errors[0]);
   }, "Checked for new material and filled open slots.");
+}
+
+/** "Fill now" on the calendar: writes for every open slot in the planning window, in the background. */
+export async function fillCalendarAction() {
+  const user = await requireActiveUser();
+  const s = await withUser(user.id, () => getSettings());
+  await guarded("/calendar", async () => {
+    await withUser(user.id, async () => {
+      const [last] = await db().select().from(schema.events).where(and(eq(schema.events.userId, user.id), inArray(schema.events.kind, ["fill", "fill_done"]))).orderBy(desc(schema.events.at)).limit(1);
+      if (last?.kind === "fill" && Date.now() - last.at.getTime() < 10 * 60_000) throw new Error("Already filling your calendar. New posts appear here as they are written.");
+      if (s.paused) throw new Error("Autopilot is paused. Resume it in Settings first.");
+      await addEvent("fill", `Filling the next ${s.horizonDays} days…`);
+    });
+    if (!(await startBackgroundFill(user.id))) after(() => fillNowForUser(user.id, { budgetMs: 4 * 60_000 }).then(() => undefined).catch(() => undefined));
+  }, `Filling the next ${s.horizonDays} days. New posts appear here over the next few minutes.`);
 }
 
 // ---- admin ------------------------------------------------------------------

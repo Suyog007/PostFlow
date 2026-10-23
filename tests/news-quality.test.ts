@@ -74,6 +74,27 @@ describe("skipping weak stories", () => {
     expect((await db().select().from(schema.posts)).filter((p) => p.status === "scheduled")).toHaveLength(1);
   });
 
+  it("Fill now retries recently failed slots straight away and logs the result", async () => {
+    const { fillNowForUser } = await import("../src/server/tick");
+    await saveSettings({ slots: [BOTH[0]], horizonDays: 3 });
+    await addItem("A strong story about a database release for developers", 9);
+    await addItem("Another strong story about a new open source CI runner", 9);
+    const soon = await db().select().from(schema.posts);
+    expect(soon).toHaveLength(0);
+    // Three fresh rejections for the next slot would normally block it for hours.
+    const { slotsBetween } = await import("../src/server/slots");
+    const { getSettings } = await import("../src/server/settings");
+    const tomorrow = slotsBetween(await getSettings(), new Date(Date.now() + 20 * 60_000), new Date(Date.now() + 3 * 86_400_000))[0].at;
+    await db().insert(schema.posts).values([1, 2, 3].map(() => ({ userId: me(), platform: "x", pillar: "news" as const, text: "old", status: "rejected" as const, scheduledAt: tomorrow })));
+    fakeLLM((req) => (req.schemaName === "write_post" ? { text: "Acme shipped a database release today. I'd expect small teams to try it for faster backups." } : GOOD_REVIEW));
+    const r = await fillNowForUser(me(), { budgetMs: 30_000 });
+    expect(r?.produced).toBeGreaterThanOrEqual(1);
+    const live = (await db().select().from(schema.posts)).filter((p) => p.status === "scheduled");
+    expect(live.map((p) => p.scheduledAt.getTime())).toContain(tomorrow.getTime());
+    const done = await db().select().from(schema.events);
+    expect(done.some((e) => e.kind === "fill_done" && /Filled the calendar/.test(e.message))).toBe(true);
+  });
+
   it("does not waste rewrites on a story the reviewer finds not worth posting", async () => {
     await addItem("A boring story about developer tooling changes today", 9);
     const calls = fakeLLM((req) => (req.schemaName === "write_post" ? { text: "A boring change landed. According to the report, nothing much happened for builders." } : { ...GOOD_REVIEW, worth_posting: 3, issues: ["A recap with no point."] }));

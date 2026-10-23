@@ -8,6 +8,7 @@ import { requireActiveUser } from "@/server/auth";
 import { entitlementOf } from "@/server/billing/plans";
 import { Icon, PageHeader, PlatformGlyph, StatusBadge } from "@/components/ui";
 import { Flash } from "../flash";
+import { fillCalendarAction } from "@/app/actions";
 
 type Post = typeof schema.posts.$inferSelect;
 
@@ -97,6 +98,8 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   ];
   const showSteps = steps.slice(0, 3).some((x) => !x.done);
   const events = await recentEvents(10);
+  const [lastFill] = await db().select().from(schema.events).where(and(eq(schema.events.userId, user.id), inArray(schema.events.kind, ["fill", "fill_done"]))).orderBy(desc(schema.events.at)).limit(1);
+  const filling = lastFill?.kind === "fill" && Date.now() - lastFill.at.getTime() < 15 * 60_000;
 
   const today = DateTime.now().setZone(tz);
   const hours = week.map((p) => DateTime.fromJSDate(p.scheduledAt, { zone: tz }).hour);
@@ -110,7 +113,15 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
 
   return (
     <div>
-      <Flash ok={sp.ok} error={sp.error} />
+      {/* While "Fill now" runs, reload every 20 s so new posts show up without a manual refresh. */}
+      {filling && <meta httpEquiv="refresh" content={`20;url=/calendar${offset ? `?w=${offset}` : ""}`} />}
+      {!filling && <Flash ok={sp.ok} error={sp.error} />}
+      {filling && (
+        <div className="panel mb-4 flex items-center gap-2 px-4 py-3 text-[13px]" role="status">
+          <span className="h-2 w-2 animate-pulse rounded-full bg-[var(--warn)]" />
+          Filling the next {s.horizonDays} days. Each post is written and reviewed, so this takes a few minutes. This page refreshes by itself.
+        </div>
+      )}
       {showSteps && (
         <section className="panel mb-5 p-4" aria-label="Getting started">
           <div className="flex items-baseline justify-between gap-3">
@@ -149,6 +160,11 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
             <Link href={`/calendar?w=${offset - 1}`} className="btn btn-sm" aria-label="Previous week"><Icon name="left" size={14} /></Link>
             <Link href="/calendar" className="btn btn-sm">Today</Link>
             <Link href={`/calendar?w=${offset + 1}`} className="btn btn-sm" aria-label="Next week"><Icon name="right" size={14} /></Link>
+            <form action={fillCalendarAction} className="ml-1">
+              <button className="btn btn-sm" disabled={filling} title={`Write posts now for every open slot in the next ${s.horizonDays} days, retrying slots that failed`}>
+                <Icon name="bolt" size={14} />{filling ? "Filling…" : "Fill now"}
+              </button>
+            </form>
             <Link href="/create" className="btn btn-primary btn-sm ml-1"><Icon name="create" size={14} />New post</Link>
           </div>
         }

@@ -564,7 +564,7 @@ export interface FillResult {
 }
 
 /** Generates up to `max` posts for the earliest empty slots in the horizon. */
-export async function fillCalendar(opts: { max?: number; now?: Date; deadline?: number } = {}): Promise<FillResult> {
+export async function fillCalendar(opts: { max?: number; now?: Date; deadline?: number; retryFailedSince?: Date } = {}): Promise<FillResult> {
   const { max = 1, now = new Date(), deadline = Infinity } = opts;
   const s = await getSettings();
   const res: FillResult = { produced: 0, rejected: 0, idle: null };
@@ -582,7 +582,7 @@ export async function fillCalendar(opts: { max?: number; now?: Date; deadline?: 
   // Slots with nothing worth posting are skipped for this pass (and retried on the next one, when new stories may have arrived).
   const skipped = new Set<string>();
   let guard = 0;
-  while (res.produced + res.rejected < max && Date.now() < deadline && guard++ < 12) {
+  while (res.produced + res.rejected < max && Date.now() < deadline && guard++ < max + 12) {
     const from = new Date(now.getTime() + 20 * 60_000);
     const to = new Date(now.getTime() + s.horizonDays * 86_400_000);
     const all = slotsBetween(s, from, to);
@@ -595,7 +595,8 @@ export async function fillCalendar(opts: { max?: number; now?: Date; deadline?: 
     const occupied = new Set(taken.filter((t) => (LIVE as readonly string[]).includes(t.status)).map((t) => `${t.platform}@${t.at.getTime()}`));
     const attempts = new Map<string, number>();
     // Only recent rejections count, so a slot that failed gets another try once new stories have come in.
-    const retryAfter = now.getTime() - SLOT_RETRY_AFTER_MS;
+    // "Fill now" gives every failed slot a fresh set of attempts.
+    const retryAfter = opts.retryFailedSince?.getTime() ?? now.getTime() - SLOT_RETRY_AFTER_MS;
     for (const t of taken.filter((t) => t.status === "rejected" && t.createdAt.getTime() > retryAfter)) attempts.set(`${t.platform}@${t.at.getTime()}`, (attempts.get(`${t.platform}@${t.at.getTime()}`) ?? 0) + 1);
     const free = all.filter((sl) => !occupied.has(`${sl.platform}@${sl.at.getTime()}`) && !skipped.has(`${sl.platform}@${sl.at.getTime()}`) && (attempts.get(`${sl.platform}@${sl.at.getTime()}`) ?? 0) < MAX_ATTEMPTS_PER_SLOT);
     // Make room for breaking news if every free slot is too late; the freed slot is picked up on the next pass.
