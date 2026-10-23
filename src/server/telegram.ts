@@ -76,18 +76,10 @@ export async function notifyText(text: string, buttons?: { text: string; data: s
 
 const label = (p: string) => (p === "x" ? "X" : "LinkedIn");
 
-export async function notifyScheduled(post: PostRow, tz: string, requireApproval = false, silentPass = false) {
+export async function notifyScheduled(post: PostRow, tz: string, requireApproval = false) {
   const head = `${post.fast ? "⚡ Fast lane" : "🗓"} ${label(post.platform)} · ${formatLocal(post.scheduledAt, tz)}${post.expiresAt ? " · time-sensitive" : ""}\n\n${post.text}\n\n`;
-  if (silentPass) {
-    // Asked, but silence is a yes: it goes out on time unless you step in.
-    await notifyText(`${head}It goes out at ${formatLocal(post.scheduledAt, tz)} unless you reject it.`, [
-      [{ text: "🚀 Post now", data: `pn:${post.id}` }, { text: "🔁 Reject, find another", data: `rj:${post.id}` }],
-      [{ text: "🗑 Remove", data: `rm:${post.id}` }],
-    ]);
-    return;
-  }
   if (requireApproval) {
-    await notifyText(`${head}It will not be posted until you approve it.`, [[{ text: "✅ Approve", data: `ok:${post.id}` }, { text: "🔁 Reject, find another", data: `rj:${post.id}` }]]);
+    await notifyText(`${head}It is only posted if you approve it before ${formatLocal(post.scheduledAt, tz)}. Otherwise it is skipped.`, [[{ text: "✅ Approve", data: `ok:${post.id}` }, { text: "🔁 Reject, find another", data: `rj:${post.id}` }], [{ text: "🚀 Post now", data: `pn:${post.id}` }]]);
     return;
   }
   await notifyText(

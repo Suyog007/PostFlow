@@ -490,7 +490,7 @@ export async function produceForSlot(platform: Platform, at: Date, m: Material, 
   } else if (verdict.approved) {
     await addEvent("scheduled", `${opts.fast ? "Fast lane: " : ""}${platform === "x" ? "X" : "LinkedIn"} post scheduled for ${formatLocal(at, s.timezone)}: ${m.label.slice(0, 80)}`, row.id);
     const gate_ = approvalGate(s, (await entitlementFor(userId)).features.autoMode);
-    await notifyScheduled(row, s.timezone, gate_.blocks || (gate_.prompts && !gate_.silentPass), gate_.silentPass).catch(() => {});
+    await notifyScheduled(row, s.timezone, gate_.blocks).catch(() => {});
   } else {
     await addEvent("rejected", `Reviewer rejected a ${platform} draft (${m.label.slice(0, 60)}): ${verdict.reasons[0] ?? ""}`, row.id);
   }

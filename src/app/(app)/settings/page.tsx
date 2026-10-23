@@ -9,7 +9,7 @@ import { requireActiveUser } from "@/server/auth";
 import { approvalGate, entitlementOf } from "@/server/billing/plans";
 import { telegramConfigured, telegramLinkUrl } from "@/server/telegram";
 import { isPlatformConfigured } from "@/server/platforms/accounts";
-import { addSourceAction, connectAction, deleteSourceAction, disconnectAction, runTickAction, saveFastLaneAction, saveProfileAction, saveSlotsAction, unlinkTelegramAction, toggleSourceAction, togglePauseAction, toggleApprovalAction, removeStyleNoteAction, toggleSilentPassAction } from "@/app/actions";
+import { addSourceAction, connectAction, deleteSourceAction, disconnectAction, runTickAction, saveFastLaneAction, saveProfileAction, saveSlotsAction, unlinkTelegramAction, toggleSourceAction, togglePauseAction, toggleApprovalAction, removeStyleNoteAction } from "@/app/actions";
 import { Flash } from "../flash";
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ ok?: string; error?: string; connected?: string }> }) {
@@ -56,20 +56,11 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <h2 className="mb-2 text-lg font-semibold">Publishing mode</h2>
         <div className="card flex flex-wrap items-center gap-3 p-3 text-sm">
           <div className="min-w-0 flex-1">
-            <div className="font-medium">{approvalOn ? "Approval required" : gate.silentPass ? "Ask me, but post on time if I do not answer" : "Auto mode"}{!ent.features.autoMode && pro("Auto mode")}</div>
-            <p className="text-muted">{approvalOn ? "Posts are written and scheduled, but nothing goes out until you approve it." : gate.silentPass ? "Each post is sent to you to approve or reject. If you do nothing, it still goes out at its scheduled time. You can reject, remove or post it early until then." : "Posts that pass review go out at their scheduled time without asking."}</p>
+            <div className="font-medium">{approvalOn ? "Approval required" : "Auto mode"}{!ent.features.autoMode && pro("Auto mode")}</div>
+            <p className="text-muted">{approvalOn ? "Posts are only published if you approve them before their time. If you do nothing, the time passes, the post is skipped and the calendar moves on." : "Posts that pass review go out at their scheduled time without asking."}</p>
           </div>
           {ent.features.autoMode && <form action={toggleApprovalAction}><button className="btn-secondary">{approvalOn ? "Switch to auto mode" : "Require approval"}</button></form>}
         </div>
-        {ent.features.autoMode && s.requireApproval && (
-          <form action={toggleSilentPassAction} className="card mt-2 flex flex-wrap items-center gap-3 p-3 text-sm">
-            <div className="min-w-0 flex-1">
-              <div className="font-medium">If I do not approve or reject</div>
-              <p className="text-muted">{s.approveIfSilent ? "The post goes out on time." : "The post is held back until you approve it."}</p>
-            </div>
-            <button className="btn-secondary">{s.approveIfSilent ? "Hold until I approve" : "Post on time anyway"}</button>
-          </form>
-        )}
       </section>
 
       <section>

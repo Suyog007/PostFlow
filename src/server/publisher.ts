@@ -1,4 +1,4 @@
-import { and, eq, gt, inArray, lt, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, isNull, lt, lte, sql } from "drizzle-orm";
 import { db, schema } from "./db/client";
 import { uid } from "./context";
 import { approvalGate, entitlementFor } from "./billing/plans";
@@ -7,7 +7,7 @@ import { getCredentials, getPlatformClient, markAccountError, NotConnectedError 
 import { ReconcileNotSupported, type Platform } from "./platforms/types";
 import { addEvent } from "./events";
 import { notifyProblem, notifyPublished, notifyText } from "./telegram";
-import { nextFreeSlot } from "./slots";
+import { formatLocal, nextFreeSlot } from "./slots";
 import { log } from "./log";
 
 type PostRow = typeof schema.posts.$inferSelect;
@@ -121,6 +121,18 @@ export async function publishDue(opts: { now?: Date; max?: number } = {}): Promi
   const requireApproval = approvalGate(s, (await entitlementFor(await uid())).features.autoMode).blocks;
   let published = 0;
   let handled = 0;
+  // Approval required: a post nobody approved before its time is skipped, and the calendar moves on to the next one.
+  if (requireApproval) {
+    const skipped = await db()
+      .update(schema.posts)
+      .set({ status: "expired", error: "Not approved before its time, so it was skipped.", updatedAt: new Date() })
+      .where(and(eq(schema.posts.userId, await uid()), eq(schema.posts.status, "scheduled"), isNull(schema.posts.approvedAt), lte(schema.posts.scheduledAt, now)))
+      .returning({ id: schema.posts.id, platform: schema.posts.platform, scheduledAt: schema.posts.scheduledAt });
+    if (skipped.length) {
+      await addEvent("skipped", `${skipped.length} post${skipped.length === 1 ? "" : "s"} not approved in time and skipped: ${skipped.map((p) => `${p.platform === "x" ? "X" : "LinkedIn"} ${formatLocal(p.scheduledAt, s.timezone)}`).join(", ")}.`);
+      await notifyText(`⏭ ${skipped.length} post${skipped.length === 1 ? " was" : "s were"} not approved in time and skipped. The calendar carries on with the next ones.`);
+    }
+  }
   for (let i = 0; i < (opts.max ?? 5); i++) {
     const post = await claimNext(now, requireApproval);
     if (!post) break;

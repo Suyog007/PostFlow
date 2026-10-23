@@ -171,7 +171,7 @@ async function handleForUser(u: Update, chat: number): Promise<void> {
     const gate_ = approvalGate(s, (await entitlementFor(userId)).features.autoMode);
     const approvalOn = gate_.blocks;
     const waiting = (p: (typeof q)[number]) => gate_.blocks && !p.approvedAt;
-    const tag = (p: (typeof q)[number]) => (gate_.blocks ? (p.approvedAt ? " · ✅ approved" : " · ⏳ needs your OK") : gate_.silentPass ? (p.approvedAt ? " · ✅ approved" : " · 🕒 goes out on time unless you reject it") : "");
+    const tag = (p: (typeof q)[number]) => (gate_.blocks ? (p.approvedAt ? " · ✅ approved" : " · ⏳ needs your OK, skipped if not approved in time") : "");
     const now = DateTime.now().setZone(s.timezone);
     const dayLabel = (d: DateTime) => {
       const diff = Math.round(d.startOf("day").diff(now.startOf("day"), "days").days);
@@ -186,7 +186,7 @@ async function handleForUser(u: Update, chat: number): Promise<void> {
       days.get(key)!.posts.push(p);
     }
     const nWaiting = q.filter(waiting).length;
-    await sendTo(chat, `🗓 ${q.length} scheduled post${q.length === 1 ? "" : "s"} over ${days.size} day${days.size === 1 ? "" : "s"}${approvalOn ? (nWaiting ? ` · ${nWaiting} waiting for your OK` : " · all approved") : gate_.silentPass ? " · unapproved ones go out on time unless you reject them" : ""}`);
+    await sendTo(chat, `🗓 ${q.length} scheduled post${q.length === 1 ? "" : "s"} over ${days.size} day${days.size === 1 ? "" : "s"}${approvalOn ? (nWaiting ? ` · ${nWaiting} waiting for your OK` : " · all approved") : ""}`);
     let n = 0;
     for (const day of days.values()) {
       // One message per day, with the full text of every post and its own buttons.

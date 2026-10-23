@@ -18,8 +18,6 @@ export const settingsSchema = z.object({
   paused: z.boolean().default(false),
   /** Nothing is published until the owner approves it. Turn off for full auto mode. */
   requireApproval: z.boolean().default(true),
-  /** With approval on: a post you neither approve nor reject still goes out at its scheduled time. You can reject or remove it until then. */
-  approveIfSilent: z.boolean().default(false),
   /** Wording preferences the owner gave when asking for a reword. Fed to the writer on every post. */
   styleNotes: z.array(z.string()).default([]),
   /** IANA timezone; set from the browser at sign-up. */

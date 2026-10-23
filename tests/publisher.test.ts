@@ -26,36 +26,36 @@ describe("publishDue", () => {
     await saveSettings({ requireApproval: false });
   });
 
-  it("holds unapproved posts while approval is required, then publishes once approved", async () => {
+  it("an unapproved post is skipped once its time passes, and an approved one still goes out", async () => {
     await saveSettings({ requireApproval: true });
     const sent = fakePlatform("x", () => ({ kind: "success", externalIds: ["9"] }));
-    const p = await addPost();
+    const unapproved = await addPost();
+    const approved = await addPost({ scheduledAt: new Date("2026-10-21T03:44:00Z"), approvedAt: new Date("2026-10-21T02:00:00Z") });
+    expect((await publishDue({ now: NOW })).published).toBe(1);
+    expect(sent).toHaveLength(1);
+    expect(await get(approved.id)).toMatchObject({ status: "published" });
+    expect(await get(unapproved.id)).toMatchObject({ status: "expired", error: "Not approved before its time, so it was skipped." });
+    // Approving it afterwards does not make it publish late: its time has passed.
+    await db().update(schema.posts).set({ approvedAt: NOW }).where(eq(schema.posts.id, unapproved.id));
     expect((await publishDue({ now: NOW })).published).toBe(0);
-    expect(sent).toHaveLength(0);
-    await db().update(schema.posts).set({ approvedAt: NOW }).where(eq(schema.posts.id, p.id));
-    expect((await publishDue({ now: NOW })).published).toBe(1);
-    expect(sent).toHaveLength(1);
+    // And autopilot does not write another post for that slot.
+    expect((await db().select().from(schema.events)).some((e) => e.kind === "skipped")).toBe(true);
   });
 
-  it("with 'approve if silent', an unanswered post still goes out on time, and a rejected one does not", async () => {
-    await saveSettings({ requireApproval: true, approveIfSilent: true });
-    const sent = fakePlatform("x", () => ({ kind: "success", externalIds: ["9"] }));
-    const silent = await addPost();
-    const removed = await addPost({ scheduledAt: new Date("2026-10-21T03:44:00Z") });
-    await db().update(schema.posts).set({ status: "cancelled" }).where(eq(schema.posts.id, removed.id));
-    expect((await publishDue({ now: NOW })).published).toBe(1);
-    expect(sent).toHaveLength(1);
-    expect(await get(silent.id)).toMatchObject({ status: "published" });
-    expect((await get(removed.id)).status).toBe("cancelled");
+  it("a future unapproved post is left alone until its time", async () => {
+    await saveSettings({ requireApproval: true });
+    fakePlatform("x", () => ({ kind: "success", externalIds: ["9"] }));
+    const later = await addPost({ scheduledAt: new Date("2026-10-21T09:00:00Z") });
+    await publishDue({ now: NOW });
+    expect((await get(later.id)).status).toBe("scheduled");
   });
 
-  it("approve-if-silent never lifts the approval requirement of a plan without auto mode", async () => {
-    await saveSettings({ requireApproval: true, approveIfSilent: true });
-    await db().update(schema.users).set({ plan: "starter" }).where(eq(schema.users.id, me()));
+  it("auto mode publishes without approval, as before", async () => {
+    await saveSettings({ requireApproval: false });
     const sent = fakePlatform("x", () => ({ kind: "success", externalIds: ["9"] }));
     await addPost();
-    expect((await publishDue({ now: NOW })).published).toBe(0);
-    expect(sent).toHaveLength(0);
+    expect((await publishDue({ now: NOW })).published).toBe(1);
+    expect(sent).toHaveLength(1);
   });
 
   it("a platform that is not connected is skipped quietly: one notice a day, the rest carries on", async () => {

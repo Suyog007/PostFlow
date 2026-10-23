@@ -253,14 +253,6 @@ export async function toggleApprovalAction() {
     await saveSettings({ requireApproval: !s.requireApproval });
   });
 }
-/** With approval on: let a post go out on time even if you neither approve nor reject it. */
-export async function toggleSilentPassAction() {
-  await guarded("/settings", async () => {
-    await assertFeature("autoMode", "Auto mode");
-    const s = await getSettings();
-    await saveSettings({ approveIfSilent: !s.approveIfSilent });
-  });
-}
 export async function togglePauseAction() {
   await guarded("/settings", async () => saveSettings({ paused: !(await getSettings()).paused }));
 }
