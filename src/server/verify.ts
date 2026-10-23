@@ -1,5 +1,6 @@
 import Parser from "rss-parser";
-import { eq } from "drizzle-orm";
+import { and, eq, gte, ne } from "drizzle-orm";
+import { storyIndex, sameStory as sameStoryInFeeds } from "./stories";
 import { db, schema } from "./db/client";
 import { isPublicHttpUrl } from "./net";
 import { log } from "./log";
@@ -110,15 +111,16 @@ function queryFor(title: string) {
   return title.replace(/\s+[-|–]\s+[^-|–]{2,40}$/, "").split(/\s+/).slice(0, 14).join(" ");
 }
 
-export function evaluate(item: Pick<ItemRow, "url" | "title" | "summary">, found: Mention[]): Verification {
+/** `matched` are reports already known to be the same story (from your own feeds), so their headlines need not match word for word. */
+export function evaluate(item: Pick<ItemRow, "url" | "title" | "summary">, found: Mention[], matched: Mention[] = []): Verification {
   const origin = registrableDomain(item.url);
   const originKey = origin.split(".")[0];
   const primary = PRIMARY.some((d) => origin === d || origin.endsWith(`.${d}`));
   const risky = RISKY.test(`${item.title} ${item.summary}`);
   const others = new Map<string, Mention>();
-  for (const m of found) {
+  for (const [m, known] of [...matched.map((m) => [m, true] as const), ...found.map((m) => [m, false] as const)]) {
     const key = publisherKey(m.domain);
-    if (!key || samePublisher(key, originKey) || [...others.keys()].some((k) => samePublisher(k, key)) || !sameStory(item.title, m.title)) continue;
+    if (!key || samePublisher(key, originKey) || [...others.keys()].some((k) => samePublisher(k, key)) || (!known && !sameStory(item.title, m.title))) continue;
     others.set(key, m);
   }
   const independent = 1 + others.size;
@@ -132,16 +134,31 @@ export function evaluate(item: Pick<ItemRow, "url" | "title" | "summary">, found
   return { ok, independent, needed, primary, risky, mentions: [...others.values()].slice(0, 5), reason, checkedAt: new Date().toISOString() };
 }
 
+/** Other outlets in your own feeds that ran the same story in the last few days. */
+async function sameStoryInYourFeeds(item: ItemRow): Promise<Mention[]> {
+  const rows = await db()
+    .select({ id: schema.items.id, title: schema.items.title, url: schema.items.url, sourceId: schema.items.sourceId })
+    .from(schema.items)
+    .where(and(eq(schema.items.userId, item.userId), ne(schema.items.id, item.id), gte(schema.items.publishedAt, new Date(Date.now() - 4 * 86_400_000))));
+  const index = storyIndex([...rows, { id: item.id, title: item.title, sourceId: item.sourceId }]);
+  const origin = registrableDomain(item.url);
+  return rows
+    .filter((r) => registrableDomain(r.url) !== origin && sameStoryInFeeds(index, item.title, r.title))
+    .map((r) => ({ domain: registrableDomain(r.url), title: r.title, url: r.url }));
+}
+
 /** Checks (and caches on the item) whether enough independent publishers carry this story. Fails closed. */
 export async function ensureVerification(item: ItemRow): Promise<Verification> {
   const cached = item.verification as unknown as Verification | null;
   if (cached && item.verifiedAt && (cached.ok || Date.now() - item.verifiedAt.getTime() < RECHECK_MS)) return cached;
+  const fromFeeds = await sameStoryInYourFeeds(item);
   let v: Verification;
   try {
-    v = evaluate(item, await search(queryFor(item.title)));
+    v = evaluate(item, await search(queryFor(item.title)), fromFeeds);
   } catch (err) {
     log.warn("verify_failed", { itemId: item.id, error: (err as Error).message });
-    v = { ...evaluate(item, []), reason: "Could not reach the news search to cross-check this story." };
+    v = evaluate(item, [], fromFeeds);
+    if (!v.ok) v = { ...v, reason: "Could not reach the news search to cross-check this story." };
   }
   await db().update(schema.items).set({ verification: v as unknown as Record<string, unknown>, verifiedAt: new Date() }).where(eq(schema.items.id, item.id));
   item.verification = v as unknown as Record<string, unknown>;

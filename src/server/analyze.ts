@@ -7,6 +7,7 @@ import { analystSystem, profileBlock } from "./prompts";
 import { getSettings } from "./settings";
 import { tipsSourceId } from "./tips";
 import { addEvent } from "./events";
+import { coverage } from "./stories";
 
 const out = z.object({
   items: z.array(
@@ -30,7 +31,18 @@ export async function analyzeBatch(batchSize = 15): Promise<number> {
     .limit(batchSize);
   if (!rows.length) return 0;
 
-  const listing = rows.map((r, i) => `[${i}] (${r.pillar}) ${r.title}\n${r.summary.slice(0, 300)}`).join("\n\n");
+  // How many other outlets are running the same story: a strong signal the model cannot see from one item.
+  const recent = await db()
+    .select({ id: schema.items.id, title: schema.items.title, sourceId: schema.items.sourceId })
+    .from(schema.items)
+    .where(and(eq(schema.items.userId, await uid()), gte(schema.items.publishedAt, new Date(Date.now() - 2 * 86_400_000))));
+  const covered = coverage([...recent, ...rows.filter((r) => !recent.some((x) => x.id === r.id))]);
+  const listing = rows
+    .map((r, i) => {
+      const n = covered.get(r.id) ?? 0;
+      return `[${i}] (${r.pillar}) ${r.title}${n >= 2 ? ` [covered by ${n} other outlets in the last 2 days]` : ""}\n${r.summary.slice(0, 300)}`;
+    })
+    .join("\n\n");
   const res = await runTask({
     task: "analyze_items",
     role: "analyst",

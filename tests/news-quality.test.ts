@@ -138,7 +138,7 @@ describe("fill now", () => {
   it("fills at least 5 days ahead even when autopilot plans 3", async () => {
     const { fillNowForUser } = await import("../src/server/tick");
     await saveSettings({ slots: [BOTH[0]], horizonDays: 3 });
-    for (const t of ["database release", "CI runner", "edge runtime", "queue service", "auth library", "vector index"]) await addItem(`A strong story about a new ${t} for developers`, 9);
+    for (const t of ["Acme ships Postgres backups in seconds", "Bolt open-sources its CI runner", "Cinder cuts edge cold starts to 8ms", "Relay queues reach general availability", "Keyring moves auth sessions into signed cookies", "Vectorly indexes now update in place"]) await addItem(t, 9);
     const lines = ["Acme shipped a database release; nightly backup jobs get much shorter.", "Bolt opened its CI runner source, which matters most to teams paying per minute.", "Edge runtimes got cold starts under ten milliseconds, per the Cinder team.", "Queues without a broker to babysit: Relay made its service generally available.", "Keyring moved auth sessions into signed cookies, so small apps drop a whole table.", "Vectorly indexes now update in place, no more nightly rebuilds for search apps."];
     let n = 0;
     fakeLLM((req) => (req.schemaName === "write_post" ? { text: lines[n++ % lines.length] } : GOOD_REVIEW));
@@ -147,6 +147,25 @@ describe("fill now", () => {
     const furthest = Math.max(...live.map((p) => p.scheduledAt.getTime()));
     expect(furthest - Date.now()).toBeGreaterThan(4 * 86_400_000);
     expect(live.length).toBeGreaterThanOrEqual(5);
+  });
+});
+
+describe("big stories", () => {
+  it("the scorer is told when many outlets run a story, and the story is written about once per platform", async () => {
+    const srcs = await db().insert(schema.sources).values(["Register", "Ars", "NewStack", "TechCrunch"].map((n) => ({ userId: me(), name: n, url: `https://${n.toLowerCase()}.example.com/rss` }))).returning();
+    const titles = ["PHP2Shell exploit bypasses remote code execution protections", "Hackers got a head start on the PHP2Shell vulnerability", "AI found a critical PHP flaw, the PHP2Shell fix took months", "PHP2Shell: patch now, site owners warned"];
+    for (const [i, t] of titles.entries())
+      await db().insert(schema.items).values({ userId: me(), sourceId: srcs[i].id, url: `https://${["theregister.com", "arstechnica.com", "thenewstack.io", "techcrunch.com"][i]}/php${i}`, title: t, summary: `${t}. Upgrade PHP today.`, pillar: "news", publishedAt: new Date(Date.now() - (i + 1) * 3_600_000) });
+    const calls = fakeLLM((req) => (req.schemaName === "analyze_items" ? { items: titles.map((_, i) => ({ id: String(i), relevance: 9, urgency: "week", angle: "patch now" })) } : req.schemaName === "write_post" ? { text: "PHP2Shell hit PHP itself, per The Register. If you run PHP anywhere, patching beats reading about it." } : GOOD_REVIEW));
+    await analyzeBatch();
+    expect(calls[0].user).toMatch(/covered by 3 other outlets/);
+    await saveSettings({ slots: [BOTH[0]], horizonDays: 3 });
+    // The web search finds nothing; the other outlets in your own feeds confirm the story.
+    setNewsSearchForTests(async () => []);
+    await fillCalendar({ max: 3 });
+    const all = await db().select().from(schema.posts);
+    const live = all.filter((p) => p.status === "scheduled");
+    expect(live).toHaveLength(1);
   });
 });
 
@@ -161,9 +180,11 @@ describe("stock opinion phrases", () => {
 
   it("each news post gets a move, and the next post gets a different one", async () => {
     await saveSettings({ slots: [BOTH[0]], horizonDays: 3 });
-    await addItem("A strong story about a database release for developers", 9);
-    await addItem("Another strong story about a new open source CI runner", 9);
-    const calls = fakeLLM((req) => (req.schemaName === "write_post" ? { text: "Acme shipped a database release today. Small teams with big nightly backups should look first." } : GOOD_REVIEW));
+    await addItem("Acme ships Postgres backups in seconds", 9);
+    await addItem("Bolt open-sources its CI runner", 9);
+    const texts = ["Acme shipped a database release today. Small teams with big nightly backups should look first.", "Bolt put its CI runner on GitHub, which matters most to teams paying per build minute."];
+    let k = 0;
+    const calls = fakeLLM((req) => (req.schemaName === "write_post" ? { text: texts[k++ % 2] } : GOOD_REVIEW));
     await fillCalendar({ now: NOW, max: 2 });
     const moves = (await db().select().from(schema.posts)).map((p) => (p.review as { move?: string }).move);
     expect(moves).toHaveLength(2);

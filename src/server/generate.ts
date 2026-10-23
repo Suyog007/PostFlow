@@ -14,6 +14,7 @@ import { getSettings, saveSettings, type Settings } from "./settings";
 import { REVIEWER_SYSTEM, profileBlock, writerSystem } from "./prompts";
 import { runChecks, type Check } from "./checks";
 import { afterQuietHours, slotsBetween, formatLocal, nextFreeSlot } from "./slots";
+import { sameStory, storyIndex } from "./stories";
 import { fetchArticleText } from "./net";
 import { addEvent } from "./events";
 import { notifyScheduled, notifyText } from "./telegram";
@@ -101,8 +102,20 @@ async function candidateItems(platform: Platform, s: Settings, pillar: Pillar | 
     )
     .orderBy(desc(schema.items.relevance), desc(schema.items.publishedAt))
     .limit(60);
+  // One post per story on each platform: twenty articles about the same event are still one story.
+  const posted = await db()
+    .select({ title: schema.items.title })
+    .from(schema.posts)
+    .innerJoin(schema.items, eq(schema.items.id, schema.posts.itemId))
+    .where(and(await mine(schema.posts), eq(schema.posts.platform, platform), inArray(schema.posts.status, ["scheduled", "publishing", "published", "unconfirmed"]), gte(schema.posts.scheduledAt, new Date(now.getTime() - 4 * 86_400_000))));
+  const corpus = await db()
+    .select({ id: schema.items.id, title: schema.items.title, sourceId: schema.items.sourceId })
+    .from(schema.items)
+    .where(and(await mine(schema.items), gte(schema.items.publishedAt, new Date(now.getTime() - 4 * 86_400_000))));
+  const index = storyIndex(corpus);
+  const covered = (title: string) => posted.some((p) => sameStory(index, title, p.title));
   // Time-sensitive items must still be fresh an hour after the slot they would take.
-  return rows.filter((r) => !used.items.has(r.id) && !((e) => e && e.getTime() <= slotAt.getTime() + 3_600_000)(itemExpiry(r)));
+  return rows.filter((r) => !used.items.has(r.id) && !((e) => e && e.getTime() <= slotAt.getTime() + 3_600_000)(itemExpiry(r)) && !covered(r.title));
 }
 
 /** First candidate that enough independent publishers confirm. Checks are cached on the item and capped per call. */
