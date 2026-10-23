@@ -234,10 +234,13 @@ async function urgentCapReached(platform: Platform, at: Date): Promise<boolean> 
 /** Time-sensitive verified items first (soonest to go stale), otherwise rotate pillars. Returns null when nothing is worth posting. */
 export async function chooseMaterial(platform: Platform, slotAt: Date, s: Settings, now = new Date()): Promise<Material | null> {
   const capped = await urgentCapReached(platform, slotAt);
-  const urgent = (capped ? [] : await candidateItems(platform, s, "any", now, slotAt))
+  // The daily cap on time-sensitive posts does not hold back a must-know story.
+  const urgent = (await candidateItems(platform, s, "any", now, slotAt))
+    .filter((it) => !capped || it.kind === "must_know")
     .map((it) => ({ it, exp: itemExpiry(it) }))
     .filter((x): x is { it: ItemRow; exp: Date } => !!x.exp && x.exp.getTime() > slotAt.getTime() + 3_600_000)
-    .sort((a, b) => a.exp.getTime() - b.exp.getTime())
+    // Must-know stories first, then whatever goes stale soonest.
+    .sort((a, b) => Number(b.it.kind === "must_know") - Number(a.it.kind === "must_know") || a.exp.getTime() - b.exp.getTime())
     .map((x) => x.it);
   const hit = await pickVerified(urgent);
   if (hit) return itemMaterial(hit.it, hit.v);
@@ -654,6 +657,33 @@ export async function rejectAndReplace(id: string): Promise<{ replacementId: str
 // ---------------------------------------------------------------------------
 
 /** Frees the earliest soft slot for a time-sensitive item that would otherwise go stale before any free slot. */
+/**
+ * A must-know story (big bug, attack, outage) that would go stale before any free slot takes the slot of an
+ * ordinary news post the owner has not approved or edited. Posts the owner approved or edited are never touched.
+ */
+async function bumpForMustKnow(platform: Platform, s: Settings, now: Date, freeSlots: { at: Date }[]): Promise<boolean> {
+  const cands = (await candidateItems(platform, s, "any", now))
+    .filter((it) => it.kind === "must_know")
+    .filter((it) => { const e = itemExpiry(it) ?? new Date(now.getTime() + 7 * 86_400_000); return e.getTime() > now.getTime() + 3_600_000; });
+  const hit = await pickVerified(cands, 3);
+  if (!hit) return false;
+  const deadline = itemExpiry(hit.it) ?? new Date(now.getTime() + 2 * 86_400_000);
+  const firstFree = freeSlots[0]?.at.getTime() ?? Infinity;
+  if (firstFree < deadline.getTime() - 3_600_000) return false; // a free slot already works
+
+  const rows = await db()
+    .select({ post: schema.posts, kind: schema.items.kind })
+    .from(schema.posts)
+    .leftJoin(schema.items, eq(schema.items.id, schema.posts.itemId))
+    .where(and(await mine(schema.posts), eq(schema.posts.platform, platform), eq(schema.posts.status, "scheduled"), eq(schema.posts.userEdited, false), isNull(schema.posts.approvedAt), eq(schema.posts.fast, false), gte(schema.posts.scheduledAt, new Date(now.getTime() + 30 * 60_000)), lte(schema.posts.scheduledAt, new Date(deadline.getTime() - 3_600_000))))
+    .orderBy(asc(schema.posts.scheduledAt));
+  const victim = rows.find((r) => r.kind !== "must_know" && !r.post.noteId)?.post;
+  if (!victim) return false;
+  await db().delete(schema.posts).where(eq(schema.posts.id, victim.id));
+  await addEvent("bumped", `Made room on ${platform === "x" ? "X" : "LinkedIn"} ${formatLocal(victim.scheduledAt, s.timezone)} for a must-know story: ${hit.it.title.slice(0, 90)}. The post it replaced had not been approved.`);
+  return true;
+}
+
 async function bumpForUrgent(platform: Platform, s: Settings, now: Date, freeSlots: { at: Date }[]): Promise<boolean> {
   const cands = (await candidateItems(platform, s, "any", now))
     .filter((it) => { const e = itemExpiry(it); return !!e && e.getTime() > now.getTime() + 3_600_000; })
@@ -780,7 +810,7 @@ export async function fillCalendar(opts: { max?: number; now?: Date; deadline?: 
     // Make room for breaking news if every free slot is too late; the freed slot is picked up on the next pass.
     let bumped = false;
     for (const p of ["x", "linkedin"] as const) {
-      if (await bumpForUrgent(p, s, now, free.filter((f) => f.platform === p))) {
+      if ((await bumpForMustKnow(p, s, now, free.filter((f) => f.platform === p))) || (await bumpForUrgent(p, s, now, free.filter((f) => f.platform === p)))) {
         bumped = true;
         break;
       }

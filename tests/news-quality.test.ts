@@ -222,6 +222,25 @@ describe("must-know stories", () => {
   });
 });
 
+describe("must-know stories and a full calendar", () => {
+  it("take the slot of an unapproved news post, never an approved or edited one", async () => {
+    await saveSettings({ slots: [BOTH[0]], horizonDays: 3 });
+    const slots = (await import("../src/server/slots")).slotsBetween(await (await import("../src/server/settings")).getSettings(), new Date(Date.now() + 20 * 60_000), new Date(Date.now() + 3 * 86_400_000));
+    // Every slot before the story goes stale is taken: the first by an approved post, the rest by unapproved ones.
+    for (const [i, sl] of slots.entries())
+      await db().insert(schema.posts).values({ userId: me(), platform: "x", pillar: "news", text: `Ordinary news post ${i} about a tooling release with a take.`, status: "scheduled", scheduledAt: sl.at, approvedAt: i === 0 ? new Date() : null, expiresAt: new Date(Date.now() + 6 * 86_400_000) });
+    await db().insert(schema.items).values({ userId: me(), url: "https://theregister.com/php2shell", title: "PHP2Shell lets attackers run code on unpatched PHP servers", summary: "A flaw in PHP lets attackers run code. Patch to 8.4.9.", pillar: "news", publishedAt: new Date(Date.now() - 3_600_000), relevance: 9, urgency: "breaking", kind: "must_know", analyzedAt: new Date() });
+    let n = 0;
+    const texts = ["PHP2Shell is a reminder that old runtimes are attack surface too, per The Register. Patch to 8.4.9.", "PHP had a bug that let a stranger run their own code on your server, per The Register. Update to 8.4.9 today."];
+    fakeLLM((req) => (req.schemaName === "write_post" ? { text: texts[n++ % 2] } : GOOD_REVIEW));
+    await fillCalendar({ max: 2 });
+    const live = (await db().select().from(schema.posts)).filter((p) => p.status === "scheduled").sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime());
+    expect(live[0].approvedAt).not.toBeNull(); // the approved post kept its slot
+    expect(live[1].text).toMatch(/PHP/); // the next slot went to the must-know story
+    expect(live.length).toBe(slots.length);
+  });
+});
+
 describe("stock opinion phrases", () => {
   it("blocks the templates that make every post sound machine-written", async () => {
     const { runChecks } = await import("../src/server/checks");
