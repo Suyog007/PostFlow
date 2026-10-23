@@ -22,6 +22,8 @@ import { ensureVerification, type Verification } from "./verify";
 type Platform = "x" | "linkedin";
 const LIVE = ["scheduled", "publishing", "published", "unconfirmed", "failed", "cancelled", "expired"] as const;
 const MAX_ATTEMPTS_PER_SLOT = 3;
+/** After this long, earlier rejections for a slot no longer block new attempts. */
+const SLOT_RETRY_AFTER_MS = 4 * 3_600_000;
 
 export interface Material {
   kind: "news" | "note" | "evergreen";
@@ -587,12 +589,14 @@ export async function fillCalendar(opts: { max?: number; now?: Date; deadline?: 
     if (!all.length) return { ...res, idle: "no slots configured" };
 
     const taken = await db()
-      .select({ platform: schema.posts.platform, at: schema.posts.scheduledAt, status: schema.posts.status })
+      .select({ platform: schema.posts.platform, at: schema.posts.scheduledAt, status: schema.posts.status, createdAt: schema.posts.createdAt })
       .from(schema.posts)
       .where(and(await mine(schema.posts), gte(schema.posts.scheduledAt, from), lte(schema.posts.scheduledAt, to)));
     const occupied = new Set(taken.filter((t) => (LIVE as readonly string[]).includes(t.status)).map((t) => `${t.platform}@${t.at.getTime()}`));
     const attempts = new Map<string, number>();
-    for (const t of taken.filter((t) => t.status === "rejected")) attempts.set(`${t.platform}@${t.at.getTime()}`, (attempts.get(`${t.platform}@${t.at.getTime()}`) ?? 0) + 1);
+    // Only recent rejections count, so a slot that failed gets another try once new stories have come in.
+    const retryAfter = now.getTime() - SLOT_RETRY_AFTER_MS;
+    for (const t of taken.filter((t) => t.status === "rejected" && t.createdAt.getTime() > retryAfter)) attempts.set(`${t.platform}@${t.at.getTime()}`, (attempts.get(`${t.platform}@${t.at.getTime()}`) ?? 0) + 1);
     const free = all.filter((sl) => !occupied.has(`${sl.platform}@${sl.at.getTime()}`) && !skipped.has(`${sl.platform}@${sl.at.getTime()}`) && (attempts.get(`${sl.platform}@${sl.at.getTime()}`) ?? 0) < MAX_ATTEMPTS_PER_SLOT);
     // Make room for breaking news if every free slot is too late; the freed slot is picked up on the next pass.
     let bumped = false;
@@ -623,7 +627,7 @@ export async function fillCalendar(opts: { max?: number; now?: Date; deadline?: 
       else {
         res.rejected++;
         const n = (attempts.get(`${target.platform}@${target.at.getTime()}`) ?? 0) + 1;
-        if (n >= MAX_ATTEMPTS_PER_SLOT) await notifyText(`I could not write a post good enough for ${formatLocal(target.at, s.timezone)} (${target.platform}). That slot stays empty. Send me a note about what you worked on and I will use it.`).catch(() => {});
+        if (n >= MAX_ATTEMPTS_PER_SLOT) await notifyText(`I could not write a post good enough for ${formatLocal(target.at, s.timezone)} (${target.platform}). I will try that slot again in a few hours, when new stories have come in. A note about what you worked on also helps.`).catch(() => {});
       }
       // Items that were rejected are not retried for this platform (the post row records the use).
     } catch (err) {

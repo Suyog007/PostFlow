@@ -60,6 +60,20 @@ describe("skipping weak stories", () => {
     expect(calls.filter((c) => c.schemaName === "pick_topic")).toHaveLength(0);
   });
 
+  it("retries a slot that failed three times once the rejections are a few hours old", async () => {
+    await saveSettings({ slots: [BOTH[0]] });
+    await addItem("A strong story about a database release for developers", 9);
+    const at = new Date("2026-10-21T03:45:00Z");
+    const rejected = (hoursAgo: number) => ({ userId: me(), platform: "x", pillar: "news" as const, text: "old", status: "rejected" as const, scheduledAt: at, createdAt: new Date(NOW.getTime() - hoursAgo * 3_600_000) });
+    await db().insert(schema.posts).values([rejected(1), rejected(1), rejected(1)]);
+    fakeLLM((req) => (req.schemaName === "write_post" ? { text: "Acme shipped a database release today. I'd expect small teams to try it for faster backups." } : GOOD_REVIEW));
+    await fillCalendar({ now: NOW, max: 1 });
+    expect((await db().select().from(schema.posts)).filter((p) => p.status === "scheduled")).toHaveLength(0);
+    await db().update(schema.posts).set({ createdAt: new Date(NOW.getTime() - 5 * 3_600_000) });
+    await fillCalendar({ now: NOW, max: 1 });
+    expect((await db().select().from(schema.posts)).filter((p) => p.status === "scheduled")).toHaveLength(1);
+  });
+
   it("does not waste rewrites on a story the reviewer finds not worth posting", async () => {
     await addItem("A boring story about developer tooling changes today", 9);
     const calls = fakeLLM((req) => (req.schemaName === "write_post" ? { text: "A boring change landed. According to the report, nothing much happened for builders." } : { ...GOOD_REVIEW, worth_posting: 3, issues: ["A recap with no point."] }));
