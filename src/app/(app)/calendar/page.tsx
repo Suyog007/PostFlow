@@ -95,7 +95,8 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const mine = eq(schema.posts.userId, user.id);
   const tz = s.timezone;
   const offset = Number(sp.w ?? 0) || 0;
-  const weekStart = DateTime.now().setZone(tz).startOf("week").plus({ weeks: offset });
+  // A rolling 7 days starting today, so the next few days (and what "Fill now" wrote) are always on screen.
+  const weekStart = DateTime.now().setZone(tz).startOf("day").plus({ weeks: offset });
   const weekEnd = weekStart.plus({ weeks: 1 });
 
   const week = await db()
@@ -177,7 +178,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
         title={`${weekStart.toFormat("d LLL")} – ${weekEnd.minus({ days: 1 }).toFormat("d LLL yyyy")}`}
         description={
           upcoming[0] ? (
-            <>Next up: <span className="inline-block align-[-1px]"><PlatformGlyph platform={upcoming[0].platform} size={12} /></span> {DateTime.fromJSDate(upcoming[0].scheduledAt, { zone: tz }).toFormat("ccc HH:mm")}. {scheduledCount} scheduled and {postedCount} posted this week. Everything scheduled goes out unless you remove it.</>
+            <>Next up: <span className="inline-block align-[-1px]"><PlatformGlyph platform={upcoming[0].platform} size={12} /></span> {DateTime.fromJSDate(upcoming[0].scheduledAt, { zone: tz }).toFormat("ccc HH:mm")}. {scheduledCount} scheduled and {postedCount} posted in these 7 days. Everything scheduled goes out unless you remove it.</>
           ) : (
             <>Nothing scheduled yet. Autopilot fills open slots up to {s.horizonDays} days ahead.</>
           )
