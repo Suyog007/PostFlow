@@ -147,7 +147,8 @@ describe("fill now", () => {
     const live = (await db().select().from(schema.posts)).filter((p) => p.status === "scheduled");
     const furthest = Math.max(...live.map((p) => p.scheduledAt.getTime()));
     expect(furthest - Date.now()).toBeGreaterThan(4 * 86_400_000);
-    expect(live.length).toBeGreaterThanOrEqual(5);
+    // About one slot a day: five days ahead holds four or five, depending on the time of day this runs.
+    expect(live.length).toBeGreaterThanOrEqual(4);
   });
 });
 
@@ -172,7 +173,8 @@ describe("big stories", () => {
 
 describe("must-know stories", () => {
   it("are labelled by the scorer and get two versions: a normal take and a plain explainer you can switch to", async () => {
-    await saveSettings({ slots: BOTH, horizonDays: 1 });
+    // Slots at a fixed small hour and two days of window: some slot always falls inside, whatever time the test runs.
+    await saveSettings({ slots: BOTH.map((b) => ({ ...b, time: "00:30" })), horizonDays: 2 });
     await db().insert(schema.items).values({ userId: me(), url: "https://theregister.com/php2shell", title: "PHP2Shell lets attackers run code on unpatched PHP servers", summary: "A flaw in PHP lets attackers run code. Patch to 8.4.9.", pillar: "news", publishedAt: new Date(Date.now() - 3_600_000) });
     let calls = fakeLLM(() => ({ items: [{ id: "0", relevance: 9, urgency: "week", angle: "PHP servers can be taken over; patch now", kind: "must_know" }] }));
     await analyzeBatch();
@@ -207,7 +209,7 @@ describe("must-know stories", () => {
   });
 
   it("when only the explainer passes review, it is the one scheduled", async () => {
-    await saveSettings({ slots: [BOTH[0]], horizonDays: 1 });
+    await saveSettings({ slots: [{ ...BOTH[0], time: "00:30" }], horizonDays: 2 });
     await db().insert(schema.items).values({ userId: me(), url: "https://theregister.com/php2shell", title: "PHP2Shell lets attackers run code on unpatched PHP servers", summary: "A flaw in PHP lets attackers run code. Patch to 8.4.9.", pillar: "news", publishedAt: new Date(Date.now() - 3_600_000), relevance: 9, urgency: "week", kind: "must_know", analyzedAt: new Date() });
     fakeLLM((req) =>
       req.schemaName === "write_post"
@@ -224,7 +226,8 @@ describe("must-know stories", () => {
 
 describe("must-know stories and a full calendar", () => {
   it("take the slot of an unapproved news post, never an approved or edited one", async () => {
-    await saveSettings({ slots: [BOTH[0]], horizonDays: 3 });
+    // A slot every six hours, so the first ones always fall well before the story goes stale.
+    await saveSettings({ slots: ["00:00", "06:00", "12:00", "18:00"].map((time) => ({ ...BOTH[0], time })), horizonDays: 3 });
     const slots = (await import("../src/server/slots")).slotsBetween(await (await import("../src/server/settings")).getSettings(), new Date(Date.now() + 20 * 60_000), new Date(Date.now() + 3 * 86_400_000));
     // Every slot before the story goes stale is taken: the first by an approved post, the rest by unapproved ones.
     for (const [i, sl] of slots.entries())
