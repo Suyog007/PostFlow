@@ -122,6 +122,7 @@ export const items = pgTable(
     relevance: integer("relevance"), // 0-10 for this owner's profile
     urgency: text("urgency"), // "breaking" | "week" | "evergreen"
     angle: text("angle"), // one-line suggested take
+    kind: text("kind"), // "must_know" | "opportunity" | "other"
     analyzedAt: timestamp("analyzed_at", { withTimezone: true }),
     // Cross-check against other publishers (see verify.ts).
     verifiedAt: timestamp("verified_at", { withTimezone: true }),

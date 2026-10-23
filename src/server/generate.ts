@@ -42,6 +42,8 @@ export interface Material {
   verification?: Verification;
   /** The owner's own article: its link is appended to the post (not as a "Source:" line). */
   ownUrl?: string;
+  /** A must-know event (vulnerability, attack, outage): explained plainly rather than given a quick take. */
+  mustKnow?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -78,7 +80,7 @@ async function itemMaterial(it: ItemRow, v?: Verification): Promise<Material> {
   const text = [`Source: ${src?.name ?? new URL(it.url).hostname}`, `Title: ${it.title}`, `Published: ${it.publishedAt.toISOString().slice(0, 10)}`, `Summary: ${it.summary}`, body ? `Article text:\n${body}` : "(Only the headline and summary are available; do not claim details beyond them.)", v?.mentions.length ? `Also reported by (independent publishers; you may say "according to X and Y"):\n${v.mentions.map((m) => `- ${m.domain}: ${m.title}`).join("\n")}` : "", it.angle ? `Suggested angle (from an assistant, not a fact): ${it.angle}` : ""]
     .filter(Boolean)
     .join("\n");
-  return { kind: "news", pillar: it.pillar, source: text, label: it.title, itemId: it.id, sourceUrl: it.url, expiresAt: itemExpiry(it), firstPerson: false, verification: v };
+  return { kind: "news", pillar: it.pillar, source: text, label: it.title, itemId: it.id, sourceUrl: it.url, expiresAt: itemExpiry(it), firstPerson: false, verification: v, mustKnow: it.kind === "must_know" };
 }
 
 function noteMaterial(n: typeof schema.notes.$inferSelect): Material {
@@ -260,6 +262,9 @@ export const MOVES = {
   before: "How people handled this before, and what this replaces or makes easier.",
   dry: "A short, dry, slightly wry observation about it. Clever, not a joke for its own sake.",
   guess: "A guess about what builders will do next, worded freshly and clearly as a guess (no stock phrases).",
+  // Only for must-know events; never picked by rotation.
+  explain:
+    "Explain it simply, like to a smart friend who is not a security or infrastructure expert: what went wrong, what that lets an attacker (or the outage) do, who is exposed, and the one thing to do now. An everyday analogy is welcome if it is accurate. Plain words, no jargon without a short explanation. No fear-mongering.",
 } as const;
 export type Move = keyof typeof MOVES;
 
@@ -272,8 +277,9 @@ async function pickMove(): Promise<Move> {
     .orderBy(desc(schema.posts.createdAt))
     .limit(4);
   const used = new Set(rows.map((r) => (r.review as { move?: string } | null)?.move).filter(Boolean));
-  const options = (Object.keys(MOVES) as Move[]).filter((k) => !used.has(k));
-  const pool = options.length ? options : (Object.keys(MOVES) as Move[]);
+  const rotating = (Object.keys(MOVES) as Move[]).filter((k) => k !== "explain");
+  const options = rotating.filter((k) => !used.has(k));
+  const pool = options.length ? options : rotating;
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
@@ -335,7 +341,7 @@ async function write(m: Material, platform: Platform, s: Settings, recent: strin
     m.kind === "news" && move ? `\nTHIS POST'S MOVE (how to make your point this time): ${MOVES[move]}` : "",
     "\nWrite the post about the material above and nothing else.",
   ].join("\n");
-  const res = await runTask({ task: "write_post", role: "writer", system: writerSystem(s, platform), user, output: writerOut, maxTokens: 1200, temperature: 0.7 });
+  const res = await runTask({ task: "write_post", role: "writer", system: writerSystem(s, platform, { explainer: move === "explain" }), user, output: writerOut, maxTokens: 1200, temperature: 0.7 });
   const evidence = (res.evidence ?? []).slice(0, 10).map((e) => ({ claim: e.claim.slice(0, 300), quote: e.quote.slice(0, 500), found: quoteInSource(e.quote, m.source) }));
   return { text: sanitize(res.text), evidence };
 }
@@ -420,7 +426,7 @@ export async function produceForSlot(platform: Platform, at: Date, m: Material, 
   const recent = await recentTexts(platform);
   // For your own article the link is part of the post, so length checks and the reviewer see it.
   const compose = (t: string) => (m.ownUrl ? (platform === "linkedin" ? `${t}\n\n${m.ownUrl}` : `${t} ${m.ownUrl}`) : t);
-  const move = m.kind === "news" ? await pickMove() : undefined;
+  const move = m.kind !== "news" ? undefined : m.mustKnow ? "explain" : await pickMove();
   let w = await write(m, platform, s, recent, undefined, move);
   let text = w.text;
   let verdict: Verdict = { approved: false, reasons: [] };

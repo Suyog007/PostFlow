@@ -169,6 +169,27 @@ describe("big stories", () => {
   });
 });
 
+describe("must-know stories", () => {
+  it("are labelled by the scorer and explained in plain words, with room on LinkedIn", async () => {
+    await saveSettings({ slots: BOTH, horizonDays: 1 });
+    const [it] = await db().insert(schema.items).values({ userId: me(), url: "https://theregister.com/php2shell", title: "PHP2Shell lets attackers run code on unpatched PHP servers", summary: "A flaw in PHP lets attackers run code. Patch to 8.4.9.", pillar: "news", publishedAt: new Date(Date.now() - 3_600_000) }).returning();
+    let calls = fakeLLM(() => ({ items: [{ id: "0", relevance: 9, urgency: "week", angle: "PHP servers can be taken over; patch now", kind: "must_know" }] }));
+    await analyzeBatch();
+    expect((await db().select().from(schema.items))[0].kind).toBe("must_know");
+    const texts = ["PHP had a bug that lets a stranger run their own code on your server, per The Register. Patch to 8.4.9 today.", "Think of PHP2Shell as a spare key left under every PHP doormat, per The Register: attackers can run code on unpatched servers. Update to 8.4.9."];
+    let k = 0;
+    calls = fakeLLM((req) => (req.schemaName === "write_post" ? { text: texts[k++ % 2] } : GOOD_REVIEW));
+    await fillCalendar({ max: 2 });
+    const writes = calls.filter((c) => c.schemaName === "write_post");
+    expect(writes.length).toBeGreaterThanOrEqual(2);
+    expect(writes.every((w) => w.user.includes("Explain it simply"))).toBe(true);
+    expect(writes.find((w) => w.system.includes("LinkedIn"))!.system).toContain("at most 700 characters");
+    const moves = (await db().select().from(schema.posts)).map((p) => (p.review as { move?: string }).move);
+    expect(new Set(moves)).toEqual(new Set(["explain"]));
+    expect(it.id).toBeTruthy();
+  });
+});
+
 describe("stock opinion phrases", () => {
   it("blocks the templates that make every post sound machine-written", async () => {
     const { runChecks } = await import("../src/server/checks");

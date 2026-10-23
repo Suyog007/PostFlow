@@ -16,6 +16,7 @@ const out = z.object({
       relevance: z.number().min(0).max(10),
       urgency: z.enum(["breaking", "week", "evergreen"]),
       angle: z.string(),
+      kind: z.enum(["must_know", "opportunity", "other"]).optional(),
     }),
   ),
 });
@@ -61,7 +62,7 @@ export async function analyzeBatch(batchSize = 15): Promise<number> {
       .update(schema.items)
       .set(
         r
-          ? { relevance: row.sourceId === tipsId ? Math.max(8, Math.round(r.relevance)) : Math.round(r.relevance), urgency: r.urgency, angle: r.angle.slice(0, 300), analyzedAt: new Date() }
+          ? { relevance: row.sourceId === tipsId ? Math.max(8, Math.round(r.relevance)) : Math.round(r.relevance), urgency: r.urgency, angle: r.angle.slice(0, 300), kind: r.kind ?? "other", analyzedAt: new Date() }
           : // The model skipped it; treat as not worth posting rather than retrying forever.
             { relevance: 0, urgency: "evergreen", analyzedAt: new Date() },
       )

@@ -25,15 +25,19 @@ For each item, judge:
   Items marked "[covered by N other outlets]" are stories the audience is hearing about everywhere; when one is within the owner's expertise, score it at least 7 and pick the most informative item of the story.
   Otherwise, a plain recap of events with no actionable opening for builders scores at most 5. Scores of 9-10 are rare: a clear shift a builder should act on this week, or a must-know event.
 - urgency: "breaking" ONLY when a post three days later would look late or wrong: outages, incidents, security issues, deadlines, limited-time offers, live events, a price change taking effect today. "week" for most news: launches, releases, announcements, funding, policy changes, Show HN projects; still worth a post within a week. "evergreen" when it is still useful in a month: guides, analysis, research, engineering write-ups. Most items are "week".
-- angle: one sentence naming the opportunity: who could build what because of this, and why now. Empty string if relevance < 5.
+- kind: "must_know" for the must-know events above (vulnerabilities, attacks, outages, shutdowns), "opportunity" for openings builders can act on, "other" for everything else.
+- angle: one sentence. For "must_know": what broke and who is affected, in plain words. For "opportunity": who could build what because of this, and why now. Empty string if relevance < 5.
 Be strict: most items should score below 6. Return every id exactly once.`;
 }
 
-export function writerSystem(s: Settings, platform: "x" | "linkedin") {
+export function writerSystem(s: Settings, platform: "x" | "linkedin", opts: { explainer?: boolean } = {}) {
+  // Explaining a bug and its impact needs a little more room on LinkedIn; X stays short.
   const platformRules =
     platform === "x"
       ? `Platform: X. 2 to 3 short lines, at most 240 characters including spaces. No hashtags. No emoji.`
-      : `Platform: LinkedIn. 2 to 3 short lines, at most 300 characters. No hashtags. No emoji. No headline, no sign-off, no question to "the community".`;
+      : opts.explainer
+        ? `Platform: LinkedIn. 3 to 6 short lines, at most 700 characters. No hashtags. No emoji. No headline, no sign-off, no question to "the community".`
+        : `Platform: LinkedIn. 2 to 3 short lines, at most 300 characters. No hashtags. No emoji. No headline, no sign-off, no question to "the community".`;
   return `You ghost-write posts for one person. Write exactly as they would: plain, specific, human.
 
 ${profileBlock(s)}
