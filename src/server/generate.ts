@@ -676,6 +676,8 @@ export interface FillResult {
   produced: number;
   rejected: number;
   idle: string | null;
+  /** Open slots left empty because no story will still be fresh by then. */
+  waiting?: { platform: Platform; at: Date }[];
 }
 
 /** "Fill now" always looks at least this many days ahead, even when autopilot plans fewer. */
@@ -727,7 +729,10 @@ export async function fillCalendar(opts: { max?: number; now?: Date; deadline?: 
       }
     }
     if (bumped) continue;
-    if (!free.length) return { ...res, idle: res.produced + res.rejected ? null : skipped.size ? "nothing worth posting right now" : "calendar full" };
+    if (!free.length) {
+      const waiting = all.filter((sl) => skipped.has(`${sl.platform}@${sl.at.getTime()}`)).map((sl) => ({ platform: sl.platform, at: sl.at }));
+      return { ...res, waiting, idle: res.produced + res.rejected ? null : skipped.size ? "nothing worth posting right now" : "calendar full" };
+    }
     const target = free[0];
 
     let material: Material | null;

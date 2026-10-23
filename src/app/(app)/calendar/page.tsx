@@ -10,8 +10,26 @@ import { Icon, PageHeader, PlatformGlyph, StatusBadge } from "@/components/ui";
 import { Flash } from "../flash";
 import { fillCalendarAction } from "@/app/actions";
 import { fillNowDays } from "@/server/generate";
+import { slotsBetween } from "@/server/slots";
 
 type Post = typeof schema.posts.$inferSelect;
+/** A slot in the planning window with nothing on it yet. */
+interface OpenSlot { open: true; id: string; platform: "x" | "linkedin"; scheduledAt: Date }
+type Entry = Post | OpenSlot;
+const isOpen = (e: Entry): e is OpenSlot => "open" in e;
+
+function OpenSlotBox({ e, tz, top, left, width }: { e: OpenSlot; tz: string; top: number; left: number; width: number }) {
+  return (
+    <div
+      className="absolute rounded-md border border-dashed border-[var(--line-strong)] px-1.5 py-1 text-[11px] text-[var(--subtle)]"
+      style={{ top, left: `calc(${left}% + 2px)`, width: `calc(${width}% - 4px)`, height: EVENT_MIN_PX }}
+      title="Open slot: no story that will still be fresh by then yet. Autopilot fills it as new stories come in."
+    >
+      <div className="flex items-center gap-1"><PlatformGlyph platform={e.platform} size={12} /><span className="mono">{DateTime.fromJSDate(e.scheduledAt, { zone: tz }).toFormat("HH:mm")}</span></div>
+      <div className="line-clamp-2">Open, waiting for news</div>
+    </div>
+  );
+}
 
 const HOUR_PX = 64;
 const EVENT_MIN_PX = 54;
@@ -40,7 +58,7 @@ function Event({ p, tz, top, left, width, narrow, needsOk }: { p: Post; tz: stri
 }
 
 /** Greedy lane assignment so posts at the same time sit side by side. */
-function layoutDay(posts: Post[], tz: string, startHour: number) {
+function layoutDay<T extends { scheduledAt: Date }>(posts: T[], tz: string, startHour: number) {
   const items = posts
     .map((p) => {
       const d = DateTime.fromJSDate(p.scheduledAt, { zone: tz });
@@ -103,13 +121,21 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const filling = lastFill?.kind === "fill" && Date.now() - lastFill.at.getTime() < 15 * 60_000;
 
   const today = DateTime.now().setZone(tz);
-  const hours = week.map((p) => DateTime.fromJSDate(p.scheduledAt, { zone: tz }).hour);
+  const hours = [...week.map((p) => DateTime.fromJSDate(p.scheduledAt, { zone: tz }).hour), ...s.slots.map((sl) => Number(sl.time.slice(0, 2)))];
   const startHour = Math.min(7, ...hours);
   const endHour = Math.max(22, ...hours.map((h) => h + 1));
   const gridHeight = (endHour - startHour + 1) * HOUR_PX;
   const days = Array.from({ length: 7 }, (_, i) => weekStart.plus({ days: i }));
   const nowTop = ((today.hour * 60 + today.minute - startHour * 60) / 60) * HOUR_PX;
   const scheduledCount = week.filter((p) => p.status === "scheduled").length;
+  // Open slots in the "Fill now" window, so an empty day reads as "waiting for news", not "broken".
+  const liveKeys = new Set(week.filter((p) => ["scheduled", "publishing", "published", "unconfirmed"].includes(p.status)).map((p) => `${p.platform}@${p.scheduledAt.getTime()}`));
+  const openFrom = new Date(Math.max(Date.now() + 20 * 60_000, weekStart.toMillis()));
+  const openTo = new Date(Math.min(Date.now() + fillNowDays(s) * 86_400_000, weekEnd.toMillis() - 1));
+  const openSlots: OpenSlot[] = openFrom < openTo
+    ? slotsBetween(s, openFrom, openTo).filter((sl) => !liveKeys.has(`${sl.platform}@${sl.at.getTime()}`)).map((sl) => ({ open: true, id: `open-${sl.platform}-${sl.at.getTime()}`, platform: sl.platform, scheduledAt: sl.at }))
+    : [];
+  const entries: Entry[] = [...week, ...openSlots].sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime());
   const postedCount = week.filter((p) => p.status === "published").length;
 
   return (
@@ -194,13 +220,17 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
             ))}
           </div>
           {days.map((d) => {
-            const dayPosts = week.filter((p) => DateTime.fromJSDate(p.scheduledAt, { zone: tz }).hasSame(d, "day"));
+            const dayPosts = entries.filter((p) => DateTime.fromJSDate(p.scheduledAt, { zone: tz }).hasSame(d, "day"));
             return (
               <div key={d.toISODate()} className="cal-col" style={{ height: gridHeight }}>
                 {Array.from({ length: endHour - startHour + 1 }, (_, i) => <div key={i} className="cal-hour" />)}
-                {layoutDay(dayPosts, tz, startHour).map((it) => (
-                  <Event key={it.p.id} p={it.p} tz={tz} top={it.top} left={(it.lane / it.lanes) * 100} width={100 / it.lanes} narrow={it.lanes > 2} needsOk={needsOk(it.p)} />
-                ))}
+                {layoutDay(dayPosts, tz, startHour).map((it) =>
+                  isOpen(it.p) ? (
+                    <OpenSlotBox key={it.p.id} e={it.p} tz={tz} top={it.top} left={(it.lane / it.lanes) * 100} width={100 / it.lanes} />
+                  ) : (
+                    <Event key={it.p.id} p={it.p} tz={tz} top={it.top} left={(it.lane / it.lanes) * 100} width={100 / it.lanes} narrow={it.lanes > 2} needsOk={needsOk(it.p)} />
+                  ),
+                )}
                 {d.hasSame(today, "day") && nowTop > 0 && nowTop < gridHeight && (
                   <div className="pointer-events-none absolute inset-x-0 z-10 flex items-center" style={{ top: nowTop }}>
                     <span className="-ml-1 h-2 w-2 rounded-full bg-[var(--bad)]" />
@@ -216,13 +246,18 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       {/* Mobile: agenda */}
       <div className="space-y-4 md:hidden">
         {days.map((d) => {
-          const dayPosts = week.filter((p) => DateTime.fromJSDate(p.scheduledAt, { zone: tz }).hasSame(d, "day"));
+          const dayPosts = entries.filter((p) => DateTime.fromJSDate(p.scheduledAt, { zone: tz }).hasSame(d, "day"));
           return (
             <section key={d.toISODate()}>
               <h2 className={`mb-1.5 text-[12px] font-semibold uppercase tracking-wide ${d.hasSame(today, "day") ? "text-[var(--ink)]" : "text-[var(--subtle)]"}`}>{d.toFormat("cccc d LLL")}{d.hasSame(today, "day") ? " · Today" : ""}</h2>
               {dayPosts.length ? (
                 <div className="panel divide">
-                  {dayPosts.map((p) => (
+                  {dayPosts.map((p) => isOpen(p) ? (
+                    <div key={p.id} className="flex gap-3 px-3 py-2.5 text-[var(--subtle)]">
+                      <div className="w-11 flex-none pt-0.5 text-[12px] mono">{DateTime.fromJSDate(p.scheduledAt, { zone: tz }).toFormat("HH:mm")}</div>
+                      <div className="flex min-w-0 flex-1 items-center gap-1.5 text-[13px]"><PlatformGlyph platform={p.platform} size={13} />Open slot, waiting for a story that will still be fresh</div>
+                    </div>
+                  ) : (
                     <Link key={p.id} href={`/posts/${p.id}`} className="flex gap-3 px-3 py-2.5">
                       <div className="w-11 flex-none pt-0.5 text-[12px] text-[var(--muted)] mono">{DateTime.fromJSDate(p.scheduledAt, { zone: tz }).toFormat("HH:mm")}</div>
                       <div className="min-w-0 flex-1">

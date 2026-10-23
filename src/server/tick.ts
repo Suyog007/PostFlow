@@ -4,6 +4,7 @@ import { collectFeeds, seedSourcesIfEmpty } from "./collect";
 import { analyzeBatch } from "./analyze";
 import { fillCalendar, fillNowDays, type FillResult } from "./generate";
 import { env } from "./env";
+import { formatLocal } from "./slots";
 import { processRequests } from "./requests";
 import { publishDue, reconcile } from "./publisher";
 import { llmConfigured } from "./llm";
@@ -153,8 +154,11 @@ export async function fillNowForUser(userId: string, opts: { budgetMs?: number }
           await addEvent("fill_done", `Fill stopped: ${(err as Error).message}`);
           throw err;
         }
-        const tail = f.idle && f.idle !== "calendar full" ? ` Stopped because: ${f.idle}.` : "";
-        await addEvent("fill_done", `Filled the calendar: ${f.produced} new post${f.produced === 1 ? "" : "s"}, ${f.rejected} held back by the reviewer.${tail}`);
+        const waiting = f.waiting ?? [];
+        const tail = waiting.length
+          ? ` ${waiting.length} open slot${waiting.length === 1 ? "" : "s"} (${waiting.map((w) => `${w.platform === "x" ? "X" : "LinkedIn"} ${formatLocal(w.at, s.timezone)}`).join(", ")}) have no story that will still be fresh by then; autopilot fills them as new stories come in.`
+          : f.idle && f.idle !== "calendar full" && f.idle !== "nothing worth posting right now" ? ` Stopped because: ${f.idle}.` : "";
+        await addEvent("fill_done", `Filled the calendar: ${f.produced} new post${f.produced === 1 ? "" : "s"}, ${f.rejected} held back by the reviewer.${tail}`.slice(0, 500));
         return f;
       }),
     3 * 60_000,
