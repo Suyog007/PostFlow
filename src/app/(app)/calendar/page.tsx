@@ -5,7 +5,7 @@ import { db, schema } from "@/server/db/client";
 import { getSettings } from "@/server/settings";
 import { recentEvents } from "@/server/events";
 import { requireActiveUser } from "@/server/auth";
-import { approvalGate, entitlementOf } from "@/server/billing/plans";
+import { activePlatforms, approvalGate, entitlementOf } from "@/server/billing/plans";
 import { Icon, PageHeader, PlatformGlyph, StatusBadge } from "@/components/ui";
 import { Flash } from "../flash";
 import { fillCalendarAction } from "@/app/actions";
@@ -128,13 +128,14 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const gridHeight = (endHour - startHour + 1) * HOUR_PX;
   const days = Array.from({ length: 7 }, (_, i) => weekStart.plus({ days: i }));
   const nowTop = ((today.hour * 60 + today.minute - startHour * 60) / 60) * HOUR_PX;
+  const active = await activePlatforms(user.id);
   const scheduledCount = week.filter((p) => p.status === "scheduled").length;
   // Open slots in the "Fill now" window, so an empty day reads as "waiting for news", not "broken".
   const liveKeys = new Set(week.filter((p) => ["scheduled", "publishing", "published", "unconfirmed"].includes(p.status)).map((p) => `${p.platform}@${p.scheduledAt.getTime()}`));
   const openFrom = new Date(Math.max(Date.now() + 20 * 60_000, weekStart.toMillis()));
   const openTo = new Date(Math.min(Date.now() + fillNowDays(s) * 86_400_000, weekEnd.toMillis() - 1));
   const openSlots: OpenSlot[] = openFrom < openTo
-    ? slotsBetween(s, openFrom, openTo).filter((sl) => !liveKeys.has(`${sl.platform}@${sl.at.getTime()}`)).map((sl) => ({ open: true, id: `open-${sl.platform}-${sl.at.getTime()}`, platform: sl.platform, scheduledAt: sl.at }))
+    ? slotsBetween(s, openFrom, openTo).filter((sl) => active.includes(sl.platform) && !liveKeys.has(`${sl.platform}@${sl.at.getTime()}`)).map((sl) => ({ open: true, id: `open-${sl.platform}-${sl.at.getTime()}`, platform: sl.platform, scheduledAt: sl.at }))
     : [];
   const entries: Entry[] = [...week, ...openSlots].sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime());
   const postedCount = week.filter((p) => p.status === "published").length;

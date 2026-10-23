@@ -60,6 +60,19 @@ export async function entitlementFor(userId: string): Promise<Entitlement> {
 
 export class LimitError extends Error {}
 
+/**
+ * The platforms to write posts for. The owner gets both, so everything can be previewed. Everyone else
+ * only gets what they have connected: nothing is fetched or written for an account that cannot publish.
+ */
+export async function activePlatforms(userId?: string): Promise<("x" | "linkedin")[]> {
+  const id = userId ?? (await uid());
+  if ((await entitlementFor(id)).plan === "owner") return ["linkedin", "x"];
+  const rows = await db().select({ platform: schema.platformAccounts.platform }).from(schema.platformAccounts).where(and(eq(schema.platformAccounts.userId, id), eq(schema.platformAccounts.status, "connected")));
+  return (["linkedin", "x"] as const).filter((p) => rows.some((r) => r.platform === p));
+}
+
+export const CONNECT_FIRST = "Connect LinkedIn or X in Settings first. PostFlow starts writing posts once an account is connected.";
+
 function monthStart(now = new Date()) {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 }

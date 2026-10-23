@@ -13,7 +13,7 @@ import { addEvent } from "./events";
 import { log } from "./log";
 import { recordHeartbeat } from "./health";
 import { withUser } from "./context";
-import { entitledUsers } from "./billing/plans";
+import { activePlatforms, entitledUsers } from "./billing/plans";
 
 export interface TickResult {
   skipped?: string;
@@ -52,6 +52,11 @@ async function publishPhase(out: TickResult) {
 async function pipelinePhase(out: TickResult, deadline: number) {
   const s = await getSettings();
   if (s.paused) return;
+  // Nothing is fetched, scored or written for an account that cannot publish yet (the owner is exempt).
+  if (!(await activePlatforms()).length) {
+    out.idle = "connect LinkedIn or X first";
+    return;
+  }
   // Things the user asked for come before anything the autopilot decides on its own.
   if (llmConfigured()) {
     try {
@@ -143,6 +148,10 @@ export async function fillNowForUser(userId: string, opts: { budgetMs?: number }
         const s = await getSettings();
         if (s.paused) {
           await addEvent("fill_done", "Fill skipped: autopilot is paused.");
+          return null;
+        }
+        if (!(await activePlatforms()).length) {
+          await addEvent("fill_done", "Fill skipped: connect LinkedIn or X in Settings first.");
           return null;
         }
         await collectFeeds({ maxFeeds: 20, minIntervalMinutes: 30 }).catch(() => {});

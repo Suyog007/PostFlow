@@ -1,7 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
 import { db, schema } from "./db/client";
 import { uid } from "./context";
-import { assertFeature } from "./billing/plans";
+import { activePlatforms, assertFeature, CONNECT_FIRST, LimitError } from "./billing/plans";
 import { getSettings, type Settings } from "./settings";
 import { fetchArticle } from "./net";
 import { produceForSlot, type Material } from "./generate";
@@ -20,7 +20,9 @@ export type RequestMode = "schedule" | "soon" | "draft";
 export async function createRequest(input: { text: string; platforms?: Platform[]; mode?: RequestMode; via?: string; own?: boolean }): Promise<RequestRow> {
   const text = input.text.trim();
   if (text.length < 8) throw new Error("Give me a bit more to work with: an idea in a sentence or two, or a link.");
-  const platforms = (input.platforms?.length ? input.platforms : ["linkedin", "x"]) as Platform[];
+  const active = await activePlatforms();
+  const platforms = ((input.platforms?.length ? input.platforms : ["linkedin", "x"]) as Platform[]).filter((p) => active.includes(p));
+  if (!platforms.length) throw new LimitError(CONNECT_FIRST);
   if (URL_RE.test(text) || input.own) await assertFeature("links", "Writing posts from a link");
   const [row] = await db()
     .insert(schema.requests)

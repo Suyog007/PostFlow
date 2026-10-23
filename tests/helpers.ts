@@ -36,6 +36,9 @@ export async function resetDb() {
   // The slot maths in the tests was written for this timezone (new accounts default to the browser's).
   const { saveSettings } = await import("../src/server/settings");
   await saveSettings({ timezone: "Asia/Kathmandu" });
+  // Most tests are about writing and publishing, which needs connected accounts (see activePlatforms).
+  const { encryptSecret } = await import("../src/server/crypto");
+  for (const platform of ["x", "linkedin"] as const) await db().insert(schema.platformAccounts).values({ userId: u.id, platform, externalUserId: "u1", handle: "@me", accessTokenEnc: encryptSecret("tok"), status: "connected" });
 }
 
 export type LlmHandler = (req: CompletionRequest) => unknown;

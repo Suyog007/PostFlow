@@ -2,7 +2,7 @@ import { z } from "zod";
 import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lte, notInArray, sql } from "drizzle-orm";
 import { db, schema } from "./db/client";
 import { uid } from "./context";
-import { approvalGate, assertPostQuota, entitlementFor, LimitError } from "./billing/plans";
+import { activePlatforms, approvalGate, assertPostQuota, entitlementFor, LimitError } from "./billing/plans";
 import type { Pillar } from "./db/schema";
 import { runTask, untrusted, LLMError } from "./llm";
 
@@ -740,7 +740,8 @@ export async function runFastLane(s: Settings, now: Date): Promise<{ produced: n
   if (!f.enabled) return out;
   if (!(await entitlementFor(await uid())).features.fastLane) return out;
   const since = new Date(now.getTime() - 24 * 3_600_000);
-  for (const platform of f.platforms) {
+  const active = await activePlatforms();
+  for (const platform of f.platforms.filter((p) => active.includes(p))) {
     const recent = await db()
       .select({ status: schema.posts.status })
       .from(schema.posts)
@@ -781,6 +782,9 @@ export async function fillCalendar(opts: { max?: number; now?: Date; deadline?: 
   const s = await getSettings();
   const res: FillResult = { produced: 0, rejected: 0, idle: null };
   if (s.paused) return { ...res, idle: "paused" };
+  // Only write for platforms that can publish (the owner is exempt).
+  const active = await activePlatforms();
+  if (!active.length) return { ...res, idle: "connect LinkedIn or X first" };
 
   try {
     const f = await runFastLane(s, now);
@@ -797,8 +801,8 @@ export async function fillCalendar(opts: { max?: number; now?: Date; deadline?: 
   while (res.produced + res.rejected < max && Date.now() < deadline && guard++ < max + 12) {
     const from = new Date(now.getTime() + 20 * 60_000);
     const to = new Date(now.getTime() + (opts.horizonDays ?? s.horizonDays) * 86_400_000);
-    const all = slotsBetween(s, from, to);
-    if (!all.length) return { ...res, idle: "no slots configured" };
+    const all = slotsBetween(s, from, to).filter((sl) => active.includes(sl.platform));
+    if (!all.length) return { ...res, idle: "no slots configured for your connected platforms" };
 
     const taken = await db()
       .select({ platform: schema.posts.platform, at: sql<Date>`coalesce(${schema.posts.slotAt}, ${schema.posts.scheduledAt})`.mapWith((v) => new Date(v)), status: schema.posts.status, createdAt: schema.posts.createdAt })
