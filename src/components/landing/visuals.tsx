@@ -29,8 +29,9 @@ function Node({ icon, title, children, tone }: { icon: ReactNode; title: string;
 function Arrow() {
   return (
     <div className="flex items-center justify-center text-[var(--subtle)]" aria-hidden="true">
-      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="rotate-90 lg:rotate-0">
-        <path d="M4 12h15M14 6.5 19.5 12 14 17.5" />
+      <svg width="40" height="28" viewBox="0 0 40 28" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="rotate-90 lg:rotate-0">
+        <path d="M2 14h28" className="flow-line" />
+        <path d="M27 8l7 6-7 6" />
       </svg>
     </div>
   );
@@ -60,7 +61,7 @@ export function FlowDiagram() {
         </div>
         <Arrow />
         <Node icon={<Icon name="calendar" size={15} />} title="Your calendar">
-          You approve, edit, move or remove. Each new post is also sent to Telegram with buttons.
+          You approve, edit, move or remove. Telegram sends you a heads-up about ten minutes before each post.
         </Node>
         <Arrow />
         <div className="grid gap-2">
@@ -74,46 +75,6 @@ export function FlowDiagram() {
       </div>
       <figcaption className="mt-4 text-center text-[13px] text-[var(--subtle)]">The scheduler runs every 5 minutes: publish what is due first, then collect, write and review.</figcaption>
     </figure>
-  );
-}
-
-/** Illustration of the Telegram bot, using the bot's real message format. */
-export function TelegramMock() {
-  return (
-    // fixmyslop-ignore[ui/neon-glow] neutral grey drop shadow under the phone mock, not a coloured glow
-    <div className="mx-auto w-full max-w-[400px] overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface)] shadow-[0_24px_48px_-24px_rgba(16,24,40,.25)]">
-      <div className="flex items-center gap-3 border-b border-[var(--line)] px-4 py-3">
-        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#2aabee] text-white">
-          <Icon name="send" size={17} />
-        </span>
-        <div>
-          <div className="text-[14px] font-semibold">PostFlow bot</div>
-          <div className="text-[12px] text-[var(--subtle)]">bot</div>
-        </div>
-      </div>
-      <div className="space-y-3 bg-[var(--raised)] p-4 text-[13px] leading-relaxed">
-        <div className="max-w-[88%] rounded-2xl rounded-tl-md bg-[var(--surface)] p-3 shadow-[0_1px_0_var(--line)]">
-          {/* fixmyslop-ignore[ui/emoji-icons] this mock reproduces real Telegram bot messages, whose text contains these emoji */}
-          <p className="font-medium">🗓 LinkedIn · Thu 22 Oct, 09:15</p>
-          {/* fixmyslop-ignore[ui/emoji-icons] emoji belong to the example post text itself */}
-          <p className="mt-2 whitespace-pre-line">{"60 people came to our meetup in Lalitpur on building with small models.\n\n💻 Most questions were about running models on cheap laptops."}</p>
-          <p className="mt-2 text-[var(--muted)]">It will not be posted until you approve it.</p>
-        </div>
-        <div className="grid max-w-[88%] grid-cols-2 gap-1.5 text-center text-[12px] font-medium">
-          {/* fixmyslop-ignore[ui/emoji-icons] these are the bot's real button labels in Telegram */}
-          <span className="rounded-lg bg-[var(--surface)] px-2 py-2 shadow-[0_1px_0_var(--line)]">✅ Approve</span>
-          {/* fixmyslop-ignore[ui/emoji-icons] these are the bot's real button labels in Telegram */}
-          <span className="rounded-lg bg-[var(--surface)] px-2 py-2 shadow-[0_1px_0_var(--line)]">🔁 Reject, find another</span>
-        </div>
-        <div className="ml-auto max-w-[80%] rounded-2xl rounded-tr-md bg-[var(--accent)] p-3 text-[var(--accent-ink)]">
-          Shipped invoice exports today. The CSV was easy, the timezone handling took all afternoon.
-        </div>
-        <div className="max-w-[88%] rounded-2xl rounded-tl-md bg-[var(--surface)] p-3 shadow-[0_1px_0_var(--line)]">
-          {/* fixmyslop-ignore[ui/emoji-icons] the bot's real reply text contains this emoji */}
-          📝 Saved (own work). I will turn it into a post for an upcoming slot.
-        </div>
-      </div>
-    </div>
   );
 }
 

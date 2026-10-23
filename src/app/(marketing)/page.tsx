@@ -6,7 +6,11 @@ import { signupsOpen } from "@/server/users";
 import { Icon, Logo, PlatformGlyph } from "@/components/ui";
 import { Pricing } from "@/components/landing/pricing";
 import { WaitlistForm } from "@/components/landing/waitlist-form";
-import { FlowDiagram, NewsCard, RejectedCard, Shot, TelegramMock } from "@/components/landing/visuals";
+import { FlowDiagram, NewsCard, RejectedCard, Shot } from "@/components/landing/visuals";
+import { LandingMotion, LandingNav } from "@/components/landing/motion";
+import { HeroDemo } from "@/components/landing/hero-demo";
+import { ScrollSteps } from "@/components/landing/scroll-steps";
+import { TelegramLive } from "@/components/landing/telegram-live";
 import { TRIAL_DAYS } from "@/lib/pricing";
 
 export const metadata: Metadata = {
@@ -20,13 +24,6 @@ export const metadata: Metadata = {
     images: [{ url: "/landing/calendar-light.png", width: 2560, height: 1600 }],
   },
 };
-
-const NAV = [
-  { href: "#how", label: "How it works" },
-  { href: "#review", label: "Reviewer" },
-  { href: "#pricing", label: "Pricing" },
-  { href: "#faq", label: "FAQ" },
-];
 
 const FAQ: { q: string; a: ReactNode }[] = [
   {
@@ -63,15 +60,23 @@ const FAQ: { q: string; a: ReactNode }[] = [
   },
 ];
 
-function Section({ id, eyebrow, title, intro, children, className = "" }: { id?: string; eyebrow?: string; title: string; intro?: ReactNode; children: ReactNode; className?: string }) {
+/** Fades and slides its content up the first time it scrolls into view (see LandingMotion). */
+function Reveal({ children, delay = 0, className = "" }: { children: ReactNode; delay?: number; className?: string }) {
   return (
-    <section id={id} className={`scroll-mt-20 px-4 py-20 sm:py-24 ${className}`}>
+    <div className={`reveal ${className}`} style={{ "--d": `${delay}ms` } as React.CSSProperties}>
+      {children}
+    </div>
+  );
+}
+
+function Section({ id, title, intro, children, className = "" }: { id?: string; title: string; intro?: ReactNode; children: ReactNode; className?: string }) {
+  return (
+    <section id={id} className={`scroll-mt-20 px-4 py-20 sm:py-28 ${className}`}>
       <div className="mx-auto max-w-[1120px]">
-        <div className="mx-auto mb-12 max-w-[680px] text-center">
-          {eyebrow && <p className="mb-3 text-[13px] font-semibold uppercase tracking-[0.08em] text-[var(--accent)]">{eyebrow}</p>}
-          <h2 className="text-[30px] font-semibold leading-[1.15] tracking-tight sm:text-[38px]">{title}</h2>
+        <Reveal className="mx-auto mb-14 max-w-[680px] text-center">
+          <h2 className="text-[30px] font-semibold leading-[1.15] tracking-tight sm:text-[40px]">{title}</h2>
           {intro && <p className="mt-4 text-[16px] leading-relaxed text-[var(--muted)] sm:text-[17px]">{intro}</p>}
-        </div>
+        </Reveal>
         {children}
       </div>
     </section>
@@ -81,7 +86,7 @@ function Section({ id, eyebrow, title, intro, children, className = "" }: { id?:
 function Feature({ title, body, points, visual, flip, wide }: { title: string; body: string; points: string[]; visual: ReactNode; flip?: boolean; wide?: boolean }) {
   if (wide) {
     return (
-      <div>
+      <Reveal>
         <div className="grid gap-6 lg:grid-cols-2 lg:gap-16">
           <div>
             <h3 className="text-[24px] font-semibold leading-tight tracking-tight sm:text-[28px]">{title}</h3>
@@ -97,11 +102,11 @@ function Feature({ title, body, points, visual, flip, wide }: { title: string; b
           </ul>
         </div>
         <div className="mt-10">{visual}</div>
-      </div>
+      </Reveal>
     );
   }
   return (
-    <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-16">
+    <Reveal className="grid items-center gap-10 lg:grid-cols-2 lg:gap-16">
       <div className={flip ? "lg:order-2" : ""}>
         <h3 className="text-[24px] font-semibold leading-tight tracking-tight sm:text-[28px]">{title}</h3>
         <p className="mt-3 text-[16px] leading-relaxed text-[var(--muted)]">{body}</p>
@@ -115,7 +120,7 @@ function Feature({ title, body, points, visual, flip, wide }: { title: string; b
         </ul>
       </div>
       <div className={flip ? "lg:order-1" : ""}>{visual}</div>
-    </div>
+    </Reveal>
   );
 }
 
@@ -128,64 +133,39 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
 
   return (
     <div className="bg-[var(--bg)] text-[15px]">
-      {/* ---------- nav ---------- */}
-      <header className="sticky top-0 z-40 border-b border-[var(--line)] bg-[var(--bg)]/85 backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-[1120px] items-center gap-6 px-4">
-          <Link href="/" className="flex items-center gap-2">
-            <Logo size={24} />
-            <span className="text-[16px] font-semibold tracking-tight">PostFlow</span>
-          </Link>
-          <nav className="hidden items-center gap-6 text-[14px] text-[var(--muted)] md:flex">
-            {NAV.map((n) => (
-              <a key={n.href} href={n.href} className="hover:text-[var(--ink)]">{n.label}</a>
-            ))}
-          </nav>
-          <div className="ml-auto flex items-center gap-2">
-            {loggedIn ? (
-              <Link href="/calendar" className="btn btn-primary h-9 text-[14px]">Open app</Link>
-            ) : (
-              <>
-                <Link href="/login" className="btn btn-ghost h-9 text-[14px]">Sign in</Link>
-                <a href={primary.href} className="btn btn-primary h-9 text-[14px]">{open ? "Start free trial" : primary.label}</a>
-              </>
-            )}
-          </div>
-        </div>
-      </header>
+      <LandingMotion />
+      <LandingNav loggedIn={loggedIn} open={open} primary={primary} />
 
       <main>
         {deleted && (
           <p role="status" className="mx-auto mt-4 max-w-[1120px] rounded-md bg-[var(--good-soft)] px-4 py-2 text-[13px] text-[var(--good)]">Your account and its data were deleted, and your subscription was cancelled.</p>
         )}
         {/* ---------- hero ---------- */}
-        <section className="px-4 pb-16 pt-16 sm:pt-24">
-          <div className="mx-auto max-w-[1120px]">
-            <div className="mx-auto max-w-[820px] text-center">
-              <p className="mb-5 inline-flex items-center gap-2 rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-1 text-[13px] text-[var(--muted)]">
+        <section className="relative px-4 pb-20 pt-10 sm:pt-14">
+          <div className="hero-grid pointer-events-none absolute inset-x-0 top-0 h-[560px]" aria-hidden="true" />
+          <div className="relative mx-auto max-w-[1120px]">
+            <div className="mx-auto max-w-[900px] text-center">
+              <p className="rise mb-4 inline-flex items-center gap-2 rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-1 text-[13px] text-[var(--muted)]" style={{ "--d": "0ms" } as React.CSSProperties}>
                 <span className="h-1.5 w-1.5 rounded-full bg-[var(--good)]" /> For founders, engineers and consultants
               </p>
-              <h1 className="text-[38px] font-semibold leading-[1.08] tracking-[-0.02em] sm:text-[56px]">
+              <h1 className="rise text-[38px] font-semibold leading-[1.08] tracking-[-0.02em] sm:text-[52px]" style={{ "--d": "90ms" } as React.CSSProperties}>
                 A week of LinkedIn and X posts, written from your notes and checked before they go out.
               </h1>
-              <p className="mx-auto mt-6 max-w-[640px] text-[17px] leading-relaxed text-[var(--muted)] sm:text-[19px]">
+              <p className="rise mx-auto mt-5 max-w-[660px] text-[16px] leading-relaxed text-[var(--muted)] sm:text-[18px]" style={{ "--d": "190ms" } as React.CSSProperties}>
                 PostFlow keeps your calendar filled a few days ahead with posts about your work, the news in your field and what you have learned. A second AI reviews every draft for facts and filler. Nothing goes out until you approve it.
               </p>
-              <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-                <a href={primary.href} className="btn btn-primary h-11 px-5 text-[15px]">{primary.label}</a>
+              <div className="rise mt-7 flex flex-col justify-center gap-3 sm:flex-row" style={{ "--d": "280ms" } as React.CSSProperties}>
+                <a href={primary.href} className="btn btn-primary h-11 px-5 text-[15px]">{primary.label}<Icon name="right" size={15} className="cta-arrow" /></a>
                 <a href="#how" className="btn h-11 px-5 text-[15px]">See how it works</a>
               </div>
-              <p className="mt-4 text-[13px] text-[var(--subtle)]">{open ? "No charge during the trial · Cancel anytime" : `${TRIAL_DAYS}-day free trial at launch · No card to join the list`}</p>
+              <p className="rise mt-4 text-[13px] text-[var(--subtle)]" style={{ "--d": "340ms" } as React.CSSProperties}>{open ? "No charge during the trial · Cancel anytime" : `${TRIAL_DAYS}-day free trial at launch · No card to join the list`}</p>
             </div>
 
-            {/* On phones the screenshot keeps a readable size and scrolls sideways. */}
-            <div className="-mx-4 mt-14 overflow-x-auto px-4 pb-2 sm:mx-0 sm:mt-16 sm:overflow-visible sm:px-0">
-              <div className="min-w-[760px] sm:min-w-0 [mask-image:linear-gradient(to_bottom,#000_78%,transparent)]">
-                <Shot name="calendar" alt="The PostFlow calendar: a week of scheduled LinkedIn and X posts, some approved, some waiting for approval" width={1280} height={800} priority />
-              </div>
+            <div className="rise mt-10 sm:mt-12" style={{ "--d": "420ms" } as React.CSSProperties}>
+              <HeroDemo />
             </div>
-            <p className="mt-1 text-center text-[12px] text-[var(--subtle)] sm:hidden">Swipe to see the whole week</p>
 
-            <div className="mt-8 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-[14px] text-[var(--muted)]">
+            <div className="mt-12 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-[14px] text-[var(--muted)]">
               <span className="flex items-center gap-2"><PlatformGlyph platform="linkedin" size={18} /> Publishes to LinkedIn</span>
               <span className="flex items-center gap-2"><PlatformGlyph platform="x" size={18} /> Publishes to X</span>
               <span className="flex items-center gap-2"><Icon name="send" size={17} /> Approve from Telegram</span>
@@ -202,11 +182,11 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
               { t: "Schedulers still leave a blank box.", b: "A queue is only useful once you have something to put in it. The hard part was never pressing publish." },
               { t: "AI writers fill the box with filler.", b: "Generic hooks, invented stories and confident claims nobody checked. That costs more trust than posting nothing." },
             ].map((x, i) => (
-              <div key={x.t}>
+              <Reveal key={x.t} delay={i * 110}>
                 <p className="mb-2 font-mono text-[12px] text-[var(--subtle)]">0{i + 1}</p>
                 <h3 className="text-[18px] font-semibold tracking-tight">{x.t}</h3>
                 <p className="mt-2 leading-relaxed text-[var(--muted)]">{x.b}</p>
-              </div>
+              </Reveal>
             ))}
           </div>
         </section>
@@ -214,31 +194,37 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
         {/* ---------- how it works ---------- */}
         <Section
           id="how"
-          eyebrow="How it works"
           title="You bring the material. PostFlow does the writing, checking and scheduling."
           intro="Setup takes about ten minutes. After that, your part is a few rough notes a week and a quick look at the calendar."
         >
-          <ol className="mb-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {[
-              { t: "Connect your accounts", b: "Sign in with LinkedIn and X through their official pages. Pick your posting times, like weekdays at 09:15." },
-              { t: "Tell it who you are", b: "Your role, what you can credibly talk about, how you sound, and topics to avoid." },
-              { t: "Drop rough notes", b: "\"Cut CI from 14 to 4 minutes, the cache did most of it.\" In the app or as a Telegram message." },
-              { t: "Approve and forget", b: "Posts appear on your calendar days ahead. Approve, tweak or remove them, and they publish on time." },
-            ].map((s, i) => (
-              <li key={s.t} className="rounded-xl border border-[var(--line)] bg-[var(--surface)] p-5">
-                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--ink)] text-[13px] font-semibold text-[var(--bg)]">{i + 1}</span>
-                <h3 className="mt-4 text-[16px] font-semibold">{s.t}</h3>
-                <p className="mt-1.5 text-[14px] leading-relaxed text-[var(--muted)]">{s.b}</p>
-              </li>
-            ))}
-          </ol>
-          <FlowDiagram />
+          <ScrollSteps />
+          <div className="mt-16 sm:mt-24">
+            <Reveal>
+              <FlowDiagram />
+            </Reveal>
+          </div>
         </Section>
+
+        {/* ---------- the real calendar ---------- */}
+        <section className="overflow-hidden border-t border-[var(--line)] bg-[var(--surface)] px-4 py-20 sm:py-28" aria-label="The PostFlow calendar">
+          <div className="mx-auto max-w-[1120px]">
+            <Reveal className="mx-auto mb-12 max-w-[680px] text-center">
+              <h2 className="text-[30px] font-semibold leading-[1.15] tracking-tight sm:text-[40px]">Your whole week, on one calendar.</h2>
+              <p className="mt-4 text-[16px] leading-relaxed text-[var(--muted)] sm:text-[17px]">The real app, not a mockup. Posts you have approved, posts waiting for your OK, and empty slots waiting for the right story.</p>
+            </Reveal>
+            {/* On phones the screenshot keeps a readable size and scrolls sideways. */}
+            <div className="-mx-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:overflow-visible sm:px-0">
+              <div data-tilt className="hero-shot min-w-[760px] sm:min-w-0">
+                <Shot name="calendar" alt="The PostFlow calendar: a week of scheduled LinkedIn and X posts, some approved, some waiting for approval" width={1280} height={800} />
+              </div>
+            </div>
+            <p className="mt-2 text-center text-[12px] text-[var(--subtle)] sm:hidden">Swipe to see the whole week</p>
+          </div>
+        </section>
 
         {/* ---------- reviewer ---------- */}
         <Section
           id="review"
-          eyebrow="The reviewer"
           title="Every draft is checked before it reaches your calendar."
           intro="Most AI writing tools stop at the first draft. PostFlow writes, then hands the draft to a separate reviewer that has one job: decide whether it is good enough to carry your name."
           className="border-t border-[var(--line)]"
@@ -275,7 +261,6 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
 
         {/* ---------- news + telegram ---------- */}
         <Section
-          eyebrow="Beyond your notes"
           title="News when it matters. Your phone when you're away."
           intro="Your notes make the best posts. PostFlow fills the gaps with news from your field, but only when the story gives your audience something to act on."
           className="border-t border-[var(--line)] bg-[var(--surface)]"
@@ -294,9 +279,9 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
             <Feature
               flip
               title="Run it from Telegram."
-              body="Every new post arrives in a Telegram chat with buttons. Approve it on the bus, or send a quick message about what you shipped and it becomes material for an upcoming post."
-              points={["Approve or swap a post with one tap", "Any message becomes a note", "/pause stops everything instantly"]}
-              visual={<TelegramMock />}
+              body="About ten minutes before each post goes out, the bot sends you the full text with buttons. Approve it on the bus, or send a quick message about what you shipped and it becomes material for an upcoming post."
+              points={["Approve, remove, reject or post early with one tap", "Any message becomes a note", "/queue shows the next days, /pause stops everything instantly"]}
+              visual={<TelegramLive />}
             />
             <Feature
               title="Have a link or an idea? Turn it into a post now."
@@ -310,7 +295,6 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
         {/* ---------- guardrails ---------- */}
         <Section
           id="safety"
-          eyebrow="Guardrails"
           title="Built to be left alone."
           intro="Automation you have to babysit is not automation. These safeguards are on for every account."
           className="border-t border-[var(--line)]"
@@ -323,8 +307,8 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
               { i: "pause" as const, t: "One switch to stop", b: "Pause everything from the app or Telegram. Removed posts are never refilled behind your back." },
               { i: "shield" as const, t: "Your accounts stay yours", b: "Official sign-in only. Access tokens are encrypted at rest, and you can disconnect at any time." },
               { i: "chart" as const, t: "Sensible volume", b: "Daily caps on AI calls and on time-sensitive posts, so your feed never turns into a news ticker." },
-            ].map((g) => (
-              <div key={g.t} className="bg-[var(--surface)] p-6">
+            ].map((g, i) => (
+              <div key={g.t} className="reveal bg-[var(--surface)] p-6" style={{ "--d": `${(i % 3) * 90}ms` } as React.CSSProperties}>
                 <Icon name={g.i} size={20} className="text-[var(--accent)]" />
                 <h3 className="mt-3 text-[16px] font-semibold">{g.t}</h3>
                 <p className="mt-1.5 text-[14px] leading-relaxed text-[var(--muted)]">{g.b}</p>
@@ -336,7 +320,6 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
         {/* ---------- pricing ---------- */}
         <Section
           id="pricing"
-          eyebrow="Pricing"
           title="Simple plans. Every one includes the reviewer."
           intro="Pick by how much you post. You can change plans or cancel at any time."
           className="border-t border-[var(--line)] bg-[var(--surface)]"
@@ -345,7 +328,7 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
         </Section>
 
         {/* ---------- FAQ ---------- */}
-        <Section id="faq" eyebrow="FAQ" title="Questions people ask first." className="border-t border-[var(--line)]">
+        <Section id="faq" title="Questions people ask first." className="border-t border-[var(--line)]">
           <div className="mx-auto max-w-[760px] divide-y divide-[var(--line)] border-y border-[var(--line)]">
             {FAQ.map((f) => (
               <details key={f.q} className="group py-5">
@@ -363,7 +346,6 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
         <section id="early-access" className="scroll-mt-20 border-t border-[var(--line)] bg-[var(--surface)] px-4 py-20 sm:py-24">
           <div className="mx-auto grid max-w-[1120px] items-center gap-10 lg:grid-cols-2 lg:gap-16">
             <div>
-              <p className="mb-3 text-[13px] font-semibold uppercase tracking-[0.08em] text-[var(--accent)]">{open ? "Get started" : "Early access"}</p>
               <h2 className="text-[30px] font-semibold leading-[1.15] tracking-tight sm:text-[38px]">Get your calendar filled before your next busy week.</h2>
               <p className="mt-4 text-[16px] leading-relaxed text-[var(--muted)] sm:text-[17px]">
                 {open
@@ -399,8 +381,8 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
             <span className="font-semibold">PostFlow</span>
           </div>
           <nav className="flex flex-wrap gap-x-6 gap-y-2">
-            {NAV.map((n) => (
-              <a key={n.href} href={n.href} className="hover:text-[var(--ink)]">{n.label}</a>
+            {[["#how", "How it works"], ["#review", "Reviewer"], ["#pricing", "Pricing"], ["#faq", "FAQ"]].map(([href, label]) => (
+              <a key={href} href={href} className="hover:text-[var(--ink)]">{label}</a>
             ))}
             <Link href="/login" className="hover:text-[var(--ink)]">Sign in</Link>
             <Link href="/terms" className="hover:text-[var(--ink)]">Terms</Link>

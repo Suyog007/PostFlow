@@ -149,3 +149,45 @@ h1, h2, h3 { text-wrap: balance; }
 .legal h2 { font-size: 17px; font-weight: 600; margin-top: 28px; }
 .legal ul { list-style: disc; padding-left: 20px; display: grid; gap: 6px; }
 .legal a { text-decoration: underline; }
+
+/* ---------- landing page motion ----------
+   Everything here is progressive: without JavaScript the page is fully visible, and with
+   prefers-reduced-motion the animations are switched off. */
+.hero-grid {
+  background-image: radial-gradient(var(--line-strong) 1px, transparent 1px);
+  background-size: 22px 22px;
+  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, #000 25%, transparent 75%);
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, #000 25%, transparent 75%);
+}
+
+@keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes flow-dash { to { stroke-dashoffset: -16; } }
+@keyframes pop-in { from { opacity: 0; transform: translateY(10px) scale(.97); } to { opacity: 1; transform: none; } }
+@keyframes caret { 50% { opacity: 0; } }
+
+.rise { animation: rise .75s cubic-bezier(.2, .7, .2, 1) both; animation-delay: var(--d, 0ms); }
+.pop-in { animation: pop-in .45s cubic-bezier(.2, .7, .2, 1) both; }
+.caret { display: inline-block; width: 1px; height: 1.1em; margin-left: 1px; vertical-align: text-bottom; background: currentColor; animation: caret 1s steps(1) infinite; }
+.flow-line { stroke-dasharray: 4 4; animation: flow-dash 1.2s linear infinite; }
+
+/* Scroll reveal: hidden only once the script is running, so no-JS visitors and crawlers see everything. */
+.reveal-ready .reveal:not([data-in]) { opacity: 0; transform: translateY(18px); }
+.reveal { transition: opacity .7s cubic-bezier(.2, .7, .2, 1), transform .7s cubic-bezier(.2, .7, .2, 1); transition-delay: var(--d, 0ms); }
+
+.lift { transition: transform .25s cubic-bezier(.2, .7, .2, 1), border-color .2s, box-shadow .25s; }
+.lift:hover { transform: translateY(-3px); border-color: var(--line-strong); }
+
+.cta-arrow { transition: transform .2s cubic-bezier(.2, .7, .2, 1); }
+.btn:hover .cta-arrow { transform: translateX(3px); }
+
+.hero-shot { transform-origin: 50% 0; transform: perspective(1800px) rotateX(calc(var(--tilt, 0) * 7deg)) translateY(calc(var(--tilt, 0) * 24px)) scale(calc(1 - var(--tilt, 0) * .04)); will-change: transform; }
+
+.step-panel { opacity: 0; transform: translateY(10px) scale(.985); transition: opacity .45s cubic-bezier(.2, .7, .2, 1), transform .45s cubic-bezier(.2, .7, .2, 1); pointer-events: none; }
+.step-panel[data-active="true"] { opacity: 1; transform: none; pointer-events: auto; }
+
+@media (prefers-reduced-motion: reduce) {
+  .rise, .pop-in, .caret, .flow-line { animation: none; }
+  .reveal-ready .reveal:not([data-in]) { opacity: 1; transform: none; }
+  .reveal, .lift, .cta-arrow, .step-panel { transition: none; }
+  .hero-shot { transform: none; }
+}
