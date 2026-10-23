@@ -34,6 +34,45 @@ describe("telegram inbound", () => {
     expect((await getSettings()).paused).toBe(false);
   });
 
+  it("/queue shows full posts grouped by day, with Approve and Remove buttons", async () => {
+    process.env.TELEGRAM_BOT_TOKEN = "123:test";
+    resetEnvCache();
+    const sent: { text: string; buttons?: { text: string }[][] }[] = [];
+    const long = "Two new PHP bugs let anyone upload and run code on a server that runs a vulnerable version. ".repeat(3).trim();
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async (_url: string, init?: { body?: string }) => {
+      const b = JSON.parse(init?.body ?? "{}");
+      if (b.text) sent.push({ text: b.text, buttons: b.reply_markup?.inline_keyboard });
+      return new Response(JSON.stringify({ ok: true }));
+    }) as typeof fetch;
+    try {
+      const tomorrow = new Date(Date.now() + 26 * 3_600_000);
+      const later = new Date(Date.now() + 74 * 3_600_000);
+      await db().insert(schema.posts).values([
+        { userId: me(), platform: "linkedin", pillar: "news", text: long, status: "scheduled", scheduledAt: new Date(Date.now() + 2 * 3_600_000) },
+        { userId: me(), platform: "x", pillar: "news", text: "Second post of the first day.", status: "scheduled", scheduledAt: new Date(Date.now() + 3 * 3_600_000) },
+        { userId: me(), platform: "x", pillar: "news", text: "A post for tomorrow.", status: "scheduled", scheduledAt: tomorrow, approvedAt: new Date() },
+        { userId: me(), platform: "x", pillar: "news", text: "A post for later.", status: "scheduled", scheduledAt: later },
+      ]);
+      await handleTelegramUpdate(msg("/queue"));
+    } finally {
+      globalThis.fetch = realFetch;
+      delete process.env.TELEGRAM_BOT_TOKEN;
+      resetEnvCache();
+    }
+    expect(sent[0].text).toMatch(/4 scheduled posts over 3 days/);
+    const day1 = sent.find((m) => /Today|Tomorrow|^📅/.test(m.text) && m.text.includes("Second post"))!;
+    expect(day1.text).toContain(long); // the whole post, not a cut-off
+    expect(day1.text).toMatch(/1\. LinkedIn/);
+    expect(day1.text).toMatch(/2\. X/);
+    expect(day1.buttons!.length).toBe(2);
+    expect(day1.buttons![0].map((b) => b.text)).toEqual(["✅ Approve 1", "🗑 Remove 1"]);
+    expect(sent.some((m) => m.text.includes("Tomorrow"))).toBe(true);
+    const approved = sent.find((m) => m.text.includes("A post for tomorrow"))!;
+    expect(approved.text).toContain("✅ approved");
+    expect(approved.buttons![0].map((b) => b.text)).toEqual(["🗑 Remove 1"]);
+  });
+
   it("the Remove button cancels a scheduled post", async () => {
     const [p] = await db().insert(schema.posts).values({ userId: me(), platform: "x", pillar: "own_work", text: "t", status: "scheduled", scheduledAt: new Date(Date.now() + 3_600_000) }).returning();
     await handleTelegramUpdate({ callback_query: { id: "1", data: `rm:${p.id}`, message: { chat: { id: 42 } } } });

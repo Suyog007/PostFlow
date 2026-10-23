@@ -1,7 +1,8 @@
 import { and, desc, eq } from "drizzle-orm";
 import { db, schema } from "./db/client";
 import { uid, withUser } from "./context";
-import { entitlementOf } from "./billing/plans";
+import { entitlementFor, entitlementOf } from "./billing/plans";
+import { DateTime } from "luxon";
 import { sendTo, telegramApi } from "./telegram";
 import { getSettings, saveSettings } from "./settings";
 import { approvePost, removePost, PostError, upcoming } from "./posts";
@@ -27,7 +28,7 @@ Other ways to feed me:
 - Any plain text is saved as a note (what you built, learned or think). Tags: #local, #learning
 - A plain link is a story tip: I cross-check it against other publishers and post it only if it holds up
 
-/queue  upcoming posts
+/queue  upcoming posts by day, in full, with Approve and Remove buttons
 /pause  stop all posting
 /resume start again
 /unlink disconnect this chat from PostFlow`;
@@ -135,9 +136,50 @@ async function handleForUser(u: Update, chat: number): Promise<void> {
     return void (await sendTo(chat, "▶️ Resumed."));
   }
   if (text === "/queue") {
-    const q = await upcoming(10);
+    const q = await upcoming(40);
     if (!q.length) return void (await sendTo(chat, "Nothing scheduled yet."));
-    return void (await sendTo(chat, q.map((p) => `${p.platform === "x" ? "X" : "LinkedIn"} · ${formatLocal(p.scheduledAt, s.timezone)}\n${p.text.slice(0, 120).replace(/\n/g, " ")}`).join("\n\n"), q.slice(0, 5).map((p) => [{ text: `🗑 Remove ${p.platform === "x" ? "X" : "LI"} ${formatLocal(p.scheduledAt, s.timezone)}`, data: `rm:${p.id}` }])));
+    const approvalOn = s.requireApproval || !(await entitlementFor(userId)).features.autoMode;
+    const waiting = (p: (typeof q)[number]) => approvalOn && !p.approvedAt;
+    const now = DateTime.now().setZone(s.timezone);
+    const dayLabel = (d: DateTime) => {
+      const diff = Math.round(d.startOf("day").diff(now.startOf("day"), "days").days);
+      const date = d.toFormat("ccc d LLL");
+      return diff === 0 ? `Today · ${date}` : diff === 1 ? `Tomorrow · ${date}` : d.toFormat("cccc · d LLL");
+    };
+    const days = new Map<string, { label: string; posts: typeof q }>();
+    for (const p of q) {
+      const d = DateTime.fromJSDate(p.scheduledAt, { zone: s.timezone });
+      const key = d.toISODate()!;
+      if (!days.has(key)) days.set(key, { label: dayLabel(d), posts: [] });
+      days.get(key)!.posts.push(p);
+    }
+    const nWaiting = q.filter(waiting).length;
+    await sendTo(chat, `🗓 ${q.length} scheduled post${q.length === 1 ? "" : "s"} over ${days.size} day${days.size === 1 ? "" : "s"}${approvalOn ? (nWaiting ? ` · ${nWaiting} waiting for your OK` : " · all approved") : ""}`);
+    let n = 0;
+    for (const day of days.values()) {
+      // One message per day, with the full text of every post and its own buttons.
+      const rows: { text: string; data: string }[][] = [];
+      let body = `📅 ${day.label}`;
+      day.posts.forEach((p, i) => {
+        n++;
+        const time = DateTime.fromJSDate(p.scheduledAt, { zone: s.timezone }).toFormat("HH:mm");
+        body += `\n\n${i + 1}. ${p.platform === "x" ? "X" : "LinkedIn"} · ${time}${approvalOn ? (p.approvedAt ? " · ✅ approved" : " · ⏳ needs your OK") : ""}\n${p.text}`;
+        const row = [];
+        if (waiting(p)) row.push({ text: `✅ Approve ${i + 1}`, data: `ok:${p.id}` });
+        row.push({ text: `🗑 Remove ${i + 1}`, data: `rm:${p.id}` });
+        rows.push(row);
+      });
+      // Telegram messages hold 4,000 characters; a very long day is split per post.
+      if (body.length <= 3900) await sendTo(chat, body, rows);
+      else {
+        await sendTo(chat, `📅 ${day.label}`);
+        for (const [i, p] of day.posts.entries()) {
+          const time = DateTime.fromJSDate(p.scheduledAt, { zone: s.timezone }).toFormat("HH:mm");
+          await sendTo(chat, `${i + 1}. ${p.platform === "x" ? "X" : "LinkedIn"} · ${time}${approvalOn ? (p.approvedAt ? " · ✅ approved" : " · ⏳ needs your OK") : ""}\n${p.text}`, [rows[i]]);
+        }
+      }
+    }
+    return;
   }
   const cmd = text.match(/^\/(post|now|draft|mine)(?:@\w+)?\s*([\s\S]*)$/i);
   if (cmd) {
