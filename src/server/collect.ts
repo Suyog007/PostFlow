@@ -6,7 +6,7 @@ import { DEFAULT_SOURCES } from "./sources-default";
 import { isPublicHttpUrl, normalizeUrl } from "./net";
 import { addEvent } from "./events";
 
-const parser = new Parser({ timeout: 15_000, headers: { "User-Agent": "Mozilla/5.0 (compatible; PostFlowBot/0.2)" } });
+const parser = new Parser({ timeout: 15_000, headers: { "User-Agent": "Mozilla/5.0 (compatible; PostFlowBot/0.2)", Accept: "application/rss+xml, application/atom+xml, application/xml;q=0.9, text/xml;q=0.9, */*;q=0.8" } });
 
 /** Inserts the default feeds the first time only (never re-adds ones the owner deleted). */
 export async function seedSourcesIfEmpty() {
