@@ -5,7 +5,8 @@ import { entitlementFor, entitlementOf } from "./billing/plans";
 import { DateTime } from "luxon";
 import { sendTo, telegramApi } from "./telegram";
 import { getSettings, saveSettings } from "./settings";
-import { approvePost, removePost, PostError, upcoming } from "./posts";
+import { approvePost, postNow, removePost, PostError, upcoming } from "./posts";
+import { publishDue } from "./publisher";
 import { rejectAndReplace } from "./generate";
 import { formatLocal } from "./slots";
 import type { Pillar } from "./db/schema";
@@ -28,7 +29,7 @@ Other ways to feed me:
 - Any plain text is saved as a note (what you built, learned or think). Tags: #local, #learning
 - A plain link is a story tip: I cross-check it against other publishers and post it only if it holds up
 
-/queue  upcoming posts by day, in full, with Approve and Remove buttons
+/queue  upcoming posts by day, in full, with Approve, Post now and Remove buttons
 /pause  stop all posting
 /resume start again
 /unlink disconnect this chat from PostFlow`;
@@ -109,6 +110,35 @@ async function handleForUser(u: Update, chat: number): Promise<void> {
         await run(); // outside a request (tests)
       }
       return;
+    } else if (data.startsWith("pn:")) {
+      // Posting for real cannot be undone, so ask first.
+      const p = await db().query.posts.findFirst({ where: and(eq(schema.posts.id, data.slice(3)), eq(schema.posts.userId, userId)) });
+      if (!p || !["scheduled", "draft", "failed", "cancelled"].includes(p.status)) {
+        answer = "That post is not waiting to go out any more.";
+      } else {
+        await telegramApi("answerCallbackQuery", { callback_query_id: u.callback_query.id });
+        await sendTo(chat, `🚀 Post this on ${p.platform === "x" ? "X" : "LinkedIn"} right now, ahead of its schedule?\n\n${p.text}`, [[{ text: "🚀 Yes, post now", data: `py:${p.id}` }, { text: "Cancel", data: "no:" }]]);
+        return;
+      }
+    } else if (data.startsWith("py:")) {
+      if ((await getSettings()).paused) {
+        answer = "Posting is paused. Send /resume first.";
+      } else {
+        try {
+          await postNow(data.slice(3));
+          answer = "🚀 Posting now…";
+          const run = () => withUser(userId, () => publishDue().then(() => undefined));
+          try {
+            after(run);
+          } catch {
+            await run(); // outside a request (tests)
+          }
+        } catch (err) {
+          answer = err instanceof PostError ? err.message : "Could not post it.";
+        }
+      }
+    } else if (data === "no:") {
+      answer = "Cancelled. Nothing was posted.";
     } else if (data.startsWith("rm:")) {
       try {
         await removePost(data.slice(3));
@@ -166,6 +196,7 @@ async function handleForUser(u: Update, chat: number): Promise<void> {
         body += `\n\n${i + 1}. ${p.platform === "x" ? "X" : "LinkedIn"} · ${time}${approvalOn ? (p.approvedAt ? " · ✅ approved" : " · ⏳ needs your OK") : ""}\n${p.text}`;
         const row = [];
         if (waiting(p)) row.push({ text: `✅ Approve ${i + 1}`, data: `ok:${p.id}` });
+        row.push({ text: `🚀 Now ${i + 1}`, data: `pn:${p.id}` });
         row.push({ text: `🗑 Remove ${i + 1}`, data: `rm:${p.id}` });
         rows.push(row);
       });

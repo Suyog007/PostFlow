@@ -66,11 +66,82 @@ describe("telegram inbound", () => {
     expect(day1.text).toMatch(/1\. LinkedIn/);
     expect(day1.text).toMatch(/2\. X/);
     expect(day1.buttons!.length).toBe(2);
-    expect(day1.buttons![0].map((b) => b.text)).toEqual(["✅ Approve 1", "🗑 Remove 1"]);
+    expect(day1.buttons![0].map((b) => b.text)).toEqual(["✅ Approve 1", "🚀 Now 1", "🗑 Remove 1"]);
     expect(sent.some((m) => m.text.includes("Tomorrow"))).toBe(true);
     const approved = sent.find((m) => m.text.includes("A post for tomorrow"))!;
     expect(approved.text).toContain("✅ approved");
-    expect(approved.buttons![0].map((b) => b.text)).toEqual(["🗑 Remove 1"]);
+    expect(approved.buttons![0].map((b) => b.text)).toEqual(["🚀 Now 1", "🗑 Remove 1"]);
+  });
+
+  it("Post now asks first, then publishes straight away and keeps the planned slot empty", async () => {
+    const { fillCalendar } = await import("../src/server/generate");
+    const { saveSettings } = await import("../src/server/settings");
+    const { connectAccount, fakePlatform, fakeLLM, GOOD_REVIEW } = await import("./helpers");
+    process.env.TELEGRAM_BOT_TOKEN = "123:test";
+    resetEnvCache();
+    const sent: { text: string; buttons?: { text: string; callback_data: string }[][] }[] = [];
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async (_url: string, init?: { body?: string }) => {
+      const b = JSON.parse(init?.body ?? "{}");
+      if (b.text) sent.push({ text: b.text, buttons: b.reply_markup?.inline_keyboard });
+      return new Response(JSON.stringify({ ok: true }));
+    }) as typeof fetch;
+    try {
+      await saveSettings({ requireApproval: true, slots: [{ platform: "x", days: [1, 2, 3, 4, 5, 6, 7], time: "09:30" }], horizonDays: 2, fastLane: { enabled: false, minRelevance: 9, maxPerDay: 1, leadMinutes: 45, platforms: ["x"], quietStart: "23:00", quietEnd: "07:00" } });
+      await connectAccount("x");
+      const out = fakePlatform("x", () => ({ kind: "success", externalIds: ["1"], url: "https://x.com/me/status/1" }));
+      const slot = new Date(Date.now() + 5 * 3_600_000);
+      const [p] = await db().insert(schema.posts).values({ userId: me(), platform: "x", pillar: "news", text: "Ship this one early.", status: "scheduled", scheduledAt: slot }).returning();
+
+      // Step 1: tapping 🚀 Now only asks. Nothing is published yet.
+      await handleTelegramUpdate({ callback_query: { id: "1", data: `pn:${p.id}`, message: { chat: { id: 42 } } } });
+      expect(out).toHaveLength(0);
+      const ask = sent.find((m) => m.text.includes("right now, ahead of its schedule"))!;
+      expect(ask.buttons![0].map((b) => b.callback_data)).toEqual([`py:${p.id}`, "no:"]);
+
+      // Cancel does nothing.
+      await handleTelegramUpdate({ callback_query: { id: "2", data: "no:", message: { chat: { id: 42 } } } });
+      expect(out).toHaveLength(0);
+
+      // Step 2: confirming publishes it, even though approval mode is on (asking is an approval).
+      await handleTelegramUpdate({ callback_query: { id: "3", data: `py:${p.id}`, message: { chat: { id: 42 } } } });
+      expect(out).toHaveLength(1);
+      const after = (await db().select().from(schema.posts).where(eq(schema.posts.id, p.id)))[0];
+      expect(after.status).toBe("published");
+      expect(after.slotAt!.getTime()).toBe(slot.getTime());
+
+      // The slot it vacated is not filled with another post.
+      await db().insert(schema.items).values({ userId: me(), url: "https://example.com/a", title: "Acme ships Postgres backups in seconds", summary: "Backups got faster.", pillar: "news", publishedAt: new Date(Date.now() - 3_600_000), relevance: 9, urgency: "week", analyzedAt: new Date() });
+      fakeLLM((req) => (req.schemaName === "write_post" ? { text: "Acme shipped faster backups, per its changelog. Small teams with big nightly jobs should look first." } : GOOD_REVIEW));
+      await fillCalendar({ max: 5 });
+      const planned = (await db().select().from(schema.posts)).filter((x) => x.id !== p.id && x.status === "scheduled");
+      expect(planned.map((x) => x.scheduledAt.getTime())).not.toContain(slot.getTime());
+    } finally {
+      globalThis.fetch = realFetch;
+      delete process.env.TELEGRAM_BOT_TOKEN;
+      resetEnvCache();
+    }
+  });
+
+  it("/queue shows a Post now button on every post", async () => {
+    process.env.TELEGRAM_BOT_TOKEN = "123:test";
+    resetEnvCache();
+    const sent: { buttons?: { text: string }[][] }[] = [];
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async (_url: string, init?: { body?: string }) => {
+      const b = JSON.parse(init?.body ?? "{}");
+      sent.push({ buttons: b.reply_markup?.inline_keyboard });
+      return new Response(JSON.stringify({ ok: true }));
+    }) as typeof fetch;
+    try {
+      await db().insert(schema.posts).values({ userId: me(), platform: "x", pillar: "news", text: "One post.", status: "scheduled", scheduledAt: new Date(Date.now() + 3_600_000) });
+      await handleTelegramUpdate(msg("/queue"));
+    } finally {
+      globalThis.fetch = realFetch;
+      delete process.env.TELEGRAM_BOT_TOKEN;
+      resetEnvCache();
+    }
+    expect(sent.flatMap((m) => m.buttons ?? []).flat().map((b) => b.text)).toContain("🚀 Now 1");
   });
 
   it("the Remove button cancels a scheduled post", async () => {

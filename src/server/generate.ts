@@ -797,9 +797,10 @@ export async function fillCalendar(opts: { max?: number; now?: Date; deadline?: 
     if (!all.length) return { ...res, idle: "no slots configured" };
 
     const taken = await db()
-      .select({ platform: schema.posts.platform, at: schema.posts.scheduledAt, status: schema.posts.status, createdAt: schema.posts.createdAt })
+      .select({ platform: schema.posts.platform, at: sql<Date>`coalesce(${schema.posts.slotAt}, ${schema.posts.scheduledAt})`.mapWith((v) => new Date(v)), status: schema.posts.status, createdAt: schema.posts.createdAt })
       .from(schema.posts)
-      .where(and(await mine(schema.posts), gte(schema.posts.scheduledAt, from), lte(schema.posts.scheduledAt, to)));
+      // A post sent early still holds the slot it was planned for.
+      .where(and(await mine(schema.posts), sql`coalesce(${schema.posts.slotAt}, ${schema.posts.scheduledAt}) >= ${from.toISOString()}::timestamptz and coalesce(${schema.posts.slotAt}, ${schema.posts.scheduledAt}) <= ${to.toISOString()}::timestamptz`));
     const occupied = new Set(taken.filter((t) => (LIVE as readonly string[]).includes(t.status)).map((t) => `${t.platform}@${t.at.getTime()}`));
     const attempts = new Map<string, number>();
     // Only recent rejections count, so a slot that failed gets another try once new stories have come in.

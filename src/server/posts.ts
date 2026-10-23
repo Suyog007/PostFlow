@@ -69,8 +69,10 @@ export async function postNow(id: string) {
     at = new Date(at.getTime() - 1000);
   }
   if (!["scheduled", "failed", "cancelled", "draft"].includes(p.status)) throw new PostError(`A ${p.status} post cannot be posted now.`);
+  // Posting early keeps its planned slot reserved, so autopilot does not write another post for it.
+  const slotAt = p.slotAt ?? (p.scheduledAt.getTime() > Date.now() + 60_000 ? p.scheduledAt : null);
   // Asking to post now is an approval.
-  await db().update(schema.posts).set({ scheduledAt: at, status: "scheduled", approvedAt: p.approvedAt ?? new Date(), error: null, attempts: 0, claimedAt: null, updatedAt: new Date() }).where(eq(schema.posts.id, id));
+  await db().update(schema.posts).set({ scheduledAt: at, slotAt, status: "scheduled", approvedAt: p.approvedAt ?? new Date(), error: null, attempts: 0, claimedAt: null, updatedAt: new Date() }).where(eq(schema.posts.id, id));
 }
 
 /** While approval is required, only approved posts are published. */

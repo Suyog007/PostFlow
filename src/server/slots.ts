@@ -1,5 +1,5 @@
 import { DateTime } from "luxon";
-import { and, eq, gt, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db, schema } from "./db/client";
 import { uid } from "./context";
 import type { Settings, Slot } from "./settings";
@@ -49,9 +49,9 @@ export function afterQuietHours(at: Date, zone: string, start: string, end: stri
 /** The next configured slot for a platform that no live post uses (null if none in the next 14 days). */
 export async function nextFreeSlot(settings: Pick<Settings, "slots" | "timezone">, platform: Slot["platform"], after: Date): Promise<Date | null> {
   const live = await db()
-    .select({ at: schema.posts.scheduledAt })
+    .select({ at: sql<Date>`coalesce(${schema.posts.slotAt}, ${schema.posts.scheduledAt})`.mapWith((v) => new Date(v)) })
     .from(schema.posts)
-    .where(and(eq(schema.posts.userId, await uid()), eq(schema.posts.platform, platform), inArray(schema.posts.status, ["scheduled", "publishing", "published", "unconfirmed"]), gt(schema.posts.scheduledAt, after)));
+    .where(and(eq(schema.posts.userId, await uid()), eq(schema.posts.platform, platform), inArray(schema.posts.status, ["scheduled", "publishing", "published", "unconfirmed"]), sql`coalesce(${schema.posts.slotAt}, ${schema.posts.scheduledAt}) > ${after.toISOString()}::timestamptz`));
   const taken = new Set(live.map((l) => l.at.getTime()));
   return slotsBetween(settings, after, new Date(after.getTime() + 14 * 86_400_000)).find((s) => s.platform === platform && !taken.has(s.at.getTime()))?.at ?? null;
 }

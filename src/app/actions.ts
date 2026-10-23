@@ -19,6 +19,7 @@ import { disconnectAccount, startOAuth } from "@/server/platforms/accounts";
 import { registerWebhook, unlinkTelegram } from "@/server/telegram";
 import { fillNowForUser, runForUser, startBackgroundFill, tick } from "@/server/tick";
 import { addEvent } from "@/server/events";
+import { publishDue } from "@/server/publisher";
 import { fillNowDays, recheckPost, rejectAndReplace, rewordPost, swapToAlternative } from "@/server/generate";
 import { isPublicHttpUrl } from "@/server/net";
 
@@ -67,7 +68,17 @@ export async function reschedulePostAction(form: FormData) {
 }
 export async function postNowAction(form: FormData) {
   const id = String(form.get("id"));
-  await guarded(`/posts/${id}`, () => postNow(id), "Queued. It goes out on the next scheduler tick (within about 5 minutes).");
+  const user = await requireActiveUser();
+  await guarded(
+    `/posts/${id}`,
+    async () => {
+      if ((await withUser(user.id, () => getSettings())).paused) throw new Error("Posting is paused. Resume it in Settings first.");
+      await postNow(id);
+      // Publish straight away instead of waiting for the next scheduler run.
+      after(() => withUser(user.id, () => publishDue()).then(() => undefined).catch(() => undefined));
+    },
+    "Posting now. It should be live within a minute. Its original slot stays empty.",
+  );
 }
 export async function approvePostAction(form: FormData) {
   const id = String(form.get("id"));

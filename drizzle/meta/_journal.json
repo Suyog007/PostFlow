@@ -50,6 +50,13 @@
       "when": 1792718390466,
       "tag": "0006_item_kind",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792722777955,
+      "tag": "0007_post_slot",
+      "breakpoints": true
     }
   ]
 }
