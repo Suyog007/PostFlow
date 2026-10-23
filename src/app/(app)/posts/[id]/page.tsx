@@ -6,7 +6,7 @@ import { requireActiveUser } from "@/server/auth";
 import { entitlementOf } from "@/server/billing/plans";
 import { db, schema } from "@/server/db/client";
 import { getSettings } from "@/server/settings";
-import { approvePostAction, postNowAction, rejectPostAction, removePostAction, reschedulePostAction, resolveAction, restorePostAction, rewordPostAction, scheduleDraftAction, unapprovePostAction } from "@/app/actions";
+import { approvePostAction, recheckPostAction, postNowAction, rejectPostAction, removePostAction, reschedulePostAction, resolveAction, restorePostAction, rewordPostAction, scheduleDraftAction, unapprovePostAction } from "@/app/actions";
 import { SubmitButton } from "@/components/submit-button";
 import { PostEditor } from "@/components/post-editor";
 import { Icon, PlatformGlyph, StatusBadge } from "@/components/ui";
@@ -19,6 +19,8 @@ interface ReviewData {
   worth_posting?: number; factual?: number; slop?: number; claims?: Claim[]; issues?: string[]; rounds?: number;
   checks?: { severity: string; message: string }[]; material?: { kind: string; label: string }; verdict?: { approved: boolean; reasons: string[] };
   verification?: Verif | null;
+  evidence?: { claim: string; quote: string; found: boolean }[];
+  rechecked?: number;
 }
 
 function Meter({ label, value }: { label: string; value?: number }) {
@@ -90,6 +92,12 @@ export default async function PostPage({ params, searchParams }: { params: Promi
         {["scheduled", "failed", "draft"].includes(p.status) && <form action={postNowAction}><input type="hidden" name="id" value={p.id} /><button className="btn"><Icon name="send" size={14} />Post now</button></form>}
         {open && !needsApproval && <form action={rejectPostAction}><input type="hidden" name="id" value={p.id} /><SubmitButton className="btn" pending="Finding another story…"><Icon name="x" size={14} />Reject, find another</SubmitButton></form>}
         {open && <form action={removePostAction}><input type="hidden" name="id" value={p.id} /><button className="btn btn-danger"><Icon name="trash" size={14} />{p.status === "draft" ? "Discard" : "Remove from calendar"}</button></form>}
+        {p.status === "rejected" && (r.rechecked ?? 0) < 2 && (
+          <form action={recheckPostAction}>
+            <input type="hidden" name="id" value={p.id} />
+            <SubmitButton className="btn btn-accent" pending="Checking again…"><Icon name="shield" size={14} />Check again</SubmitButton>
+          </form>
+        )}
         {["cancelled", "failed", "expired"].includes(p.status) && <form action={restorePostAction}><input type="hidden" name="id" value={p.id} /><button className="btn">Put back on calendar</button></form>}
       </div>
 
@@ -165,6 +173,25 @@ export default async function PostPage({ params, searchParams }: { params: Promi
                   </ul>
                 </div>
               )}
+              {r.evidence && r.evidence.length > 0 && (
+                <div>
+                  <div className="mb-1 text-[12px] font-medium text-[var(--muted)]">Where the writer says each fact comes from (not posted)</div>
+                  <ul className="divide">
+                    {r.evidence.map((e, i) => (
+                      <li key={i} className="py-1.5">
+                        <div className="flex gap-2">
+                          <Icon name={e.found ? "check" : "alert"} size={14} className={`mt-0.5 flex-none ${e.found ? "text-[var(--good)]" : "text-[var(--bad)]"}`} />
+                          <span>{e.claim}</span>
+                        </div>
+                        <blockquote className="ml-6 mt-0.5 border-l-2 border-[var(--line)] pl-2 text-[12px] text-[var(--subtle)]">
+                          &ldquo;{e.quote}&rdquo;{!e.found && <span className="text-[var(--bad)]"> · these words are not in the source</span>}
+                        </blockquote>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {r.rechecked ? <p className="text-[12px] text-[var(--subtle)]">Checked again {r.rechecked === 1 ? "once" : "twice"} by a more careful second review.</p> : null}
               {r.verdict && !r.verdict.approved && <p className="text-[var(--bad)]">Concerns: {r.verdict.reasons.join(" · ")}</p>}
               {r.checks && r.checks.length > 0 && <ul className="text-[12px] text-[var(--subtle)]">{r.checks.map((c, i) => <li key={i}>{c.severity}: {c.message}</li>)}</ul>}
               <p className="text-[12px] text-[var(--subtle)]">Reviewed in {r.rounds ?? 1} round{(r.rounds ?? 1) === 1 ? "" : "s"}.</p>

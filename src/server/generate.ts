@@ -238,7 +238,38 @@ export async function chooseMaterial(platform: Platform, slotAt: Date, s: Settin
 // Writer and reviewer
 // ---------------------------------------------------------------------------
 
-const writerOut = z.object({ text: z.string() });
+const writerOut = z.object({
+  text: z.string(),
+  /** For the fact-checker only, never posted: the words in the material behind each factual claim. */
+  evidence: z.array(z.object({ claim: z.string(), quote: z.string() })).optional(),
+});
+
+export interface Evidence {
+  claim: string;
+  quote: string;
+  /** Set by code: the quote really appears in the material. */
+  found: boolean;
+}
+
+const normQuote = (t: string) =>
+  t
+    .toLowerCase()
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201c\u201d]/g, '"')
+    .replace(/[\u2010-\u2015]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim();
+
+/** True when every part of the quote (split on "...") appears word for word in the material. */
+export function quoteInSource(quote: string, source: string): boolean {
+  const src = normQuote(source);
+  const parts = normQuote(quote)
+    .replace(/^["']+|["']+$/g, "")
+    .split(/\s*(?:\.\.\.|\u2026)\s*/)
+    .map((x) => x.replace(/^[\s.,;:"']+|[\s.,;:"']+$/g, ""))
+    .filter((x) => x.length >= 4);
+  return parts.length > 0 && parts.every((x) => src.includes(x));
+}
 
 function describeMaterial(m: Material): string {
   if (m.kind === "note") return `OWNER NOTE (first-person claims allowed only as stated here):\n${m.source}`;
@@ -256,7 +287,7 @@ function sanitize(text: string): string {
     .trim();
 }
 
-async function write(m: Material, platform: Platform, s: Settings, recent: string[], feedback?: { previous: string; notes: string[] }): Promise<string> {
+async function write(m: Material, platform: Platform, s: Settings, recent: string[], feedback?: { previous: string; notes: string[] }): Promise<{ text: string; evidence: Evidence[] }> {
   // Recent posts come first and are labelled as style-only: placed after the material, the model sometimes wrote about them instead.
   const user = [
     recent.length ? `STYLE CONTRAST ONLY (your recent posts; NOT material for this post, never write about their subjects). Do not reuse their openings, phrases or structure:\n${recent.slice(0, 8).map((r) => `- ${r.replace(/\s+/g, " ").slice(0, 140)}`).join("\n")}\n` : "",
@@ -264,8 +295,9 @@ async function write(m: Material, platform: Platform, s: Settings, recent: strin
     feedback ? `\nYour previous draft:\n"""${feedback.previous}"""\nAn editor rejected it for these reasons. Fix every one, keep what worked, do not add new facts:\n${feedback.notes.map((n) => `- ${n}`).join("\n")}` : "",
     "\nWrite the post about the material above and nothing else.",
   ].join("\n");
-  const res = await runTask({ task: "write_post", role: "writer", system: writerSystem(s, platform), user, output: writerOut, maxTokens: 900, temperature: 0.7 });
-  return sanitize(res.text);
+  const res = await runTask({ task: "write_post", role: "writer", system: writerSystem(s, platform), user, output: writerOut, maxTokens: 1200, temperature: 0.7 });
+  const evidence = (res.evidence ?? []).slice(0, 10).map((e) => ({ claim: e.claim.slice(0, 300), quote: e.quote.slice(0, 500), found: quoteInSource(e.quote, m.source) }));
+  return { text: sanitize(res.text), evidence };
 }
 
 const reviewOut = z.object({
@@ -279,14 +311,21 @@ const reviewOut = z.object({
 });
 export type Review = z.infer<typeof reviewOut>;
 
-async function review(m: Material, text: string, platform: Platform, recent: string[]): Promise<Review> {
+async function review(m: Material, text: string, platform: Platform, recent: string[], extra: { evidence?: Evidence[]; earlier?: string[]; effort?: string } = {}): Promise<Review> {
   const user = [
     `Platform: ${platform === "x" ? "X" : "LinkedIn"}`,
     describeMaterial(m),
     `DRAFT:\n"""${text}"""`,
+    extra.evidence?.length
+      ? `WRITER'S EVIDENCE (not part of the post; where the writer says each claim comes from. Code checked each quote against the material: FOUND = the exact words are there, NOT FOUND = they are not):\n${extra.evidence.map((e) => `- claim: ${e.claim}\n  quote: "${e.quote}" [${e.found ? "FOUND" : "NOT FOUND"}]`).join("\n")}`
+      : "",
+    extra.earlier?.length
+      ? `A FIRST REVIEWER HELD THIS DRAFT BACK FOR THESE REASONS. Check each one against the material. Keep the ones that are right; drop the ones that are wrong (for example, an opinion framed as "I'd expect" is not a claim of fact). Do not invent new problems to replace them:\n${extra.earlier.map((x) => `- ${x}`).join("\n")}`
+      : "",
     `RECENT POSTS (for duplicate detection):\n${recent.slice(0, 10).map((r) => `- ${r.replace(/\s+/g, " ").slice(0, 200)}`).join("\n") || "(none)"}`,
-  ].join("\n\n");
-  return runTask({ task: "review_post", role: "reviewer", system: REVIEWER_SYSTEM, user, output: reviewOut, maxTokens: 1500, temperature: 0.1 });
+  ];
+  // Room for the model's reasoning as well as the JSON answer.
+  return runTask({ task: extra.earlier !== undefined ? "recheck_post" : "review_post", role: "reviewer", system: REVIEWER_SYSTEM, user: user.filter(Boolean).join("\n\n"), output: reviewOut, maxTokens: 4000, temperature: 0.1, reasoningEffort: extra.effort });
 }
 
 export interface Verdict {
@@ -341,7 +380,8 @@ export async function produceForSlot(platform: Platform, at: Date, m: Material, 
   const recent = await recentTexts(platform);
   // For your own article the link is part of the post, so length checks and the reviewer see it.
   const compose = (t: string) => (m.ownUrl ? (platform === "linkedin" ? `${t}\n\n${m.ownUrl}` : `${t} ${m.ownUrl}`) : t);
-  let text = await write(m, platform, s, recent);
+  let w = await write(m, platform, s, recent);
+  let text = w.text;
   let verdict: Verdict = { approved: false, reasons: [] };
   let lastReview: Review | null = null;
   let checks: Check[] = [];
@@ -349,19 +389,20 @@ export async function produceForSlot(platform: Platform, at: Date, m: Material, 
 
   for (let round = 0; round < maxRounds; round++) {
     checks = runChecks(compose(text), platform, recent);
-    lastReview = await review(m, compose(text), platform, recent);
+    lastReview = await review(m, compose(text), platform, recent, { evidence: w.evidence });
     verdict = gate(lastReview, checks, m);
     rounds.push({ text, reasons: verdict.reasons });
     if (verdict.approved || round === maxRounds - 1) break;
     // A story that is simply not worth posting will not be rescued by rewording; skip it.
     if (!opts.requested && lastReview.worth_posting <= 4) break;
-    text = await write(m, platform, s, recent, { previous: text, notes: [...verdict.reasons, lastReview.revision_instructions].filter(Boolean) });
+    w = await write(m, platform, s, recent, { previous: text, notes: [...verdict.reasons, lastReview.revision_instructions].filter(Boolean) });
+    text = w.text;
   }
 
   const finalText = m.ownUrl ? compose(text) : verdict.approved ? withLink(text, m, platform, s) : text;
   // Posts you asked for are never thrown away: if the reviewer is unhappy or you wanted a draft, you get a draft.
   const status: "scheduled" | "rejected" | "draft" = opts.requested ? (verdict.approved && opts.requested === "schedule" ? "scheduled" : "draft") : verdict.approved ? "scheduled" : "rejected";
-  const reviewJson = { ...lastReview, checks, verdict, rounds: rounds.length, material: { kind: m.kind, label: m.label }, verification: m.verification ?? null, reviewedAt: new Date().toISOString() } as Record<string, unknown>;
+  const reviewJson = { ...lastReview, checks, verdict, evidence: w.evidence, rounds: rounds.length, material: { kind: m.kind, label: m.label }, verification: m.verification ?? null, reviewedAt: new Date().toISOString() } as Record<string, unknown>;
   const [row] = await db()
     .insert(schema.posts)
     .values({
@@ -430,14 +471,14 @@ export async function rewordPost(id: string, feedback: string, remember: boolean
   const platform = p.platform as Platform;
   const m = await materialForPost(p);
   const recent = (await recentTexts(platform)).filter((t) => t !== p.text);
-  const text = await write(m, platform, s, recent, {
+  const { text, evidence } = await write(m, platform, s, recent, {
     previous: p.text,
     notes: [`The owner says the content is fine but the wording does not sound like them: "${note}"`, "Keep the same story, facts and point. Change only the wording."],
   });
   const checks = runChecks(text, platform, recent);
   const block = checks.find((c) => c.severity === "block" && (c.code === "too_long" || c.code === "empty"));
   if (block) throw new Error(`The rewrite came out unusable (${block.message}) Try again.`);
-  const r = await review(m, text, platform, recent);
+  const r = await review(m, text, platform, recent, { evidence });
   const verdict = gate(r, checks, m);
   const finalText = withLink(text, m, platform, s);
   await db()
@@ -445,13 +486,59 @@ export async function rewordPost(id: string, feedback: string, remember: boolean
     .set({
       text: finalText,
       approvedAt: null,
-      review: { ...(p.review ?? {}), ...r, checks, verdict, reworded: note, reviewedAt: new Date().toISOString() },
+      review: { ...(p.review ?? {}), ...r, checks, verdict, evidence, reworded: note, reviewedAt: new Date().toISOString() },
       error: verdict.approved ? null : `Reviewer: ${verdict.reasons.join(" | ")}`.slice(0, 500),
       updatedAt: new Date(),
     })
     .where(eq(schema.posts.id, id));
   await addEvent("reworded", `Reworded a ${platform} post: ${note.slice(0, 80)}`, id);
   return { text: finalText, reasons: verdict.reasons };
+}
+
+/**
+ * "Check again": a second, more careful review of a post the reviewer held back. It sees the first
+ * reviewer's reasons and keeps only the ones that hold up. If the post passes, it goes back on the
+ * calendar (still waiting for the owner's OK when approval is on).
+ */
+export async function recheckPost(id: string): Promise<{ approved: boolean; message: string }> {
+  const p = await db().query.posts.findFirst({ where: and(eq(schema.posts.id, id), await mine(schema.posts)) });
+  if (!p) throw new Error("Post not found.");
+  if (p.status !== "rejected") throw new Error("Only posts the reviewer held back can be checked again.");
+  const prev = (p.review ?? {}) as { verdict?: Verdict; evidence?: Evidence[]; rechecked?: number };
+  if ((prev.rechecked ?? 0) >= 2) throw new Error("This post has already been checked again twice. Reword or edit it instead.");
+  if (p.expiresAt && p.expiresAt.getTime() < Date.now() + 30 * 60_000) throw new Error("This story has gone stale, so it cannot go out any more.");
+
+  const s = await getSettings();
+  const platform = p.platform as Platform;
+  const m = await materialForPost(p);
+  const recent = (await recentTexts(platform)).filter((t) => t !== p.text);
+  const checks = runChecks(p.text, platform, recent);
+  const r = await review(m, p.text, platform, recent, { evidence: prev.evidence, earlier: prev.verdict?.reasons ?? [], effort: "high" });
+  const verdict = gate(r, checks, m);
+  const review_ = { ...(p.review ?? {}), ...r, checks, verdict, rechecked: (prev.rechecked ?? 0) + 1, reviewedAt: new Date().toISOString() };
+
+  if (!verdict.approved) {
+    await db().update(schema.posts).set({ review: review_, error: `Reviewer (second check): ${verdict.reasons.join(" | ")}`.slice(0, 500), updatedAt: new Date() }).where(eq(schema.posts.id, id));
+    await addEvent("rechecked", `Second check kept a ${platform === "x" ? "X" : "LinkedIn"} post held back: ${verdict.reasons[0] ?? ""}`.slice(0, 300), id);
+    return { approved: false, message: `The second check agrees it should not go out: ${verdict.reasons[0] ?? "it did not pass"}` };
+  }
+
+  // Keep its slot if still free and far enough ahead; otherwise take the next free one before it goes stale.
+  const soon = new Date(Date.now() + 20 * 60_000);
+  const clash = await db()
+    .select({ id: schema.posts.id })
+    .from(schema.posts)
+    .where(and(await mine(schema.posts), eq(schema.posts.platform, platform), eq(schema.posts.scheduledAt, p.scheduledAt), inArray(schema.posts.status, ["scheduled", "publishing", "published", "unconfirmed"])));
+  let at: Date | null = p.scheduledAt > soon && !clash.length ? p.scheduledAt : await nextFreeSlot(s, platform, soon);
+  if (at && p.expiresAt && at > p.expiresAt) at = null;
+  const status = at ? "scheduled" : "draft";
+  await db()
+    .update(schema.posts)
+    .set({ status, scheduledAt: at ?? p.scheduledAt, review: review_, error: null, approvedAt: null, text: withLink(p.text, m, platform, s), updatedAt: new Date() })
+    .where(eq(schema.posts.id, id));
+  const when = at ? formatLocal(at, s.timezone) : null;
+  await addEvent("rechecked", `Second check passed a ${platform === "x" ? "X" : "LinkedIn"} post${when ? `; scheduled for ${when}` : "; moved to drafts"}.`, id);
+  return { approved: true, message: when ? `Passed the second check. Scheduled for ${when}.` : "Passed the second check. No free slot before it goes stale, so it is in your drafts." };
 }
 
 /** The owner rejected a post: drop it and write a different one for the same platform. Its story is not reused. */

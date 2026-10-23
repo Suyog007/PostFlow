@@ -19,7 +19,7 @@ import { disconnectAccount, startOAuth } from "@/server/platforms/accounts";
 import { registerWebhook, unlinkTelegram } from "@/server/telegram";
 import { fillNowForUser, runForUser, startBackgroundFill, tick } from "@/server/tick";
 import { addEvent } from "@/server/events";
-import { rejectAndReplace, rewordPost } from "@/server/generate";
+import { recheckPost, rejectAndReplace, rewordPost } from "@/server/generate";
 import { isPublicHttpUrl } from "@/server/net";
 
 function back(path: string, kind: "error" | "ok", message: string): never {
@@ -92,6 +92,20 @@ export async function rejectPostAction(form: FormData) {
 export async function rewordPostAction(form: FormData) {
   const id = String(form.get("id"));
   await guarded(`/posts/${id}`, () => rewordPost(id, String(form.get("feedback") ?? ""), form.get("remember") === "on"), "Reworded. Check it and approve when it sounds like you.");
+}
+/** A second, more careful review of a post the reviewer held back. */
+export async function recheckPostAction(form: FormData) {
+  const id = String(form.get("id"));
+  if (!/^[0-9a-f-]{36}$/i.test(id)) back("/calendar", "error", "Post not found.");
+  await requireActiveUser();
+  let r: { approved: boolean; message: string };
+  try {
+    r = await recheckPost(id);
+  } catch (err) {
+    back(`/posts/${id}`, "error", (err as Error).message);
+  }
+  revalidatePath("/", "layout");
+  back(`/posts/${id}`, r.approved ? "ok" : "error", r.message);
 }
 export async function removeStyleNoteAction(form: FormData) {
   const i = Number(form.get("i"));

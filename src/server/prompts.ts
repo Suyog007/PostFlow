@@ -45,7 +45,8 @@ Hard rules:
    Example of the voice (style only, not a fact to reuse): "WhatsApp's API is free now. I'd expect a wave of AI agents built on it, and a lot of people trying it this week."
 4. For evergreen explainers: only well-established, widely known facts. No statistics unless certain. Teach one useful thing.
 5. Banned: "game-changer", "revolutionary", "unlock", "leverage", "delve", "in today's fast-paced world", "let that sink in", "thoughts?", "agree?", rhetorical pile-ups, bullet-spam, emoji walls, fake urgency, engagement bait.
-6. Write in English. Do not mention that you are an AI. Do not include links; the system adds them. If the material is the owner's own article on X, keep the text to 250 characters so the link fits.
+6. Write in English. Do not mention that you are an AI. Do not include links or a "Sources:" line; the system adds links when the owner wants them.
+7. Also return "evidence": for every factual claim in the post, the claim and the exact words from the material that back it, copied word for word (use "..." to skip text). This goes only to the fact-checker and never appears in the post. Opinions need no evidence. If you cannot find words that back a claim, drop the claim from the post. If the material is the owner's own article on X, keep the text to 250 characters so the link fits.
 ${UNTRUSTED_NOTICE}`;
 }
 
@@ -58,5 +59,6 @@ Judge:
 4. issues: concrete problems, each one sentence.
 5. revision_instructions: precise edits that would fix the problems (empty if none).
 For news posts: the post must say who announced or reported the news in a few words; if it does not, list that in issues and revision_instructions (it is fixable). A recap with no builder opening or point of view is worth at most 5. Predictions and opportunity claims must be framed as the owner's opinion and follow from the source; a prediction or guarantee stated as fact is "unsupported". A sentence that starts with "I'd expect", "I think", "my guess", "guessing" or "I'd bet" IS framed as opinion: do not list it as a claim or an issue.
+When WRITER'S EVIDENCE is given, use it to find the support quickly, but always judge each claim against the material yourself; a NOT FOUND quote is a red flag for that claim.
 Also set is_duplicate=true if it repeats the point of a RECENT POST listed.
 ${UNTRUSTED_NOTICE}`;

@@ -153,6 +153,8 @@ export interface TaskSpec<T extends z.ZodType> {
   output: T;
   maxTokens: number;
   temperature?: number;
+  /** Overrides the configured reasoning effort for this call. */
+  reasoningEffort?: string;
 }
 
 /** budget -> call -> validate against schema -> log. Output is data only; it can never trigger an action. */
@@ -175,7 +177,7 @@ export async function runTask<T extends z.ZodType>(spec: TaskSpec<T>): Promise<z
       schemaName: spec.task.replace(/[^a-zA-Z0-9_]/g, "_"),
       maxTokens: spec.maxTokens,
       temperature: spec.temperature ?? 0.4,
-      reasoningEffort: effortFor(spec.role),
+      reasoningEffort: spec.reasoningEffort && env().FIREWORKS_REASONING_EFFORT !== "off" ? spec.reasoningEffort : effortFor(spec.role),
     });
   } catch (err) {
     await db().insert(schema.llmCalls).values({ userId, task: spec.task, model, status: "error", error: String((err as Error).message).slice(0, 400) });
