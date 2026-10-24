@@ -2,9 +2,10 @@ import { and, eq, gt, inArray, isNull, lt, lte, sql } from "drizzle-orm";
 import { db, schema } from "./db/client";
 import { uid } from "./context";
 import { approvalGate, entitlementFor } from "./billing/plans";
-import { getSettings } from "./settings";
+import { getSettings, type Settings } from "./settings";
+import { cardContent, loadCard, wantsImage } from "./cards";
 import { getCredentials, getPlatformClient, markAccountError, NotConnectedError } from "./platforms/accounts";
-import { ReconcileNotSupported, type Platform } from "./platforms/types";
+import { ReconcileNotSupported, type Platform, type PublishMedia } from "./platforms/types";
 import { addEvent } from "./events";
 import { myTelegramChat, notifyProblem, notifyPublished, notifyReminder, notifyText } from "./telegram";
 import { formatLocal, nextFreeSlot } from "./slots";
@@ -87,7 +88,18 @@ async function publishOne(post: PostRow, now: Date): Promise<"published" | "othe
     return "other";
   }
 
-  const result = await getPlatformClient(platform).publish([post.text], creds, {});
+  // The image card goes with the post when it is switched on. If it cannot be made or uploaded, the post still goes out.
+  const s = await getSettings();
+  const media: PublishMedia[] = [];
+  if (wantsImage(post, s)) {
+    const png = await loadCard(post);
+    if (png) media.push({ data: png, mime: "image/png", alt: cardContent(post, s.profile).hook });
+  }
+  let result = await getPlatformClient(platform).publish([post.text], creds, media.length ? { media } : {});
+  if (media.length && result.kind === "failed" && /image|media|upload|asset/i.test(result.error)) {
+    log.warn("publish_without_image", { postId: post.id, error: result.error });
+    result = await getPlatformClient(platform).publish([post.text], creds, {});
+  }
   if (result.kind === "success") {
     await setStatus(post.id, { status: "published", publishedAt: new Date(), externalId: result.externalIds[0] ?? null, url: result.url ?? null, error: null });
     await addEvent("published", `Posted on ${platform === "x" ? "X" : "LinkedIn"}.`, post.id);
@@ -116,7 +128,8 @@ async function publishOne(post: PostRow, now: Date): Promise<"published" | "othe
 export const REMIND_MINUTES = 10;
 
 /** One Telegram heads-up per post, shortly before it goes out. Does nothing until Telegram is linked. */
-async function sendReminders(now: Date, blocks: boolean, timezone: string) {
+async function sendReminders(now: Date, blocks: boolean, s: Settings) {
+  const timezone = s.timezone;
   if (!(await myTelegramChat())) return;
   const due = await db()
     .update(schema.posts)
@@ -124,7 +137,7 @@ async function sendReminders(now: Date, blocks: boolean, timezone: string) {
     .where(and(eq(schema.posts.userId, await uid()), eq(schema.posts.status, "scheduled"), isNull(schema.posts.remindedAt), gt(schema.posts.scheduledAt, now), lte(schema.posts.scheduledAt, new Date(now.getTime() + REMIND_MINUTES * 60_000))))
     .returning();
   for (const post of due) {
-    await notifyReminder(post, timezone, blocks, Math.max(1, Math.round((post.scheduledAt.getTime() - now.getTime()) / 60_000))).catch(warnOnError("reminder_notify_failed", { postId: post.id }));
+    await notifyReminder(post, timezone, blocks, Math.max(1, Math.round((post.scheduledAt.getTime() - now.getTime()) / 60_000)), wantsImage(post, s)).catch(warnOnError("reminder_notify_failed", { postId: post.id }));
   }
 }
 
@@ -135,7 +148,7 @@ export async function publishDue(opts: { now?: Date; max?: number } = {}): Promi
   if (s.paused) return { published: 0, handled: 0 };
   // Auto mode (publishing without approval) is a paid feature; without it, approval is always required.
   const requireApproval = approvalGate(s, (await entitlementFor(await uid())).features.autoMode).blocks;
-  await sendReminders(now, requireApproval, s.timezone).catch((err) => log.warn("reminder_failed", { error: (err as Error).message }));
+  await sendReminders(now, requireApproval, s).catch((err) => log.warn("reminder_failed", { error: (err as Error).message }));
   let published = 0;
   let handled = 0;
   // Approval required: a post nobody approved before its time is skipped, and the calendar moves on to the next one.

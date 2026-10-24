@@ -6,12 +6,13 @@ import { requireActiveUser } from "@/server/auth";
 import { approvalGate, entitlementOf } from "@/server/billing/plans";
 import { db, schema } from "@/server/db/client";
 import { getSettings } from "@/server/settings";
-import { approvePostAction, recheckPostAction, refillSlotAction, swapVersionAction, postNowAction, rejectPostAction, removePostAction, reschedulePostAction, resolveAction, restorePostAction, rewordPostAction, scheduleDraftAction, unapprovePostAction } from "@/app/actions";
+import { approvePostAction, recheckPostAction, refillSlotAction, swapVersionAction, togglePostImageAction, postNowAction, rejectPostAction, removePostAction, reschedulePostAction, resolveAction, restorePostAction, rewordPostAction, scheduleDraftAction, unapprovePostAction } from "@/app/actions";
 import { SubmitButton } from "@/components/submit-button";
 import { PostEditor } from "@/components/post-editor";
 import { Icon, PlatformGlyph, StatusBadge } from "@/components/ui";
 import { Flash } from "../../flash";
 import { storyDate } from "@/server/story-date";
+import { cardUrl, wantsImage } from "@/server/cards";
 
 interface Claim { claim: string; support: string; evidence: string }
 interface Mention { domain: string; title: string; url: string }
@@ -55,6 +56,7 @@ export default async function PostPage({ params, searchParams }: { params: Promi
   const platformName = p.platform === "x" ? "X" : "LinkedIn";
   // When the story itself happened: for you to judge freshness, never part of the post.
   const story = await storyDate(p, s.timezone);
+  const withImage = wantsImage(p, s);
   const name = s.profile.name || "Your Name";
   const handle = (acct?.handle ?? name.toLowerCase().replace(/[^a-z0-9]/g, "")).replace(/^@/, "");
 
@@ -81,6 +83,25 @@ export default async function PostPage({ params, searchParams }: { params: Promi
       {p.error && <p className="mb-3 rounded-lg border border-[var(--bad)]/30 bg-[var(--bad-soft)] px-3 py-2 text-[13px] text-[var(--bad)]">{p.error}</p>}
 
       <PostEditor id={p.id} platform={p.platform} initialText={p.text} name={name} role={s.profile.role} handle={handle} editable={editable} />
+
+      {/* The image card that goes out with the post (made from its hook; never a publisher's photo). */}
+      <section className="panel mt-4">
+        <div className="panel-head">
+          <Icon name="draft" size={15} />Image
+          <form action={togglePostImageAction} className="ml-auto">
+            <input type="hidden" name="id" value={p.id} />
+            <button className="btn btn-sm">{withImage ? "Post without image" : "Add the image"}</button>
+          </form>
+        </div>
+        <div className="panel-body">
+          {withImage ? (
+            // eslint-disable-next-line @next/next/no-img-element -- a signed, generated PNG; next/image would re-encode it for no gain
+            <img src={cardUrl(p)} alt={`Image card: ${p.text.split("\n")[0]}`} width={1200} height={675} className="h-auto w-full max-w-[640px] rounded-lg border border-[var(--line)]" />
+          ) : (
+            <p className="text-[13px] text-[var(--muted)]">{s.images[p.platform as "x" | "linkedin"] ? "This post goes out as text only." : `Image cards are off for ${platformName} in Settings.`}</p>
+          )}
+        </div>
+      </section>
 
       {needsApproval && (
         <div className="mt-4 flex flex-wrap items-center gap-3 rounded-lg border border-[var(--warn)]/30 bg-[var(--warn-soft)] px-3 py-2.5 text-[13px]">

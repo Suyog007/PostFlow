@@ -1,6 +1,6 @@
 // Netlify background function: runs one scheduler pass (publish, collect, write, review).
 // Background functions may run for up to 15 minutes, which a normal request (~30 s) cannot.
-import { fillNowForUser, tick } from "../../src/server/tick";
+import { fillNowForUser, refreshQueuedForUser, tick } from "../../src/server/tick";
 
 export default async (req: Request) => {
   const secret = process.env.CRON_SECRET;
@@ -10,7 +10,17 @@ export default async (req: Request) => {
     return;
   }
   // "Fill now" from the calendar sends the account to fill; the scheduler sends an empty body.
-  const body = (await req.json().catch(() => ({}))) as { fillUserId?: string };
+  const body = (await req.json().catch(() => ({}))) as { fillUserId?: string; refreshUserId?: string };
+  // "Rewrite queued posts" from the calendar or /refresh in Telegram.
+  if (typeof body.refreshUserId === "string" && /^[0-9a-f-]{36}$/i.test(body.refreshUserId)) {
+    try {
+      const r = await refreshQueuedForUser(body.refreshUserId, { budgetMs: 12 * 60_000 });
+      console.warn("refresh", JSON.stringify(r));
+    } catch (err) {
+      console.error("refresh failed", (err as Error).message);
+    }
+    return;
+  }
   if (typeof body.fillUserId === "string" && /^[0-9a-f-]{36}$/i.test(body.fillUserId)) {
     try {
       const r = await fillNowForUser(body.fillUserId, { budgetMs: 12 * 60_000 });

@@ -555,6 +555,29 @@ export async function refillSlot(removedId: string, kind: "lesson" | "news"): Pr
   return (await produceForSlot(platform, at, m, s, 3, { requested: "schedule" })).postId;
 }
 
+/**
+ * Writes a queued post again from the same story with the current writing rules (hook first, hashtags, no invented advice).
+ * Posts you approved or edited are left alone. If the new draft does not pass review, the old post stays.
+ */
+export async function rewriteFresh(id: string): Promise<"rewritten" | "kept"> {
+  const p = await db().query.posts.findFirst({ where: and(eq(schema.posts.id, id), await mine(schema.posts)) });
+  if (!p || p.status !== "scheduled" || p.userEdited || p.approvedAt || p.fast) return "kept";
+  if (p.scheduledAt.getTime() < Date.now() + 15 * 60_000) return "kept";
+  const s = await getSettings();
+  const m = await materialForPost(p);
+  // Step aside so the new post can take the slot; come back if the rewrite fails.
+  await db().update(schema.posts).set({ status: "declined", updatedAt: new Date() }).where(eq(schema.posts.id, id));
+  try {
+    const out = await produceForSlot(p.platform as Platform, p.scheduledAt, m, s, 3);
+    if (out.status === "scheduled") return "rewritten";
+  } catch (err) {
+    await db().update(schema.posts).set({ status: "scheduled", updatedAt: new Date() }).where(eq(schema.posts.id, id));
+    throw err;
+  }
+  await db().update(schema.posts).set({ status: "scheduled", updatedAt: new Date() }).where(eq(schema.posts.id, id));
+  return "kept";
+}
+
 /** Swaps a post with its alternative version (normal take vs plain explainer). The swapped-out text becomes the alternative. */
 export async function swapToAlternative(id: string): Promise<{ message: string }> {
   const p = await db().query.posts.findFirst({ where: and(eq(schema.posts.id, id), await mine(schema.posts)) });

@@ -1,8 +1,8 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull } from "drizzle-orm";
 import { db, schema, sqlClient } from "./db/client";
 import { collectFeeds, seedSourcesIfEmpty } from "./collect";
 import { analyzeBatch } from "./analyze";
-import { fillCalendar, fillNowDays, type FillResult } from "./generate";
+import { fillCalendar, fillNowDays, rewriteFresh, type FillResult } from "./generate";
 import { env } from "./env";
 import { formatLocal } from "./slots";
 import { processRequests } from "./requests";
@@ -199,8 +199,60 @@ export async function requestFillNow(userId: string, fallback: (job: () => Promi
   return message;
 }
 
+/**
+ * Rewrites every queued post that is not approved or edited, with the current writing rules.
+ * Runs in the background function, then reports by Telegram.
+ */
+export async function refreshQueuedForUser(userId: string, opts: { budgetMs?: number } = {}): Promise<{ rewritten: number; kept: number } | null> {
+  const deadline = Date.now() + (opts.budgetMs ?? 10 * 60_000);
+  return withUserLock(
+    userId,
+    () =>
+      withUser(userId, async () => {
+        const queued = await db()
+          .select({ id: schema.posts.id })
+          .from(schema.posts)
+          .where(and(eq(schema.posts.userId, userId), eq(schema.posts.status, "scheduled"), eq(schema.posts.userEdited, false), isNull(schema.posts.approvedAt), gt(schema.posts.scheduledAt, new Date(Date.now() + 15 * 60_000))))
+          .orderBy(schema.posts.scheduledAt)
+          .limit(30);
+        let rewritten = 0;
+        let kept = 0;
+        for (const q of queued) {
+          if (Date.now() > deadline) break;
+          try {
+            if ((await rewriteFresh(q.id)) === "rewritten") rewritten++;
+            else kept++;
+          } catch (err) {
+            kept++;
+            log.warn("rewrite_failed", { postId: q.id, error: (err as Error).message });
+          }
+        }
+        const summary = `Rewrote ${rewritten} queued post${rewritten === 1 ? "" : "s"} in the new style${kept ? `, and kept ${kept} where the new draft was not better` : ""}.`;
+        await addEvent("refresh_done", summary);
+        await notifyText(`✅ ${summary}\n\nSend /queue to see them.`).catch(warnOnError("notify_failed", { what: "refresh done" }));
+        return { rewritten, kept };
+      }),
+    3 * 60_000,
+  );
+}
+
+/** Starts "Rewrite queued posts" for one user, from the site or Telegram. */
+export async function requestRefresh(userId: string, fallback: (job: () => Promise<unknown>) => void): Promise<string> {
+  await withUser(userId, async () => {
+    const [last] = await db().select().from(schema.events).where(and(eq(schema.events.userId, userId), inArray(schema.events.kind, ["refresh", "refresh_done"]))).orderBy(desc(schema.events.at)).limit(1);
+    if (last?.kind === "refresh" && Date.now() - last.at.getTime() < 15 * 60_000) throw new Error("Already rewriting your queued posts. I will message you when it is done.");
+    await addEvent("refresh", "Rewriting queued posts in the new style…");
+  });
+  if (!(await startBackgroundJob(userId, "refresh"))) fallback(() => refreshQueuedForUser(userId, { budgetMs: 4 * 60_000 }).then(() => undefined).catch(warnOnError("refresh_failed", { userId })));
+  return "Rewriting your queued posts in the new style. Posts you approved or edited stay as they are.";
+}
+
 /** Starts "Fill now" in the background function. False when that is not available (local dev). */
 export async function startBackgroundFill(userId: string): Promise<boolean> {
+  return startBackgroundJob(userId, "fill");
+}
+
+async function startBackgroundJob(userId: string, job: "fill" | "refresh"): Promise<boolean> {
   const e = env();
   if (!e.CRON_SECRET) return false;
   const base = e.APP_URL.replace(/\/$/, "").replace(/^http:\/\/(?!localhost)/, "https://");
@@ -208,7 +260,7 @@ export async function startBackgroundFill(userId: string): Promise<boolean> {
     const res = await fetch(`${base}/.netlify/functions/tick-background`, {
       method: "POST",
       headers: { authorization: `Bearer ${e.CRON_SECRET}`, "content-type": "application/json" },
-      body: JSON.stringify({ fillUserId: userId }),
+      body: JSON.stringify(job === "fill" ? { fillUserId: userId } : { refreshUserId: userId }),
       redirect: "manual",
       signal: AbortSignal.timeout(10_000),
     });

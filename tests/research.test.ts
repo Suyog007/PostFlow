@@ -19,7 +19,7 @@ async function telegram<T>(fn: (sent: Sent[]) => Promise<T>) {
   const realFetch = globalThis.fetch;
   globalThis.fetch = (async (_u: string, init?: { body?: string }) => {
     const b = JSON.parse(init?.body ?? "{}");
-    if (b.text) sent.push({ text: b.text, buttons: b.reply_markup?.inline_keyboard });
+    if (b.text ?? b.caption) sent.push({ text: b.text ?? b.caption, buttons: b.reply_markup?.inline_keyboard });
     return new Response(JSON.stringify({ ok: true }));
   }) as typeof fetch;
   try {

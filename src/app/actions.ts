@@ -17,7 +17,7 @@ import { createRequest, processRequests, retryAnyway, type RequestMode } from "@
 import { addTip } from "@/server/tips";
 import { disconnectAccount, startOAuth } from "@/server/platforms/accounts";
 import { registerWebhook, unlinkTelegram } from "@/server/telegram";
-import { requestFillNow, runForUser, tick } from "@/server/tick";
+import { requestFillNow, requestRefresh, runForUser, tick } from "@/server/tick";
 import { addEvent } from "@/server/events";
 import { publishDue } from "@/server/publisher";
 import { fillNowDays, recheckPost, refillSlot, rejectAndReplace, rewordPost, swapToAlternative, writeLesson } from "@/server/generate";
@@ -105,11 +105,30 @@ export async function rewordPostAction(form: FormData) {
   const id = String(form.get("id"));
   await guarded(`/posts/${id}`, () => rewordPost(id, String(form.get("feedback") ?? ""), form.get("remember") === "on"), "Reworded. Check it and approve when it sounds like you.");
 }
+/** Switch the image card on or off for one post. */
+export async function togglePostImageAction(form: FormData) {
+  const id = String(form.get("id"));
+  if (!/^[0-9a-f-]{36}$/i.test(id)) back("/calendar", "error", "Post not found.");
+  const user = await requireActiveUser();
+  await guarded(`/posts/${id}`, async () => {
+    const p = await db().query.posts.findFirst({ where: and(eq(schema.posts.id, id), eq(schema.posts.userId, user.id)) });
+    if (!p) throw new Error("Post not found.");
+    const review = (p.review ?? {}) as Record<string, unknown>;
+    await db().update(schema.posts).set({ review: { ...review, noImage: !review.noImage }, updatedAt: new Date() }).where(eq(schema.posts.id, id));
+  }, "Saved.");
+}
+
 /** Swap a post with its other version (normal take vs plain explainer). */
 export async function swapVersionAction(form: FormData) {
   const id = String(form.get("id"));
   if (!/^[0-9a-f-]{36}$/i.test(id)) back("/calendar", "error", "Post not found.");
   await guarded(`/posts/${id}`, () => swapToAlternative(id), "Switched versions. Approve it when you are happy.");
+}
+
+/** Rewrite every queued post that is not approved or edited, in the latest writing style. */
+export async function refreshQueuedAction() {
+  const user = await requireActiveUser();
+  await guarded("/calendar", () => requestRefresh(user.id, (job) => after(job)), "Rewriting your queued posts in the new style. This takes a few minutes; posts you approved or edited stay as they are.");
 }
 
 /** Fill a slot you emptied by removing a post, with a lesson or a news story. */
@@ -266,6 +285,7 @@ export async function saveProfileAction(form: FormData) {
         learning: Number(form.get("w_learning") ?? 0),
       },
       hashtags: { linkedin: form.get("tags_linkedin") === "on", x: form.get("tags_x") === "on" },
+      images: { linkedin: form.get("img_linkedin") === "on", x: form.get("img_x") === "on" },
       // Links on X cost far more per post; only owners can turn them on.
       includeLinks: { linkedin: form.get("link_linkedin") === "on", x: (await requireActiveUser()).isOwner && form.get("link_x") === "on" },
     });

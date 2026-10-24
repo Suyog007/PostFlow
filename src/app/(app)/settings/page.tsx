@@ -159,6 +159,10 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <label className="flex items-center gap-2"><input type="checkbox" name="tags_x" defaultChecked={s.hashtags.x} /> Add 1-2 hashtags on X</label>
             <label className="flex items-center gap-2"><input type="checkbox" name="tags_linkedin" defaultChecked={s.hashtags.linkedin} /> Add up to 3 hashtags on LinkedIn</label>
           </div>
+          <div className="flex flex-wrap gap-6">
+            <label className="flex items-center gap-2"><input type="checkbox" name="img_linkedin" defaultChecked={s.images.linkedin} /> Add an image card on LinkedIn</label>
+            <label className="flex items-center gap-2"><input type="checkbox" name="img_x" defaultChecked={s.images.x} /> Add an image card on X</label>
+          </div>
           <div className="flex gap-6">
             <label className="flex items-center gap-2"><input type="checkbox" name="link_linkedin" defaultChecked={s.includeLinks.linkedin} /> Add the news source link on LinkedIn</label>
             {user.isOwner && <label className="flex items-center gap-2"><input type="checkbox" name="link_x" defaultChecked={s.includeLinks.x} /> Add the news source link on X <span className="text-xs text-muted">(X charges far more per post with a link)</span></label>}

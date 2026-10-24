@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import { cardUrl } from "./cards";
 import { storyLine } from "./story-date";
 import { env } from "./env";
 import { log } from "./log";
@@ -67,6 +68,29 @@ export async function sendTo(chatId: string | number, text: string, buttons?: { 
   });
 }
 
+/**
+ * A picture with its text and buttons. Telegram fetches the image from our signed card URL.
+ * Captions are limited to about 1,000 characters, so longer text follows as its own message.
+ * If the picture cannot be sent, the text still arrives.
+ */
+export async function sendPhotoTo(chatId: string | number, photoUrl: string, text: string, buttons?: { text: string; data: string }[][]) {
+  const markup = buttons ? { reply_markup: { inline_keyboard: buttons.map((row) => row.map((b) => ({ text: b.text, callback_data: b.data }))) } } : {};
+  if (text.length <= 1000) {
+    const r = await api("sendPhoto", { chat_id: chatId, photo: photoUrl, caption: text, ...markup });
+    if (r?.ok) return r;
+    return sendTo(chatId, text, buttons);
+  }
+  await api("sendPhoto", { chat_id: chatId, photo: photoUrl });
+  return sendTo(chatId, text, buttons);
+}
+
+export async function notifyPhoto(photoUrl: string, text: string, buttons?: { text: string; data: string }[][]) {
+  if (!env().TELEGRAM_BOT_TOKEN) return;
+  const chat = await myTelegramChat();
+  if (!chat) return;
+  await sendPhotoTo(chat, photoUrl, text, buttons);
+}
+
 /** Notification to the current user's linked chat. Silent no-op when they have not linked Telegram. */
 export async function notifyText(text: string, buttons?: { text: string; data: string }[][]) {
   if (!env().TELEGRAM_BOT_TOKEN) return;
@@ -91,20 +115,21 @@ export async function notifyScheduled(post: PostRow, tz: string, requireApproval
 }
 
 /** Sent a few minutes before a post goes out, so you can check it at that moment: approve, remove, reject or post it right away. */
-export async function notifyReminder(post: PostRow, tz: string, blocks: boolean, minutes: number) {
+export async function notifyReminder(post: PostRow, tz: string, blocks: boolean, minutes: number, withImage = false) {
+  const send = (text: string, buttons: { text: string; data: string }[][]) => (withImage ? notifyPhoto(cardUrl(post), text, buttons) : notifyText(text, buttons));
   const when = `${label(post.platform)} · ${formatLocal(post.scheduledAt, tz)}`;
   const inTxt = minutes <= 1 ? "in about a minute" : `in about ${minutes} minutes`;
   const story = await storyLine(post, tz);
   const head = `⏰ Going out ${inTxt}\n${when}${story ? `\n${story}` : ""}\n\n${post.text}\n\n`;
   if (blocks && !post.approvedAt) {
-    await notifyText(`${head}Not approved yet. If you do nothing it is skipped.`, [
+    await send(`${head}Not approved yet. If you do nothing it is skipped.`, [
       [{ text: "✅ Approve", data: `ok:${post.id}` }, { text: "🗑 Remove", data: `rm:${post.id}` }],
       [{ text: "🔁 Another story", data: `rj:${post.id}` }, { text: "✍️ New wording", data: `rw:${post.id}` }],
       [{ text: "🚀 Post now", data: `pn:${post.id}` }],
     ]);
     return;
   }
-  await notifyText(`${head}${post.approvedAt ? "Approved. " : ""}It goes out on time unless you remove it.`, [
+  await send(`${head}${post.approvedAt ? "Approved. " : ""}It goes out on time unless you remove it.`, [
     [{ text: "🗑 Remove", data: `rm:${post.id}` }, { text: "🔁 Another story", data: `rj:${post.id}` }],
     [{ text: "✍️ New wording", data: `rw:${post.id}` }],
   ]);

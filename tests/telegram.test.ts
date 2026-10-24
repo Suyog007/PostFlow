@@ -42,7 +42,7 @@ describe("telegram inbound", () => {
     const realFetch = globalThis.fetch;
     globalThis.fetch = (async (_url: string, init?: { body?: string }) => {
       const b = JSON.parse(init?.body ?? "{}");
-      if (b.text) sent.push({ text: b.text, buttons: b.reply_markup?.inline_keyboard });
+      if (b.text ?? b.caption) sent.push({ text: b.text ?? b.caption, buttons: b.reply_markup?.inline_keyboard });
       return new Response(JSON.stringify({ ok: true }));
     }) as typeof fetch;
     try {
@@ -84,7 +84,7 @@ describe("telegram inbound", () => {
     const realFetch = globalThis.fetch;
     globalThis.fetch = (async (_url: string, init?: { body?: string }) => {
       const b = JSON.parse(init?.body ?? "{}");
-      if (b.text) sent.push({ text: b.text, buttons: b.reply_markup?.inline_keyboard });
+      if (b.text ?? b.caption) sent.push({ text: b.text ?? b.caption, buttons: b.reply_markup?.inline_keyboard });
       return new Response(JSON.stringify({ ok: true }));
     }) as typeof fetch;
     try {
@@ -153,7 +153,7 @@ describe("telegram inbound", () => {
       const realFetch = globalThis.fetch;
       globalThis.fetch = (async (_u: string, init?: { body?: string }) => {
         const b = JSON.parse(init?.body ?? "{}");
-        if (b.text) sent.push({ text: b.text, buttons: b.reply_markup?.inline_keyboard });
+        if (b.text ?? b.caption) sent.push({ text: b.text ?? b.caption, buttons: b.reply_markup?.inline_keyboard });
         return new Response(JSON.stringify({ ok: true }));
       }) as typeof fetch;
       try {
@@ -279,7 +279,7 @@ describe("when the story happened", () => {
     const realFetch = globalThis.fetch;
     globalThis.fetch = (async (_u: string, init?: { body?: string }) => {
       const b = JSON.parse(init?.body ?? "{}");
-      if (b.text) sent.push(b.text);
+      if (b.text ?? b.caption) sent.push(b.text ?? b.caption);
       return new Response(JSON.stringify({ ok: true }));
     }) as typeof fetch;
     try {
@@ -311,7 +311,7 @@ describe("/today and /tomorrow", () => {
     const realFetch = globalThis.fetch;
     globalThis.fetch = (async (_u: string, init?: { body?: string }) => {
       const b = JSON.parse(init?.body ?? "{}");
-      if (b.text) sent.push({ text: b.text, buttons: b.reply_markup?.inline_keyboard });
+      if (b.text ?? b.caption) sent.push({ text: b.text ?? b.caption, buttons: b.reply_markup?.inline_keyboard });
       return new Response(JSON.stringify({ ok: true }));
     }) as typeof fetch;
     try {

@@ -3,12 +3,13 @@ import { db, schema } from "./db/client";
 import { uid, withUser } from "./context";
 import { approvalGate, entitlementFor, entitlementOf } from "./billing/plans";
 import { DateTime } from "luxon";
-import { sendTo, telegramApi } from "./telegram";
+import { sendPhotoTo, sendTo, telegramApi } from "./telegram";
+import { cardUrl, wantsImage } from "./cards";
 import { getSettings, saveSettings } from "./settings";
 import { approvePost, postNow, removePost, PostError, upcoming } from "./posts";
 import { publishDue } from "./publisher";
 import { refillSlot, rejectAndReplace, rewordPost, writeLesson } from "./generate";
-import { requestFillNow } from "./tick";
+import { requestFillNow, requestRefresh } from "./tick";
 import { formatLocal } from "./slots";
 import { storyLine } from "./story-date";
 import type { Pillar } from "./db/schema";
@@ -32,6 +33,7 @@ Other ways to feed me:
 /dig <news you heard about>  look it up first, then write a post if it is worth one
 
 /learn  a short, simple lesson for your audience in the next free slots. Add a topic to choose it: /learn how indexes work
+/refresh  rewrite every queued post you have not approved, in the latest style
 /fill   write posts now for every open slot in the next 5 days
 /today, /tomorrow  just that day's posts
 /queue  upcoming posts by day, in full. Each has Approve, Post now, Remove, Another story and New wording buttons
@@ -120,7 +122,9 @@ async function sendPost(chat: number | string, id: string, heading: string) {
   const s = await getSettings();
   const note = p.status === "draft" ? "\n\nThe reviewer had concerns, so it is a draft: open the app to look at it." : "";
   const story = await storyLine(p, s.timezone);
-  await sendTo(chat, `${heading}\n${p.platform === "x" ? "X" : "LinkedIn"} · ${formatLocal(p.scheduledAt, s.timezone)}${story ? `\n${story}` : ""}\n\n${p.text}${note}`, postButtons(id));
+  const text = `${heading}\n${p.platform === "x" ? "X" : "LinkedIn"} · ${formatLocal(p.scheduledAt, s.timezone)}${story ? `\n${story}` : ""}\n\n${p.text}${note}`;
+  if (wantsImage(p, s)) await sendPhotoTo(chat, cardUrl(p), text, postButtons(id));
+  else await sendTo(chat, text, postButtons(id));
 }
 
 const QUICK_REWORD = "Take a different angle and a fresh opening. Keep the same story and the same facts.";
@@ -339,6 +343,20 @@ async function handleForUser(u: Update, chat: number): Promise<void> {
       await run(); // outside a request (tests)
     }
     return;
+  }
+  if (text === "/refresh") {
+    try {
+      const msg = await requestRefresh(userId, (job) => {
+        try {
+          after(job);
+        } catch {
+          // outside a request (tests): nothing runs in the background
+        }
+      });
+      return void (await sendTo(chat, `⏳ ${msg} It takes a few minutes; I will message you when it is done.`));
+    } catch (err) {
+      return void (await sendTo(chat, (err as Error).message));
+    }
   }
   if (text === "/fill") {
     try {
