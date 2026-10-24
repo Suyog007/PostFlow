@@ -300,3 +300,72 @@ describe("when the story happened", () => {
     await expect(rejectAndReplace(p.id)).rejects.toThrow(/already swapped for another story/);
   });
 });
+
+describe("/today and /tomorrow", () => {
+  beforeEach(resetDb);
+
+  async function capture(fn: () => Promise<void>) {
+    process.env.TELEGRAM_BOT_TOKEN = "123:test";
+    resetEnvCache();
+    const sent: { text: string; buttons?: { text: string; callback_data: string }[][] }[] = [];
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async (_u: string, init?: { body?: string }) => {
+      const b = JSON.parse(init?.body ?? "{}");
+      if (b.text) sent.push({ text: b.text, buttons: b.reply_markup?.inline_keyboard });
+      return new Response(JSON.stringify({ ok: true }));
+    }) as typeof fetch;
+    try {
+      await fn();
+    } finally {
+      globalThis.fetch = realFetch;
+      delete process.env.TELEGRAM_BOT_TOKEN;
+      resetEnvCache();
+    }
+    return sent;
+  }
+
+  it("each shows only that day's posts", async () => {
+    const { DateTime } = await import("luxon");
+    const now = DateTime.now().setZone("Asia/Kathmandu");
+    const tomorrowNoon = now.plus({ days: 1 }).startOf("day").plus({ hours: 12 }).toJSDate();
+    const laterToday = now.plus({ minutes: 3 });
+    const sameDay = laterToday.hasSame(now, "day");
+    await db().insert(schema.posts).values([
+      { userId: me(), platform: "x", pillar: "news", text: "A post for tomorrow noon.", status: "scheduled", scheduledAt: tomorrowNoon },
+      { userId: me(), platform: "x", pillar: "news", text: "A post three days out.", status: "scheduled", scheduledAt: now.plus({ days: 3 }).toJSDate() },
+      ...(sameDay ? [{ userId: me(), platform: "linkedin", pillar: "news" as const, text: "A post for later today.", status: "scheduled" as const, scheduledAt: laterToday.toJSDate() }] : []),
+    ]);
+
+    const tomorrow = await capture(() => handleTelegramUpdate(msg("/tomorrow")));
+    expect(tomorrow[0].text).toMatch(/^🗓 1 scheduled post tomorrow/);
+    expect(tomorrow[1].text).toMatch(/^📅 Tomorrow · /);
+    expect(tomorrow.map((m) => m.text).join("\n")).not.toMatch(/three days out|later today/);
+
+    const today = await capture(() => handleTelegramUpdate(msg("/today")));
+    if (sameDay) {
+      expect(today[1].text).toContain("A post for later today.");
+      expect(today.map((m) => m.text).join("\n")).not.toContain("tomorrow noon");
+    } else {
+      expect(today[0].text).toMatch(/Nothing scheduled for today/);
+    }
+  });
+
+  it("says so when a day is empty, and a long day keeps the right buttons under each post", async () => {
+    const { DateTime } = await import("luxon");
+    const empty = await capture(() => handleTelegramUpdate(msg("/tomorrow")));
+    expect(empty[0].text).toMatch(/Nothing scheduled for tomorrow\. Send \/fill/);
+
+    const base = DateTime.now().setZone("Asia/Kathmandu").plus({ days: 1 }).startOf("day").plus({ hours: 8 });
+    const long = "A long post about databases and caching. ".repeat(40).trim();
+    const rows = await db()
+      .insert(schema.posts)
+      .values([0, 1, 2].map((i) => ({ userId: me(), platform: "linkedin", pillar: "news" as const, text: `${i}: ${long}`, status: "scheduled" as const, scheduledAt: base.plus({ hours: i }).toJSDate() })))
+      .returning();
+    const sent = await capture(() => handleTelegramUpdate(msg("/tomorrow")));
+    const second = sent.find((m) => m.text.startsWith("2. LinkedIn"))!;
+    const ids = second.buttons!.flat().map((b) => b.callback_data);
+    const p2 = rows.sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime())[1];
+    expect(ids.every((d) => d.endsWith(p2.id))).toBe(true);
+    expect(second.buttons!.length).toBe(2);
+  });
+});

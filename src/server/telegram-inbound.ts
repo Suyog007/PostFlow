@@ -33,6 +33,7 @@ Other ways to feed me:
 
 /learn  a short, simple lesson for your audience in the next free slots. Add a topic to choose it: /learn how indexes work
 /fill   write posts now for every open slot in the next 5 days
+/today, /tomorrow  just that day's posts
 /queue  upcoming posts by day, in full. Each has Approve, Post now, Remove, Another story and New wording buttons
 /pause  stop all posting
 /resume start again
@@ -56,6 +57,59 @@ async function runRequest(userId: string, chat: number | string, requestId: stri
   } catch {
     // Outside a request (tests): run it now.
     await run();
+  }
+}
+
+/**
+ * Upcoming posts, one message per day with the full text and buttons for each post.
+ * `onlyDay` limits it to today (0) or tomorrow (1) in the owner's timezone.
+ */
+async function showQueue(chat: number | string, userId: string, onlyDay?: 0 | 1) {
+  const s = await getSettings();
+  const now = DateTime.now().setZone(s.timezone);
+  const dayOffset = (d: DateTime) => Math.round(d.startOf("day").diff(now.startOf("day"), "days").days);
+  const q = (await upcoming(40)).filter((p) => onlyDay === undefined || dayOffset(DateTime.fromJSDate(p.scheduledAt, { zone: s.timezone })) === onlyDay);
+  const which = onlyDay === 0 ? "today" : onlyDay === 1 ? "tomorrow" : "";
+  if (!q.length) return void (await sendTo(chat, which ? `Nothing scheduled for ${which}. Send /fill to write posts for open slots, or /learn for a lesson.` : "Nothing scheduled yet."));
+  const gate_ = approvalGate(s, (await entitlementFor(userId)).features.autoMode);
+  const waiting = (p: (typeof q)[number]) => gate_.blocks && !p.approvedAt;
+  const tag = (p: (typeof q)[number]) => (gate_.blocks ? (p.approvedAt ? " · ✅ approved" : " · ⏳ needs your OK, skipped if not approved in time") : "");
+  const dayLabel = (d: DateTime) => {
+    const diff = dayOffset(d);
+    const date = d.toFormat("ccc d LLL");
+    return diff === 0 ? `Today · ${date}` : diff === 1 ? `Tomorrow · ${date}` : d.toFormat("cccc · d LLL");
+  };
+  const days = new Map<string, { label: string; posts: typeof q }>();
+  for (const p of q) {
+    const d = DateTime.fromJSDate(p.scheduledAt, { zone: s.timezone });
+    const key = d.toISODate()!;
+    if (!days.has(key)) days.set(key, { label: dayLabel(d), posts: [] });
+    days.get(key)!.posts.push(p);
+  }
+  const nWaiting = q.filter(waiting).length;
+  // When each news story happened, so a stale one can be swapped out. Never part of the post itself.
+  const stories: Record<string, string> = {};
+  for (const p of q) stories[p.id] = await storyLine(p, s.timezone);
+  const span = which ? ` ${which}` : ` over ${days.size} day${days.size === 1 ? "" : "s"}`;
+  await sendTo(chat, `🗓 ${q.length} scheduled post${q.length === 1 ? "" : "s"}${span}${gate_.blocks ? (nWaiting ? ` · ${nWaiting} waiting for your OK` : " · all approved") : ""}`);
+  for (const day of days.values()) {
+    const line = (p: (typeof q)[number], i: number) =>
+      `${i + 1}. ${p.platform === "x" ? "X" : "LinkedIn"} · ${DateTime.fromJSDate(p.scheduledAt, { zone: s.timezone }).toFormat("HH:mm")}${tag(p)}${stories[p.id] ? `\n${stories[p.id]}` : ""}\n${p.text}`;
+    const buttonsFor = (p: (typeof q)[number], i: number) => {
+      const row = [];
+      if (waiting(p)) row.push({ text: `✅ Approve ${i + 1}`, data: `ok:${p.id}` });
+      row.push({ text: `🚀 Now ${i + 1}`, data: `pn:${p.id}` });
+      row.push({ text: `🗑 Remove ${i + 1}`, data: `rm:${p.id}` });
+      // Not keen on it? A different story, or the same story written again.
+      return [row, [{ text: `🔁 Another story ${i + 1}`, data: `rj:${p.id}` }, { text: `✍️ New wording ${i + 1}`, data: `rw:${p.id}` }]];
+    };
+    const body = [`📅 ${day.label}`, ...day.posts.map(line)].join("\n\n");
+    // Telegram messages hold 4,000 characters; a very long day is split into one message per post.
+    if (body.length <= 3900) await sendTo(chat, body, day.posts.flatMap(buttonsFor));
+    else {
+      await sendTo(chat, `📅 ${day.label}`);
+      for (const [i, p] of day.posts.entries()) await sendTo(chat, line(p, i), buttonsFor(p, i));
+    }
   }
 }
 
@@ -300,60 +354,9 @@ async function handleForUser(u: Update, chat: number): Promise<void> {
       return void (await sendTo(chat, (err as Error).message));
     }
   }
-  if (text === "/queue") {
-    const q = await upcoming(40);
-    if (!q.length) return void (await sendTo(chat, "Nothing scheduled yet."));
-    const gate_ = approvalGate(s, (await entitlementFor(userId)).features.autoMode);
-    const approvalOn = gate_.blocks;
-    const waiting = (p: (typeof q)[number]) => gate_.blocks && !p.approvedAt;
-    const tag = (p: (typeof q)[number]) => (gate_.blocks ? (p.approvedAt ? " · ✅ approved" : " · ⏳ needs your OK, skipped if not approved in time") : "");
-    const now = DateTime.now().setZone(s.timezone);
-    const dayLabel = (d: DateTime) => {
-      const diff = Math.round(d.startOf("day").diff(now.startOf("day"), "days").days);
-      const date = d.toFormat("ccc d LLL");
-      return diff === 0 ? `Today · ${date}` : diff === 1 ? `Tomorrow · ${date}` : d.toFormat("cccc · d LLL");
-    };
-    const days = new Map<string, { label: string; posts: typeof q }>();
-    for (const p of q) {
-      const d = DateTime.fromJSDate(p.scheduledAt, { zone: s.timezone });
-      const key = d.toISODate()!;
-      if (!days.has(key)) days.set(key, { label: dayLabel(d), posts: [] });
-      days.get(key)!.posts.push(p);
-    }
-    const nWaiting = q.filter(waiting).length;
-    // When each news story happened, so a stale one can be swapped out. Never part of the post itself.
-    const stories: Record<string, string> = {};
-    for (const p of q) stories[p.id] = await storyLine(p, s.timezone);
-    await sendTo(chat, `🗓 ${q.length} scheduled post${q.length === 1 ? "" : "s"} over ${days.size} day${days.size === 1 ? "" : "s"}${approvalOn ? (nWaiting ? ` · ${nWaiting} waiting for your OK` : " · all approved") : ""}`);
-    let n = 0;
-    for (const day of days.values()) {
-      // One message per day, with the full text of every post and its own buttons.
-      const rows: { text: string; data: string }[][] = [];
-      let body = `📅 ${day.label}`;
-      day.posts.forEach((p, i) => {
-        n++;
-        const time = DateTime.fromJSDate(p.scheduledAt, { zone: s.timezone }).toFormat("HH:mm");
-        body += `\n\n${i + 1}. ${p.platform === "x" ? "X" : "LinkedIn"} · ${time}${tag(p)}${stories[p.id] ? `\n${stories[p.id]}` : ""}\n${p.text}`;
-        const row = [];
-        if (waiting(p)) row.push({ text: `✅ Approve ${i + 1}`, data: `ok:${p.id}` });
-        row.push({ text: `🚀 Now ${i + 1}`, data: `pn:${p.id}` });
-        row.push({ text: `🗑 Remove ${i + 1}`, data: `rm:${p.id}` });
-        rows.push(row);
-        // Not keen on it? A different story, or the same story written again.
-        rows.push([{ text: `🔁 Another story ${i + 1}`, data: `rj:${p.id}` }, { text: `✍️ New wording ${i + 1}`, data: `rw:${p.id}` }]);
-      });
-      // Telegram messages hold 4,000 characters; a very long day is split per post.
-      if (body.length <= 3900) await sendTo(chat, body, rows);
-      else {
-        await sendTo(chat, `📅 ${day.label}`);
-        for (const [i, p] of day.posts.entries()) {
-          const time = DateTime.fromJSDate(p.scheduledAt, { zone: s.timezone }).toFormat("HH:mm");
-          await sendTo(chat, `${i + 1}. ${p.platform === "x" ? "X" : "LinkedIn"} · ${time}${tag(p)}${stories[p.id] ? `\n${stories[p.id]}` : ""}\n${p.text}`, [rows[i]]);
-        }
-      }
-    }
-    return;
-  }
+  if (text === "/queue") return void (await showQueue(chat, userId));
+  if (text === "/today") return void (await showQueue(chat, userId, 0));
+  if (text === "/tomorrow") return void (await showQueue(chat, userId, 1));
   const cmd = text.match(/^\/(post|now|draft|mine|dig)(?:@\w+)?\s*([\s\S]*)$/i);
   const plainLink = /^https?:\/\/\S+$/i.test(text);
   if (cmd || plainLink) {
