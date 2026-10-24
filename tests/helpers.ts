@@ -44,12 +44,18 @@ export async function resetDb() {
 export type LlmHandler = (req: CompletionRequest) => unknown;
 
 /** Replace the model with a function that returns the JSON object for each task. */
+/** What the research step answers by default in tests: a story worth posting. */
+export const GOOD_ASSESSMENT = { worth: 8, why: "A specific launch developers are talking about.", kind: "other", facts: [{ fact: "It launched", source: "the article" }], angle: "What it changes for small teams." };
+
 export function fakeLLM(handler: LlmHandler) {
   const calls: CompletionRequest[] = [];
   setLLMProviderForTests({
     async complete(req) {
       calls.push(req);
-      return { text: JSON.stringify(handler(req)), inputTokens: 10, outputTokens: 10 };
+      let out = handler(req);
+      // Older tests were written before the research step; give it a sensible default answer.
+      if (req.schemaName === "assess_story" && !(out && typeof out === "object" && "worth" in out)) out = GOOD_ASSESSMENT;
+      return { text: JSON.stringify(out), inputTokens: 10, outputTokens: 10 };
     },
   });
   return calls;

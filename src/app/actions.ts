@@ -13,7 +13,7 @@ import { PILLARS, type Pillar } from "@/server/db/schema";
 import { getSettings, saveSettings } from "@/server/settings";
 import { parseSlots } from "@/server/slots-parse";
 import { approvePost, editPost, postNow, PostError, removePost, unapprovePost, reschedulePost, resolveUnconfirmed, restorePost, scheduleDraft } from "@/server/posts";
-import { createRequest, processRequests, type RequestMode } from "@/server/requests";
+import { createRequest, processRequests, retryAnyway, type RequestMode } from "@/server/requests";
 import { addTip } from "@/server/tips";
 import { disconnectAccount, startOAuth } from "@/server/platforms/accounts";
 import { registerWebhook, unlinkTelegram } from "@/server/telegram";
@@ -182,11 +182,25 @@ export async function createPostAction(form: FormData) {
       const platforms = (["linkedin", "x"] as const).filter((p) => form.get(`p_${p}`) === "on");
       if (!platforms.length) throw new Error("Pick at least one platform.");
       const mode = String(form.get("mode")) as RequestMode;
-      await createRequest({ text: String(form.get("text") ?? ""), platforms: [...platforms], mode: ["schedule", "soon", "draft"].includes(mode) ? mode : "schedule", own: form.get("own") === "on" });
+      await createRequest({ text: String(form.get("text") ?? ""), platforms: [...platforms], mode: ["schedule", "soon", "draft"].includes(mode) ? mode : "schedule", own: form.get("own") === "on", research: form.get("research") === "on", force: form.get("force") === "on" });
       const user = await requireActiveUser();
       after(() => withUser(user.id, () => processRequests({ max: 1 }).then(() => undefined)));
     },
     "Writing it now. It shows up on the calendar (or under Drafts) within a minute or two.",
+  );
+}
+
+/** A request the research found weak: write it anyway. */
+export async function retryAnywayAction(form: FormData) {
+  const id = String(form.get("id"));
+  await guarded(
+    "/create",
+    async () => {
+      const user = await requireActiveUser();
+      await retryAnyway(id);
+      after(() => withUser(user.id, () => processRequests({ max: 1 }).then(() => undefined)));
+    },
+    "Writing it anyway. It shows up on the calendar (or under Drafts) within a minute or two.",
   );
 }
 

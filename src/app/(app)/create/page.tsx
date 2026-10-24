@@ -4,7 +4,7 @@ import { getSettings } from "@/server/settings";
 import { requireActiveUser } from "@/server/auth";
 import { entitlementOf } from "@/server/billing/plans";
 import { recentRequests } from "@/server/requests";
-import { createPostAction, addTipAction } from "@/app/actions";
+import { createPostAction, addTipAction, retryAnywayAction } from "@/app/actions";
 import { Flash } from "../flash";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +22,10 @@ export default async function CreatePage({ searchParams }: { searchParams: Promi
         <h1 className="mb-1 text-lg font-semibold">Create a post</h1>
         <p className="mb-4 text-sm text-muted">Give me an idea, a link, or a link with your angle. I write it for each platform, the reviewer checks it, and it goes on the calendar unless you ask for a draft.</p>
         <form action={createPostAction} className="card space-y-3 p-4 text-sm">
-          <textarea name="text" rows={5} required placeholder={"An idea: Most teams add caching before they measure. Here is what I check first.\nA link: https://example.com/article\nA link with your angle: https://example.com/article  the pricing change matters more than the model"} className="textarea" />
+          <textarea name="text" rows={5} required placeholder={"An idea: Most teams add caching before they measure. Here is what I check first.\nA link (an article or an X post): https://x.com/jack/status/...\nA link with your angle: https://example.com/article  the pricing change matters more than the model"} className="textarea" />
+          <p className="text-[12px] text-[var(--muted)]">Links, including X posts, are researched first: PostFlow reads them, follows their links and checks other coverage, and only writes a post if it is worth one.</p>
+          <label className="flex items-center gap-2"><input type="checkbox" name="research" /> This is news I heard about: look it up before writing</label>
+          <label className="flex items-center gap-2"><input type="checkbox" name="force" /> Write it even if the research says it is weak</label>
           {links ? (
             <label className="flex items-center gap-2"><input type="checkbox" name="own" /> The link is my own article. Write it as me and include the link in the post.</label>
           ) : (
@@ -57,7 +60,14 @@ export default async function CreatePage({ searchParams }: { searchParams: Promi
           {reqs.map((r) => (
             <li key={r.id} className="card p-3">
               <p className="line-clamp-2 break-words">{r.input}</p>
-              <p className="mt-1 text-xs text-muted">{DateTime.fromJSDate(r.createdAt, { zone: s.timezone }).toFormat("d LLL HH:mm")} · {r.status}{r.error ? `: ${r.error}` : ""}</p>
+              <p className="mt-1 text-xs text-muted">{DateTime.fromJSDate(r.createdAt, { zone: s.timezone }).toFormat("d LLL HH:mm")} · {r.status === "skipped" ? "not worth a post" : r.status}{r.error ? `: ${r.error}` : ""}</p>
+              {r.summary && <p className="mt-1 text-xs">{r.summary}</p>}
+              {r.status === "skipped" && (
+                <form action={retryAnywayAction} className="mt-2">
+                  <input type="hidden" name="id" value={r.id} />
+                  <button className="btn btn-sm">Write it anyway</button>
+                </form>
+              )}
             </li>
           ))}
           {!reqs.length && <li className="text-muted">Nothing yet.</li>}

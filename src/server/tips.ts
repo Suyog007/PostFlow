@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { db, schema } from "./db/client";
 import { uid } from "./context";
 import { fetchArticle, isPublicHttpUrl, normalizeUrl } from "./net";
+import { parseXUrl, readXPost } from "./research";
 
 const TIPS_URL = "tips://manual";
 
@@ -24,7 +25,16 @@ export async function addTip(rawUrl: string): Promise<{ ok: boolean; message: st
   const userId = await uid();
   const existing = await db().query.items.findFirst({ where: and(eq(schema.items.userId, userId), eq(schema.items.url, url)) });
   if (existing) return { ok: true, message: "I already have that story. It will be considered with the rest." };
-  const article = await fetchArticle(url);
+  // An X post has no readable page; read it through X's public embed feed, plus the page it links to.
+  let article = await fetchArticle(url);
+  if (!article && parseXUrl(url)) {
+    const post = await readXPost(url);
+    if (post) {
+      const linked = post.links[0] ? await fetchArticle(post.links[0]) : null;
+      const text = [`${post.author} (@${post.handle}) on X: ${post.text}`, linked ? `Linked page, "${linked.title}": ${linked.text}` : ""].filter(Boolean).join("\n\n");
+      article = { title: linked?.title ?? `${post.author || `@${post.handle}`}: ${post.text.split("\n")[0].slice(0, 120)}`, text };
+    }
+  }
   if (!article) return { ok: false, message: "I could not read that page. Use /post with your own description instead." };
   await db()
     .insert(schema.items)

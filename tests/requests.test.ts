@@ -118,11 +118,10 @@ describe("telegram", () => {
     expect(rows.map((r) => r.mode)).toEqual(["schedule", "draft", "schedule"]);
     expect(rows.map((r) => r.own)).toEqual([false, false, true]);
   });
-  it("a plain link becomes a tip with a boosted place in the news pipeline", async () => {
+  it("a plain link is researched like /dig, not just saved as a tip", async () => {
     setFetchArticleForTests(async () => ({ title: "iFreeDomain is giving free domains for one year", text: "Free domains. ".repeat(40) }));
     await say("https://ifreedomain.com/offer");
-    const [it] = await db().select().from(schema.items).where(eq(schema.items.url, "https://ifreedomain.com/offer"));
-    expect(it.title).toContain("iFreeDomain");
-    expect(it.analyzedAt).toBeNull();
+    const [req] = await db().select().from(schema.requests);
+    expect(req).toMatchObject({ input: "https://ifreedomain.com/offer", via: "telegram" });
   });
 });

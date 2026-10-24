@@ -199,6 +199,12 @@ export const requests = pgTable("requests", {
   via: text("via").notNull().default("web"),
   /** The link is the owner's own article: write as its author and include the link. */
   own: boolean("own").notNull().default(false),
+  /** Text that names news the owner heard about: look it up before writing. Links are always researched. */
+  research: boolean("research").notNull().default(false),
+  /** Write it even if the research says it is weak. */
+  force: boolean("force").notNull().default(false),
+  /** What the research concluded, shown to the owner with the result. */
+  summary: text("summary"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   finishedAt: timestamp("finished_at", { withTimezone: true }),
 });

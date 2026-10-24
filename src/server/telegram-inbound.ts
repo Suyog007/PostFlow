@@ -12,8 +12,7 @@ import { requestFillNow } from "./tick";
 import { formatLocal } from "./slots";
 import type { Pillar } from "./db/schema";
 import { after } from "next/server";
-import { createRequest, processRequests, type RequestMode } from "./requests";
-import { addTip } from "./tips";
+import { createRequest, processRequests, retryAnyway, type RequestMode } from "./requests";
 
 interface Update {
   message?: { chat: { id: number }; text?: string };
@@ -28,7 +27,8 @@ const HELP = `Make a post from something:
 
 Other ways to feed me:
 - Any plain text is saved as a note (what you built, learned or think). Tags: #local, #learning
-- A plain link is a story tip: I cross-check it against other publishers and post it only if it holds up
+- A plain link (an article or an X post) is researched: I read it, follow its links, check other coverage and write a post if it is worth one
+/dig <news you heard about>  look it up first, then write a post if it is worth one
 
 /learn  a short, simple lesson for your audience in the next free slots. Add a topic to choose it: /learn how indexes work
 /fill   write posts now for every open slot in the next 5 days
@@ -36,6 +36,27 @@ Other ways to feed me:
 /pause  stop all posting
 /resume start again
 /unlink disconnect this chat from PostFlow`;
+
+const URL_IN = /https?:\/\/\S+/i;
+
+/** Processes a request in the background, then sends what came of it (the posts, or why it was skipped). */
+async function runRequest(userId: string, chat: number | string, requestId: string) {
+  const run = () =>
+    withUser(userId, async () => {
+      await processRequests({ max: 3 });
+      const req = await db().query.requests.findFirst({ where: eq(schema.requests.id, requestId) });
+      // Skipped and failed requests already sent their own message (with "Write it anyway" where it applies).
+      if (req?.status !== "done") return;
+      if (req.summary) await sendTo(chat, `🔎 ${req.summary}`);
+      for (const id of req.postIds) await sendPost(chat, id, "✍️ Ready");
+    });
+  try {
+    after(run);
+  } catch {
+    // Outside a request (tests): run it now.
+    await run();
+  }
+}
 
 /** Sends one post's full text with its buttons. */
 async function sendPost(chat: number | string, id: string, heading: string) {
@@ -150,6 +171,16 @@ async function handleForUser(u: Update, chat: number): Promise<void> {
         after(run);
       } catch {
         await run(); // outside a request (tests)
+      }
+      return;
+    } else if (data.startsWith("fw:")) {
+      // "Write it anyway" after the research said a link or topic was weak.
+      await telegramApi("answerCallbackQuery", { callback_query_id: u.callback_query.id, text: "Writing it anyway…" });
+      try {
+        const req = await retryAnyway(data.slice(3));
+        await runRequest(userId, chat, req.id);
+      } catch (err) {
+        await sendTo(chat, (err as Error).message);
       }
       return;
     } else if (data.startsWith("pn:")) {
@@ -318,27 +349,28 @@ async function handleForUser(u: Update, chat: number): Promise<void> {
     }
     return;
   }
-  const cmd = text.match(/^\/(post|now|draft|mine)(?:@\w+)?\s*([\s\S]*)$/i);
-  if (cmd) {
-    const mode: RequestMode = cmd[1] === "now" ? "soon" : cmd[1] === "draft" ? "draft" : "schedule";
+  const cmd = text.match(/^\/(post|now|draft|mine|dig)(?:@\w+)?\s*([\s\S]*)$/i);
+  const plainLink = /^https?:\/\/\S+$/i.test(text);
+  if (cmd || plainLink) {
+    const verb = cmd ? cmd[1].toLowerCase() : "dig";
+    const body = cmd ? cmd[2] : text;
+    const mode: RequestMode = verb === "now" ? "soon" : verb === "draft" ? "draft" : "schedule";
+    const researched = verb === "dig" || URL_IN.test(body);
     try {
-      const req = await createRequest({ text: cmd[2], mode, via: "telegram", own: cmd[1].toLowerCase() === "mine" });
-      await sendTo(chat, `✍️ On it. I will write it for ${req.platforms.length > 1 ? "LinkedIn and X" : "your platform"}${mode === "draft" ? " as drafts" : ""}. Expect it here in a minute or two.`);
-      try {
-        after(() => withUser(userId, () => processRequests({ max: 1 }).then(() => undefined)));
-      } catch {
-        // outside a request (tests): the scheduler picks it up
-      }
+      const req = await createRequest({ text: body, mode, via: "telegram", own: verb === "mine", research: verb === "dig" });
+      await sendTo(
+        chat,
+        researched && verb !== "mine"
+          ? "🔎 Looking into it: reading it, following its links and checking what other publishers say. If it is worth a post I will write it; if not, I will tell you why. Give me a minute or two."
+          : `✍️ On it. I will write it for ${req.platforms.length > 1 ? "LinkedIn and X" : "your platform"}${mode === "draft" ? " as drafts" : ""}. Expect it here in a minute or two.`,
+      );
+      await runRequest(userId, chat, req.id);
     } catch (err) {
       await sendTo(chat, (err as Error).message);
     }
     return;
   }
   if (text.startsWith("/")) return void (await sendTo(chat, HELP));
-  if (/^https?:\/\/\S+$/i.test(text)) {
-    const tip = await addTip(text);
-    return void (await sendTo(chat, `${tip.ok ? "🔎" : "⚠️"} ${tip.message}`));
-  }
 
   const note = parseNote(text);
   if (note.text.length < 15) return void (await sendTo(chat, "That is too short to build a post from. Add a little more detail."));

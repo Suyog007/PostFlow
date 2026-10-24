@@ -106,6 +106,11 @@ export function setNewsSearchForTests(fn: NewsSearch) {
   search = fn;
 }
 
+/** Headlines about a topic from many publishers (the same search the cross-check uses). */
+export function searchNews(query: string): Promise<Mention[]> {
+  return search(queryFor(query));
+}
+
 const RECHECK_MS = 45 * 60_000;
 
 function queryFor(title: string) {

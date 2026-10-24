@@ -6,11 +6,12 @@ import { activePlatforms, assertFeature, CONNECT_FIRST, LimitError } from "./bil
 import { getSettings, type Settings } from "./settings";
 import { fetchArticle } from "./net";
 import { produceForSlot, type Material } from "./generate";
-import { checkStory, registrableDomain } from "./verify";
+import { registrableDomain } from "./verify";
 import { nextFreeSlot } from "./slots";
 import { LLMError, untrusted } from "./llm";
 import { addEvent } from "./events";
 import { notifyText } from "./telegram";
+import { MIN_WORTH, NotWorthError, researchLink, researchTopic } from "./research";
 
 type Platform = "x" | "linkedin";
 type RequestRow = typeof schema.requests.$inferSelect;
@@ -18,7 +19,7 @@ const URL_RE = /https?:\/\/[^\s<>"')]+/i;
 
 export type RequestMode = "schedule" | "soon" | "draft";
 
-export async function createRequest(input: { text: string; platforms?: Platform[]; mode?: RequestMode; via?: string; own?: boolean }): Promise<RequestRow> {
+export async function createRequest(input: { text: string; platforms?: Platform[]; mode?: RequestMode; via?: string; own?: boolean; research?: boolean; force?: boolean }): Promise<RequestRow> {
   const text = input.text.trim();
   if (text.length < 8) throw new Error("Give me a bit more to work with: an idea in a sentence or two, or a link.");
   const active = await activePlatforms();
@@ -27,7 +28,7 @@ export async function createRequest(input: { text: string; platforms?: Platform[
   if (URL_RE.test(text) || input.own) await assertFeature("links", "Writing posts from a link");
   const [row] = await db()
     .insert(schema.requests)
-    .values({ userId: await uid(), input: text.slice(0, 4000), mode: input.mode ?? "schedule", platforms, via: input.via ?? "web", own: !!input.own })
+    .values({ userId: await uid(), input: text.slice(0, 4000), mode: input.mode ?? "schedule", platforms, via: input.via ?? "web", own: !!input.own, research: !!input.research, force: !!input.force })
     .returning();
   return row;
 }
@@ -42,7 +43,21 @@ async function claimNext(): Promise<RequestRow | null> {
   return id ? (await db().query.requests.findFirst({ where: eq(schema.requests.id, id) })) ?? null : null;
 }
 
-async function materialFor(input: string, own: boolean, s: Settings): Promise<{ material: Material; unverifiedRisk: boolean }> {
+/** A skipped request, sent again with "write it anyway". */
+export async function retryAnyway(requestId: string): Promise<RequestRow> {
+  const old = await db().query.requests.findFirst({ where: and(eq(schema.requests.id, requestId), eq(schema.requests.userId, await uid())) });
+  if (!old) throw new Error("I could not find that request.");
+  if (old.status !== "skipped") throw new Error("That one is not waiting for a decision.");
+  await db().update(schema.requests).set({ status: "overruled" }).where(eq(schema.requests.id, old.id));
+  const [row] = await db()
+    .insert(schema.requests)
+    .values({ userId: old.userId, input: old.input, mode: old.mode, platforms: old.platforms, via: old.via, own: old.own, research: old.research, force: true })
+    .returning();
+  return row;
+}
+
+async function materialFor(req: Pick<RequestRow, "input" | "own" | "research" | "force">, s: Settings): Promise<{ material: Material; unverifiedRisk: boolean; summary?: string }> {
+  const { input, own } = req;
   const url = input.match(URL_RE)?.[0];
   const angle = url ? input.replace(url, "").trim() : input;
   const isOwn = !!url && (own || s.ownDomains.some((d) => registrableDomain(url) === registrableDomain(d)));
@@ -58,25 +73,19 @@ async function materialFor(input: string, own: boolean, s: Settings): Promise<{ 
     ].filter(Boolean).join("\n");
     return { material: { kind: "note", pillar: "own_work", source, label: article?.title ?? url, ownUrl: url, firstPerson: true }, unverifiedRisk: false };
   }
-  if (!url) {
-    return { material: { kind: "note", pillar: "own_work", source: angle, label: angle.slice(0, 80), firstPerson: true }, unverifiedRisk: false };
+  // Links (an X post, an article) and news you heard about are researched first, then judged.
+  if (url || req.research) {
+    const r = url ? await researchLink(url, s, angle || undefined) : await researchTopic(input, s);
+    if (!req.force && r.assessment.worth < MIN_WORTH) throw new NotWorthError(r.assessment.why, r.assessment.worth);
+    const v = r.material.verification;
+    return {
+      material: r.material,
+      // A risky claim (price, offer, money, security) that other publishers do not confirm stays a draft for you to check.
+      unverifiedRisk: !!v && !v.ok && v.risky,
+      summary: `Looked into it: ${r.assessment.worth}/10. ${r.assessment.why}`,
+    };
   }
-  const article = await fetchArticle(url);
-  if (!article && angle.length < 20) throw new Error("I could not read that page (it may be behind a paywall). Paste the key points as text and I will write from those.");
-  const title = article?.title ?? new URL(url).hostname;
-  const v = await checkStory({ url, title, summary: article?.text.slice(0, 400) });
-  const lines = [
-    `Source: ${new URL(url).hostname}`,
-    `Title: ${title}`,
-    article ? `Article text:\n${article.text}` : "(The page could not be read; rely only on the owner's description below.)",
-    v.mentions.length ? `Also reported by (independent publishers):\n${v.mentions.map((m) => `- ${m.domain}: ${m.title}`).join("\n")}` : "",
-    angle ? `OWNER'S ANGLE (their own view or instruction; use it as the point of the post, framed as their opinion):\n${angle}` : "",
-  ].filter(Boolean);
-  return {
-    material: { kind: "news", pillar: "news", source: lines.join("\n"), label: title, sourceUrl: url, firstPerson: false, verification: v },
-    // A risky claim (price, offer, money, security) that other publishers do not confirm stays a draft for you to check.
-    unverifiedRisk: !v.ok && v.risky,
-  };
+  return { material: { kind: "note", pillar: "own_work", source: angle, label: angle.slice(0, 80), firstPerson: true }, unverifiedRisk: false };
 }
 
 async function slotTime(platform: Platform, mode: RequestMode, s: Settings, now: Date): Promise<Date> {
@@ -99,7 +108,7 @@ async function slotTime(platform: Platform, mode: RequestMode, s: Settings, now:
 async function processOne(req: RequestRow, now: Date) {
   const s = await getSettings();
   try {
-    const { material, unverifiedRisk } = await materialFor(req.input, req.own, s);
+    const { material, unverifiedRisk, summary } = await materialFor(req, s);
     const ids: string[] = [];
     for (const platform of req.platforms as Platform[]) {
       const at = await slotTime(platform, req.mode as RequestMode, s, now);
@@ -108,9 +117,17 @@ async function processOne(req: RequestRow, now: Date) {
       ids.push(out.postId);
     }
     if (unverifiedRisk) await notifyText("⚠️ I kept these as drafts: the claim is about a price, offer or money and other publishers do not confirm it yet. Check it, then put it on the calendar yourself.").catch(warnOnError("notify_failed", { what: "kept as drafts" }));
-    await db().update(schema.requests).set({ status: "done", postIds: ids, finishedAt: new Date() }).where(eq(schema.requests.id, req.id));
+    await db().update(schema.requests).set({ status: "done", postIds: ids, summary: summary ?? null, finishedAt: new Date() }).where(eq(schema.requests.id, req.id));
     await addEvent("request", `Created ${ids.length} post(s) from your ${req.input.match(URL_RE) ? "link" : "idea"}.`);
   } catch (err) {
+    if (err instanceof NotWorthError) {
+      // Researched and found weak: say why, and let the owner overrule it with one tap.
+      const summary = `Looked into it: ${err.worth}/10. ${err.why}`;
+      await db().update(schema.requests).set({ status: "skipped", summary: summary.slice(0, 1000), finishedAt: new Date() }).where(eq(schema.requests.id, req.id));
+      await addEvent("request", `Skipped your ${req.input.match(URL_RE) ? "link" : "topic"} after research (${err.worth}/10).`);
+      await notifyText(`🔎 I looked into it and do not think it is worth a post (${err.worth}/10).\n\n${err.why}`, [[{ text: "✍️ Write it anyway", data: `fw:${req.id}` }]]).catch(warnOnError("notify_failed", { what: "request skipped" }));
+      return;
+    }
     const message = err instanceof LLMError ? err.message : (err as Error).message;
     await db().update(schema.requests).set({ status: "failed", error: message.slice(0, 400), finishedAt: new Date() }).where(eq(schema.requests.id, req.id));
     await notifyText(`I could not create a post from that: ${message}`).catch(warnOnError("notify_failed", { what: "request failed" }));
