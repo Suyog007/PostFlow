@@ -17,7 +17,7 @@ import { createRequest, processRequests, type RequestMode } from "@/server/reque
 import { addTip } from "@/server/tips";
 import { disconnectAccount, startOAuth } from "@/server/platforms/accounts";
 import { registerWebhook, unlinkTelegram } from "@/server/telegram";
-import { fillNowForUser, runForUser, startBackgroundFill, tick } from "@/server/tick";
+import { requestFillNow, runForUser, tick } from "@/server/tick";
 import { addEvent } from "@/server/events";
 import { publishDue } from "@/server/publisher";
 import { fillNowDays, recheckPost, rejectAndReplace, rewordPost, swapToAlternative } from "@/server/generate";
@@ -220,6 +220,7 @@ export async function saveProfileAction(form: FormData) {
         local: Number(form.get("w_local") ?? 0),
         learning: Number(form.get("w_learning") ?? 0),
       },
+      hashtags: { linkedin: form.get("tags_linkedin") === "on", x: form.get("tags_x") === "on" },
       // Links on X cost far more per post; only owners can turn them on.
       includeLinks: { linkedin: form.get("link_linkedin") === "on", x: (await requireActiveUser()).isOwner && form.get("link_x") === "on" },
     });
@@ -289,15 +290,7 @@ export async function runTickAction() {
 export async function fillCalendarAction() {
   const user = await requireActiveUser();
   const s = await withUser(user.id, () => getSettings());
-  await guarded("/calendar", async () => {
-    await withUser(user.id, async () => {
-      const [last] = await db().select().from(schema.events).where(and(eq(schema.events.userId, user.id), inArray(schema.events.kind, ["fill", "fill_done"]))).orderBy(desc(schema.events.at)).limit(1);
-      if (last?.kind === "fill" && Date.now() - last.at.getTime() < 10 * 60_000) throw new Error("Already filling your calendar. New posts appear here as they are written.");
-      if (s.paused) throw new Error("Autopilot is paused. Resume it in Settings first.");
-      await addEvent("fill", `Filling the next ${fillNowDays(s)} days…`);
-    });
-    if (!(await startBackgroundFill(user.id))) after(() => fillNowForUser(user.id, { budgetMs: 4 * 60_000 }).then(() => undefined).catch(() => undefined));
-  }, `Filling the next ${fillNowDays(s)} days. New posts appear here over the next few minutes.`);
+  await guarded("/calendar", () => requestFillNow(user.id, (job) => after(job)), `Filling the next ${fillNowDays(s)} days. New posts appear here over the next few minutes.`);
 }
 
 // ---- admin ------------------------------------------------------------------

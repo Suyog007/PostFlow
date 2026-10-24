@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { db, schema, sqlClient } from "./db/client";
 import { collectFeeds, seedSourcesIfEmpty } from "./collect";
 import { analyzeBatch } from "./analyze";
@@ -13,7 +13,8 @@ import { addEvent } from "./events";
 import { log, warnOnError } from "./log";
 import { recordHeartbeat } from "./health";
 import { withUser } from "./context";
-import { activePlatforms, entitledUsers } from "./billing/plans";
+import { activePlatforms, CONNECT_FIRST, entitledUsers } from "./billing/plans";
+import { notifyText } from "./telegram";
 
 export interface TickResult {
   skipped?: string;
@@ -171,11 +172,31 @@ export async function fillNowForUser(userId: string, opts: { budgetMs?: number }
         const tail = waiting.length
           ? ` ${waiting.length} open slot${waiting.length === 1 ? "" : "s"} (${waiting.map((w) => `${w.platform === "x" ? "X" : "LinkedIn"} ${formatLocal(w.at, s.timezone)}`).join(", ")}) have no story that will still be fresh by then; autopilot fills them as new stories come in.`
           : f.idle && f.idle !== "calendar full" && f.idle !== "nothing worth posting right now" ? ` Stopped because: ${f.idle}.` : "";
-        await addEvent("fill_done", `Filled the calendar: ${f.produced} new post${f.produced === 1 ? "" : "s"}, ${f.rejected} held back by the reviewer.${tail}`.slice(0, 500));
+        const summary = `Filled the calendar: ${f.produced} new post${f.produced === 1 ? "" : "s"}, ${f.rejected} held back by the reviewer.${tail}`;
+        await addEvent("fill_done", summary.slice(0, 500));
+        await notifyText(`✅ ${summary}\n\nSend /queue to review the posts.`).catch(warnOnError("notify_failed", { what: "fill done" }));
         return f;
       }),
     3 * 60_000,
   );
+}
+
+/**
+ * Starts "Fill now" for one user, from the site or from Telegram. Returns a short message for them.
+ * `fallback` runs the job in-process when the background function is not available (local development).
+ */
+export async function requestFillNow(userId: string, fallback: (job: () => Promise<unknown>) => void): Promise<string> {
+  const message = await withUser(userId, async () => {
+    const s = await getSettings();
+    if (s.paused) throw new Error("Autopilot is paused. Resume it first.");
+    if (!(await activePlatforms()).length) throw new Error(CONNECT_FIRST);
+    const [last] = await db().select().from(schema.events).where(and(eq(schema.events.userId, userId), inArray(schema.events.kind, ["fill", "fill_done"]))).orderBy(desc(schema.events.at)).limit(1);
+    if (last?.kind === "fill" && Date.now() - last.at.getTime() < 10 * 60_000) throw new Error("Already filling your calendar. New posts appear as they are written.");
+    await addEvent("fill", `Filling the next ${fillNowDays(s)} days…`);
+    return `Filling the next ${fillNowDays(s)} days.`;
+  });
+  if (!(await startBackgroundFill(userId))) fallback(() => fillNowForUser(userId, { budgetMs: 4 * 60_000 }).then(() => undefined).catch(warnOnError("fill_now_failed", { userId })));
+  return message;
 }
 
 /** Starts "Fill now" in the background function. False when that is not available (local dev). */

@@ -7,7 +7,8 @@ import { sendTo, telegramApi } from "./telegram";
 import { getSettings, saveSettings } from "./settings";
 import { approvePost, postNow, removePost, PostError, upcoming } from "./posts";
 import { publishDue } from "./publisher";
-import { rejectAndReplace } from "./generate";
+import { rejectAndReplace, rewordPost } from "./generate";
+import { requestFillNow } from "./tick";
 import { formatLocal } from "./slots";
 import type { Pillar } from "./db/schema";
 import { after } from "next/server";
@@ -29,10 +30,21 @@ Other ways to feed me:
 - Any plain text is saved as a note (what you built, learned or think). Tags: #local, #learning
 - A plain link is a story tip: I cross-check it against other publishers and post it only if it holds up
 
-/queue  upcoming posts by day, in full, with Approve, Post now and Remove buttons
+/fill   write posts now for every open slot in the next 5 days
+/queue  upcoming posts by day, in full. Each has Approve, Post now, Remove, Another story and New wording buttons
 /pause  stop all posting
 /resume start again
 /unlink disconnect this chat from PostFlow`;
+
+const QUICK_REWORD = "Take a different angle and a fresh opening. Keep the same story and the same facts.";
+
+/** Buttons under a post you may want to act on. */
+function postButtons(id: string) {
+  return [
+    [{ text: "✅ Approve", data: `ok:${id}` }, { text: "🗑 Remove", data: `rm:${id}` }],
+    [{ text: "🔁 Another story", data: `rj:${id}` }, { text: "✍️ New wording", data: `rw:${id}` }],
+  ];
+}
 
 function parseNote(text: string): { pillar: Pillar; text: string } {
   // #nepal is kept as an alias of #local for accounts from the single-user version.
@@ -110,6 +122,25 @@ async function handleForUser(u: Update, chat: number): Promise<void> {
         await run(); // outside a request (tests)
       }
       return;
+    } else if (data.startsWith("rw:")) {
+      // Same story and facts, written again from a different angle. Takes a moment, so acknowledge first.
+      await telegramApi("answerCallbackQuery", { callback_query_id: u.callback_query.id, text: "Writing it again…" });
+      const id = data.slice(3);
+      const run = () =>
+        withUser(userId, async () => {
+          try {
+            const r = await rewordPost(id, QUICK_REWORD, false);
+            await sendTo(chat, `✍️ New wording\n\n${r.text}${r.reasons.length ? `\n\nReviewer concerns: ${r.reasons.join(" · ")}` : ""}`, postButtons(id));
+          } catch (err) {
+            await sendTo(chat, (err as Error).message);
+          }
+        });
+      try {
+        after(run);
+      } catch {
+        await run(); // outside a request (tests)
+      }
+      return;
     } else if (data.startsWith("pn:")) {
       // Posting for real cannot be undone, so ask first.
       const p = await db().query.posts.findFirst({ where: and(eq(schema.posts.id, data.slice(3)), eq(schema.posts.userId, userId)) });
@@ -165,6 +196,20 @@ async function handleForUser(u: Update, chat: number): Promise<void> {
     await saveSettings({ paused: false });
     return void (await sendTo(chat, "▶️ Resumed."));
   }
+  if (text === "/fill") {
+    try {
+      const msg = await requestFillNow(userId, (job) => {
+        try {
+          after(job);
+        } catch {
+          // outside a request (tests): the scheduler picks it up
+        }
+      });
+      return void (await sendTo(chat, `⏳ ${msg} It takes a few minutes, and I will message you when it is done.`));
+    } catch (err) {
+      return void (await sendTo(chat, (err as Error).message));
+    }
+  }
   if (text === "/queue") {
     const q = await upcoming(40);
     if (!q.length) return void (await sendTo(chat, "Nothing scheduled yet."));
@@ -201,6 +246,8 @@ async function handleForUser(u: Update, chat: number): Promise<void> {
         row.push({ text: `🚀 Now ${i + 1}`, data: `pn:${p.id}` });
         row.push({ text: `🗑 Remove ${i + 1}`, data: `rm:${p.id}` });
         rows.push(row);
+        // Not keen on it? A different story, or the same story written again.
+        rows.push([{ text: `🔁 Another story ${i + 1}`, data: `rj:${p.id}` }, { text: `✍️ New wording ${i + 1}`, data: `rw:${p.id}` }]);
       });
       // Telegram messages hold 4,000 characters; a very long day is split per post.
       if (body.length <= 3900) await sendTo(chat, body, rows);

@@ -65,8 +65,9 @@ describe("telegram inbound", () => {
     expect(day1.text).toContain(long); // the whole post, not a cut-off
     expect(day1.text).toMatch(/1\. LinkedIn/);
     expect(day1.text).toMatch(/2\. X/);
-    expect(day1.buttons!.length).toBe(2);
+    expect(day1.buttons!.length).toBe(4); // two rows per post
     expect(day1.buttons![0].map((b) => b.text)).toEqual(["✅ Approve 1", "🚀 Now 1", "🗑 Remove 1"]);
+    expect(day1.buttons![1].map((b) => b.text)).toEqual(["🔁 Another story 1", "✍️ New wording 1"]);
     expect(sent.some((m) => m.text.includes("Tomorrow"))).toBe(true);
     const approved = sent.find((m) => m.text.includes("A post for tomorrow"))!;
     expect(approved.text).toContain("✅ approved");
@@ -142,6 +143,61 @@ describe("telegram inbound", () => {
       resetEnvCache();
     }
     expect(sent.flatMap((m) => m.buttons ?? []).flat().map((b) => b.text)).toContain("🚀 Now 1");
+  });
+
+  describe("/fill and getting a different post", () => {
+    async function capture<T>(fn: (sent: { text: string; buttons?: { text: string; callback_data: string }[][] }[]) => Promise<T>) {
+      process.env.TELEGRAM_BOT_TOKEN = "123:test";
+      resetEnvCache();
+      const sent: { text: string; buttons?: { text: string; callback_data: string }[][] }[] = [];
+      const realFetch = globalThis.fetch;
+      globalThis.fetch = (async (_u: string, init?: { body?: string }) => {
+        const b = JSON.parse(init?.body ?? "{}");
+        if (b.text) sent.push({ text: b.text, buttons: b.reply_markup?.inline_keyboard });
+        return new Response(JSON.stringify({ ok: true }));
+      }) as typeof fetch;
+      try {
+        return await fn(sent);
+      } finally {
+        globalThis.fetch = realFetch;
+        delete process.env.TELEGRAM_BOT_TOKEN;
+        resetEnvCache();
+      }
+    }
+
+    it("/fill starts a fill and refuses to start a second one while it runs", async () => {
+      await capture(async (sent) => {
+        await handleTelegramUpdate(msg("/fill"));
+        expect(sent[0].text).toMatch(/Filling the next 5 days.*message you when it is done/);
+        await handleTelegramUpdate(msg("/fill"));
+        expect(sent[1].text).toMatch(/Already filling/);
+      });
+      const events = await db().select().from(schema.events);
+      expect(events.filter((e) => e.kind === "fill")).toHaveLength(1);
+    });
+
+    it("/fill says so when autopilot is paused", async () => {
+      await handleTelegramUpdate(msg("/pause"));
+      await capture(async (sent) => {
+        await handleTelegramUpdate(msg("/fill"));
+        expect(sent[0].text).toMatch(/paused/i);
+      });
+    });
+
+    it("the New wording button writes the same story again and sends it back with buttons", async () => {
+      const { fakeLLM, GOOD_REVIEW } = await import("./helpers");
+      const [p] = await db().insert(schema.posts).values({ userId: me(), platform: "x", pillar: "own_work", text: "Cut CI from 14 minutes to 4. The cache did most of it.", status: "scheduled", scheduledAt: new Date(Date.now() + 3_600_000) }).returning();
+      fakeLLM((req) => (req.schemaName === "write_post" ? { text: "Our CI used to take 14 minutes and now takes 4, mostly thanks to the dependency cache. #devops" } : GOOD_REVIEW));
+      await capture(async (sent) => {
+        await handleTelegramUpdate({ callback_query: { id: "9", data: `rw:${p.id}`, message: { chat: { id: 42 } } } });
+        const reply = sent.find((m) => m.text.includes("New wording"))!;
+        expect(reply.text).toContain("takes 4, mostly thanks to the dependency cache");
+        expect(reply.buttons!.flat().map((b) => b.callback_data)).toEqual([`ok:${p.id}`, `rm:${p.id}`, `rj:${p.id}`, `rw:${p.id}`]);
+      });
+      const after = (await db().select().from(schema.posts).where(eq(schema.posts.id, p.id)))[0];
+      expect(after.text).toContain("dependency cache");
+      expect(after.status).toBe("scheduled");
+    });
   });
 
   it("the Remove button cancels a scheduled post", async () => {

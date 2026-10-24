@@ -30,14 +30,21 @@ For each item, judge:
 Be strict: most items should score below 6. Return every id exactly once.`;
 }
 
+/** What the writer may do with hashtags on this platform. */
+export function tagRule(s: Pick<Settings, "hashtags">, platform: "x" | "linkedin") {
+  if (!s.hashtags[platform]) return "No hashtags.";
+  const n = platform === "x" ? "1 or 2" : "up to 3";
+  return `Finish with ${n} hashtags on their own at the end, after the text: specific to the topic (like #nextjs, #postgres, #devops), never generic filler (#tech, #innovation, #success, #motivation, #ai on its own) and never inside a sentence. Skip hashtags if none fits naturally.`;
+}
+
 export function writerSystem(s: Settings, platform: "x" | "linkedin", opts: { explainer?: boolean } = {}) {
   // Explaining a bug and its impact needs a little more room on LinkedIn; X stays short.
   const platformRules =
     platform === "x"
-      ? `Platform: X. 2 to 3 short lines, at most 240 characters including spaces. No hashtags. No emoji.`
+      ? `Platform: X. 2 to 3 short lines, at most 240 characters including spaces (hashtags included). No emoji. ${tagRule(s, "x")}`
       : opts.explainer
-        ? `Platform: LinkedIn. 3 to 6 short lines, at most 700 characters. No hashtags. No emoji. No headline, no sign-off, no question to "the community".`
-        : `Platform: LinkedIn. 2 to 3 short lines, at most 300 characters. No hashtags. No emoji. No headline, no sign-off, no question to "the community".`;
+        ? `Platform: LinkedIn. 3 to 6 short lines, at most 700 characters. No emoji. No headline, no sign-off, no question to "the community". ${tagRule(s, "linkedin")}`
+        : `Platform: LinkedIn. 2 to 3 short lines, at most 300 characters. No emoji. No headline, no sign-off, no question to "the community". ${tagRule(s, "linkedin")}`;
   return `You ghost-write posts for one person. Write exactly as they would: plain, specific, human.
 
 ${profileBlock(s)}
@@ -63,10 +70,11 @@ export const REVIEWER_SYSTEM = `You are a strict, skeptical editor and fact-chec
 Judge:
 1. worth_posting (0-10): Is the STORY AND ANGLE worth a post: specific and useful to developers/builders, with a real point of view? 10 = I would follow this person for posts like it. Generic, obvious or filler = 0-4. Judge only the subject and the take here; wording, attribution and fact problems are fixable and belong in factual, slop and issues, not in this score.
 2. factual (0-10): Extract every checkable claim (numbers, names, dates, quotes, cause-and-effect, "X launched Y"). Mark each "supported" only if the SOURCE MATERIAL or OWNER NOTE explicitly backs it; "unsupported" if it contradicts or goes beyond it; "unverifiable" if it cannot be checked from what you were given (for evergreen posts, well-established general knowledge may be "supported"). Any first-person experience not in the OWNER NOTE is "unsupported". 10 only if every claim is supported.
-3. slop (0-10, 10 = clean human prose): Penalise corporate buzzwords, filler openers, forced contrast ("It's not X, it's Y"), triplets for rhythm, engagement bait, hollow motivation, any emoji or hashtag, more than 3 lines, recapping the article, a stiff "According to the report" opener, the same sentence template or opinion phrase as the RECENT POSTS, a tone that sounds machine-written. Naming the source briefly ("Anthropic launched", "per The Verge") is good, not slop. Short and casual is the goal.
+3. slop (0-10, 10 = clean human prose): Penalise corporate buzzwords, filler openers, forced contrast ("It's not X, it's Y"), triplets for rhythm, engagement bait, hollow motivation, any emoji, more than 3 lines, recapping the article, a stiff "According to the report" opener, the same sentence template or opinion phrase as the RECENT POSTS, a tone that sounds machine-written. Naming the source briefly ("Anthropic launched", "per The Verge") is good, not slop. Short and casual is the goal.
 4. issues: concrete problems, each one sentence.
 5. revision_instructions: precise edits that would fix the problems (empty if none).
 For news posts: the post must say who announced or reported the news in a few words; if it does not, list that in issues and revision_instructions (it is fixable). A recap with no builder opening or point of view is worth at most 5. Predictions and opportunity claims must be framed as the owner's opinion and follow from the source; a prediction or guarantee stated as fact is "unsupported". A sentence that is plainly the owner's own take (what they would try, what they think it means, what they find odd, a hedged guess) IS opinion: do not list it as a claim or an issue.
 When WRITER'S EVIDENCE is given, use it to find the support quickly, but always judge each claim against the material yourself; a NOT FOUND quote is a red flag for that claim.
+Hashtags: the user message says whether hashtags are allowed on this platform. When allowed, 1-2 specific hashtags at the end are normal: do not count them as claims, filler or slop, and do not count them toward the line limit. When not allowed, any hashtag is a problem.
 Also set is_duplicate=true if it repeats the point of a RECENT POST listed.
 ${UNTRUSTED_NOTICE}`;

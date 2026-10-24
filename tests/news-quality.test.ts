@@ -268,6 +268,34 @@ describe("stock opinion phrases", () => {
   });
 });
 
+describe("hashtags", () => {
+  it("X gets one or two specific hashtags by default, LinkedIn none, and the reviewer is told which", async () => {
+    await saveSettings({ slots: BOTH.map((b) => ({ ...b, time: "00:30" })), horizonDays: 2 });
+    await addItem("Acme ships Postgres backups in seconds", 9);
+    const calls = fakeLLM((req) => (req.schemaName === "write_post" ? { text: "Acme says Postgres backups now take seconds. Small teams with big nightly jobs should look first. #postgres" } : GOOD_REVIEW));
+    await fillCalendar({ max: 4 });
+    const writes = calls.filter((c) => c.schemaName === "write_post");
+    expect(writes.find((w) => w.system.includes("Platform: X"))!.system).toMatch(/Finish with 1 or 2 hashtags/);
+    expect(writes.find((w) => w.system.includes("Platform: LinkedIn"))!.system).toMatch(/No hashtags\./);
+    const reviews = calls.filter((c) => c.schemaName === "review_post");
+    expect(reviews.find((r) => r.user.startsWith("Platform: X"))!.user).toContain("Hashtags allowed here: yes");
+    expect(reviews.find((r) => r.user.startsWith("Platform: LinkedIn"))!.user).toContain("Hashtags allowed here: no");
+  });
+
+  it("LinkedIn hashtags can be switched on (up to 3), and too many are blocked", async () => {
+    const { runChecks } = await import("../src/server/checks");
+    const { writerSystem } = await import("../src/server/prompts");
+    const { getSettings } = await import("../src/server/settings");
+    await saveSettings({ hashtags: { linkedin: true, x: false } });
+    const s = await getSettings();
+    expect(writerSystem(s, "linkedin")).toMatch(/up to 3 hashtags/);
+    expect(writerSystem(s, "x")).toMatch(/No hashtags\./);
+    expect(runChecks("A decent post about Postgres backups that finished faster. #postgres #devops #databases", "linkedin").some((c) => c.code === "hashtags")).toBe(false);
+    expect(runChecks("A decent post about Postgres backups that finished faster. #postgres #devops #databases #sre", "linkedin").some((c) => c.code === "hashtags")).toBe(true);
+    expect(runChecks("A decent post about Postgres backups that finished faster. #postgres #devops #databases", "x").some((c) => c.code === "hashtags")).toBe(true);
+  });
+});
+
 describe("repeated phrasing", () => {
   it("finds a shared run of six words", () => {
     expect(sharedPhrase("I would expect small teams to ship focused products first.", "Honestly I would expect small teams to ship it faster.")).toBe("i would expect small teams to");

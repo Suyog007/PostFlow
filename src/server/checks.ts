@@ -67,7 +67,8 @@ export function runChecks(text: string, platform: "x" | "linkedin", recent: stri
   const flat = body.replace(/[\u2018\u2019]/g, "'");
   const stock = STOCK_OPINION.filter(([re]) => re.test(flat)).map(([, l]) => `"${l}"`);
   if (stock.length) checks.push({ code: "stock_opinion", severity: "block", message: `Uses ${stock.join(", ")}, a stock phrase that makes every post sound the same. Make the point in your own words.` });
-  if ((body.match(HASHTAG_RE) ?? []).length > 2) checks.push({ code: "hashtags", severity: "block", message: "More than 2 hashtags." });
+  const tagMax = platform === "linkedin" ? 3 : 2;
+  if ((body.match(HASHTAG_RE) ?? []).length > tagMax) checks.push({ code: "hashtags", severity: "block", message: `More than ${tagMax} hashtags.` });
   const emojiMax = platform === "linkedin" ? 5 : 2;
   if ((body.match(EMOJI_RE) ?? []).length > emojiMax) checks.push({ code: "emoji", severity: "block", message: `More than ${emojiMax} emoji for ${platform === "x" ? "X" : "LinkedIn"}.` });
   if (platform === "linkedin" && body.split(/\n{2,}/).some((p) => p.length > 420)) checks.push({ code: "wall", severity: "warn", message: "A paragraph is too long. Keep paragraphs to 2-3 short lines." });

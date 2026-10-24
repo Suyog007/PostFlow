@@ -96,12 +96,14 @@ export async function notifyReminder(post: PostRow, tz: string, blocks: boolean,
   if (blocks && !post.approvedAt) {
     await notifyText(`${head}Not approved yet. If you do nothing it is skipped.`, [
       [{ text: "✅ Approve", data: `ok:${post.id}` }, { text: "🗑 Remove", data: `rm:${post.id}` }],
-      [{ text: "🔁 Reject, find another", data: `rj:${post.id}` }, { text: "🚀 Post now", data: `pn:${post.id}` }],
+      [{ text: "🔁 Another story", data: `rj:${post.id}` }, { text: "✍️ New wording", data: `rw:${post.id}` }],
+      [{ text: "🚀 Post now", data: `pn:${post.id}` }],
     ]);
     return;
   }
   await notifyText(`${head}${post.approvedAt ? "Approved. " : ""}It goes out on time unless you remove it.`, [
-    [{ text: "🗑 Remove", data: `rm:${post.id}` }, { text: "🔁 Reject, find another", data: `rj:${post.id}` }],
+    [{ text: "🗑 Remove", data: `rm:${post.id}` }, { text: "🔁 Another story", data: `rj:${post.id}` }],
+    [{ text: "✍️ New wording", data: `rw:${post.id}` }],
   ]);
 }
 

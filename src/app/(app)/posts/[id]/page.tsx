@@ -93,6 +93,13 @@ export default async function PostPage({ params, searchParams }: { params: Promi
       <div className="mt-4 flex flex-wrap gap-2">
         {p.status === "draft" && <form action={scheduleDraftAction}><input type="hidden" name="id" value={p.id} /><button className="btn btn-accent"><Icon name="calendar" size={14} />Put on calendar</button></form>}
         {["scheduled", "failed", "draft"].includes(p.status) && <form action={postNowAction}><input type="hidden" name="id" value={p.id} /><button className="btn"><Icon name="send" size={14} />Post now</button></form>}
+        {(open || p.status === "rejected") && (
+          <form action={rewordPostAction}>
+            <input type="hidden" name="id" value={p.id} />
+            <input type="hidden" name="feedback" value="Take a different angle and a fresh opening. Keep the same story and the same facts." />
+            <SubmitButton className="btn" pending="Writing it again…"><Icon name="pencil" size={14} />Write it again</SubmitButton>
+          </form>
+        )}
         {open && !needsApproval && <form action={rejectPostAction}><input type="hidden" name="id" value={p.id} /><SubmitButton className="btn" pending="Finding another story…"><Icon name="x" size={14} />Reject, find another</SubmitButton></form>}
         {open && <form action={removePostAction}><input type="hidden" name="id" value={p.id} /><button className="btn btn-danger"><Icon name="trash" size={14} />{p.status === "draft" ? "Discard" : "Remove from calendar"}</button></form>}
         {p.status === "rejected" && (r.rechecked ?? 0) < 2 && (

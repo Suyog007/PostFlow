@@ -63,6 +63,8 @@ export const settingsSchema = z.object({
   /** Domains of your own sites (portfolio, blog). A link to one of these is treated as your own article: written as its author, with the link included. */
   ownDomains: z.array(z.string()).default([]),
   /** Links in posts. Off by default: the post names its source in words. */
+  /** Hashtags at the end of a post: 1-2 specific ones on X by default, none on LinkedIn unless switched on (then up to 3). */
+  hashtags: z.object({ linkedin: z.boolean().default(false), x: z.boolean().default(true) }).default({ linkedin: false, x: true }),
   includeLinks: z.object({ linkedin: z.boolean().default(false), x: z.boolean().default(false) }).default({ linkedin: false, x: false }),
   /** Extra posts, outside the normal slots, for rare high-scoring breaking stories. The owner still has the lead time to veto. */
   fastLane: z

@@ -102,7 +102,7 @@ describe("publishDue", () => {
         expect(r[0].text).toContain("A post going out in eight minutes.");
         expect(r[0].text).toContain("in about 8 minutes");
         expect(r[0].text).toContain("Not approved yet. If you do nothing it is skipped.");
-        expect(r[0].buttons!.flat().map((b) => b.text)).toEqual(["✅ Approve", "🗑 Remove", "🔁 Reject, find another", "🚀 Post now"]);
+        expect(r[0].buttons!.flat().map((b) => b.text)).toEqual(["✅ Approve", "🗑 Remove", "🔁 Another story", "✍️ New wording", "🚀 Post now"]);
         await publishDue({ now: new Date(NOW.getTime() + 60_000) });
         expect(sent.filter((m) => m.text.includes("Going out"))).toHaveLength(1); // only once
       });

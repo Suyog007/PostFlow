@@ -361,9 +361,9 @@ const reviewOut = z.object({
 });
 export type Review = z.infer<typeof reviewOut>;
 
-async function review(m: Material, text: string, platform: Platform, recent: string[], extra: { evidence?: Evidence[]; earlier?: string[]; effort?: string } = {}): Promise<Review> {
+async function review(m: Material, text: string, platform: Platform, recent: string[], s: Settings, extra: { evidence?: Evidence[]; earlier?: string[]; effort?: string } = {}): Promise<Review> {
   const user = [
-    `Platform: ${platform === "x" ? "X" : "LinkedIn"}`,
+    `Platform: ${platform === "x" ? "X" : "LinkedIn"}. Hashtags allowed here: ${s.hashtags[platform] ? "yes" : "no"}.`,
     describeMaterial(m),
     `DRAFT:\n"""${text}"""`,
     extra.evidence?.length
@@ -440,7 +440,7 @@ export async function produceForSlot(platform: Platform, at: Date, m: Material, 
     const log: { text: string; reasons: string[] }[] = [];
     for (let round = 0; round < rounds; round++) {
       checks = runChecks(compose(text), platform, recent);
-      lastReview = await review(m, compose(text), platform, recent, { evidence: w.evidence });
+      lastReview = await review(m, compose(text), platform, recent, s, { evidence: w.evidence });
       verdict = gate(lastReview, checks, m);
       log.push({ text, reasons: verdict.reasons });
       if (verdict.approved || round === rounds - 1) break;
@@ -571,7 +571,7 @@ export async function rewordPost(id: string, feedback: string, remember: boolean
   const checks = runChecks(text, platform, recent);
   const block = checks.find((c) => c.severity === "block" && (c.code === "too_long" || c.code === "empty"));
   if (block) throw new Error(`The rewrite came out unusable (${block.message}) Try again.`);
-  const r = await review(m, text, platform, recent, { evidence });
+  const r = await review(m, text, platform, recent, s, { evidence });
   const verdict = gate(r, checks, m);
   const finalText = withLink(text, m, platform, s);
   await db()
@@ -606,7 +606,7 @@ export async function recheckPost(id: string): Promise<{ approved: boolean; mess
   const m = await materialForPost(p);
   const recent = (await recentTexts(platform)).filter((t) => t !== p.text);
   const checks = runChecks(p.text, platform, recent);
-  const r = await review(m, p.text, platform, recent, { evidence: prev.evidence, earlier: prev.verdict?.reasons ?? [], effort: "high" });
+  const r = await review(m, p.text, platform, recent, s, { evidence: prev.evidence, earlier: prev.verdict?.reasons ?? [], effort: "high" });
   const verdict = gate(r, checks, m);
   const review_ = { ...(p.review ?? {}), ...r, checks, verdict, rechecked: (prev.rechecked ?? 0) + 1, reviewedAt: new Date().toISOString() };
 
