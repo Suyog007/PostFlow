@@ -34,6 +34,8 @@ const schema = z.object({
   /** Reasoning effort for the reviewer. Defaults to "medium" when FIREWORKS_REASONING_EFFORT is set. */
   FIREWORKS_REVIEW_REASONING_EFFORT: optional,
   FIREWORKS_BASE_URL: z.string().default("https://api.fireworks.ai/inference/v1"),
+  /** Image model for post pictures (a Fireworks FLUX model). */
+  FIREWORKS_IMAGE_MODEL: z.string().default("flux-1-schnell-fp8"),
   /** Owner accounts' model-call cap per rolling 24h (customers get their plan's cap). */
   MAX_LLM_CALLS_PER_DAY: z.coerce.number().default(150),
   /** Hard stop across all users per rolling 24h, so a bug can never run up a bill. */

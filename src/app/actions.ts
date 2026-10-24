@@ -22,6 +22,7 @@ import { addEvent } from "@/server/events";
 import { publishDue } from "@/server/publisher";
 import { fillNowDays, recheckPost, refillSlot, rejectAndReplace, rewordPost, swapToAlternative, writeLesson } from "@/server/generate";
 import { warnOnError } from "@/server/log";
+import { redrawPostImage } from "@/server/post-images";
 import { isPublicHttpUrl } from "@/server/net";
 
 function back(path: string, kind: "error" | "ok", message: string): never {
@@ -105,7 +106,18 @@ export async function rewordPostAction(form: FormData) {
   const id = String(form.get("id"));
   await guarded(`/posts/${id}`, () => rewordPost(id, String(form.get("feedback") ?? ""), form.get("remember") === "on"), "Reworded. Check it and approve when it sounds like you.");
 }
-/** Switch the image card on or off for one post. */
+/** Draw a new picture for one post. */
+export async function redrawImageAction(form: FormData) {
+  const id = String(form.get("id"));
+  if (!/^[0-9a-f-]{36}$/i.test(id)) back("/calendar", "error", "Post not found.");
+  const user = await requireActiveUser();
+  await guarded(`/posts/${id}`, async () => {
+    const p = await db().query.posts.findFirst({ where: and(eq(schema.posts.id, id), eq(schema.posts.userId, user.id)) });
+    if (!p) throw new Error("Post not found.");
+    if (!(await redrawPostImage(p))) throw new Error("Could not draw a new picture right now. Try again in a minute.");
+  }, "New picture drawn.");
+}
+/** Switch the picture on or off for one post. */
 export async function togglePostImageAction(form: FormData) {
   const id = String(form.get("id"));
   if (!/^[0-9a-f-]{36}$/i.test(id)) back("/calendar", "error", "Post not found.");

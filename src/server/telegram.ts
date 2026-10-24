@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { cardUrl } from "./cards";
+import { cardUrl } from "./post-images";
 import { storyLine } from "./story-date";
 import { env } from "./env";
 import { log } from "./log";
@@ -69,7 +69,7 @@ export async function sendTo(chatId: string | number, text: string, buttons?: { 
 }
 
 /**
- * A picture with its text and buttons. Telegram fetches the image from our signed card URL.
+ * A picture with its text and buttons. Telegram fetches the image from our signed picture URL.
  * Captions are limited to about 1,000 characters, so longer text follows as its own message.
  * If the picture cannot be sent, the text still arrives.
  */
@@ -121,17 +121,20 @@ export async function notifyReminder(post: PostRow, tz: string, blocks: boolean,
   const inTxt = minutes <= 1 ? "in about a minute" : `in about ${minutes} minutes`;
   const story = await storyLine(post, tz);
   const head = `⏰ Going out ${inTxt}\n${when}${story ? `\n${story}` : ""}\n\n${post.text}\n\n`;
+  const picture = withImage ? [[{ text: "🎨 New picture", data: `ni:${post.id}` }, { text: "🚫 No picture", data: `xi:${post.id}` }]] : [];
   if (blocks && !post.approvedAt) {
     await send(`${head}Not approved yet. If you do nothing it is skipped.`, [
       [{ text: "✅ Approve", data: `ok:${post.id}` }, { text: "🗑 Remove", data: `rm:${post.id}` }],
       [{ text: "🔁 Another story", data: `rj:${post.id}` }, { text: "✍️ New wording", data: `rw:${post.id}` }],
       [{ text: "🚀 Post now", data: `pn:${post.id}` }],
+      ...picture,
     ]);
     return;
   }
   await send(`${head}${post.approvedAt ? "Approved. " : ""}It goes out on time unless you remove it.`, [
     [{ text: "🗑 Remove", data: `rm:${post.id}` }, { text: "🔁 Another story", data: `rj:${post.id}` }],
     [{ text: "✍️ New wording", data: `rw:${post.id}` }],
+    ...picture,
   ]);
 }
 

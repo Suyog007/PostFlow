@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { db, schema } from "../src/server/db/client";
-import { cardContent, cardUrl, setCardLoaderForTests, verifyCard, wantsImage } from "../src/server/cards";
+import { altText, cardUrl, drawPrompt, ensurePostImage, redrawPostImage, setImageDrawerForTests, setImageMakingForTests, verifyCard, wantsImage } from "../src/server/post-images";
+import { withUser } from "../src/server/context";
 import { publishDue } from "../src/server/publisher";
 import { saveSettings, getSettings } from "../src/server/settings";
 import { setPlatformClientForTests } from "../src/server/platforms/accounts";
@@ -9,21 +10,32 @@ import type { PublishOptions } from "../src/server/platforms/types";
 import { GOOD_REVIEW, fakeLLM, me, resetDb } from "./helpers";
 
 const POST = "GitLab fixed a bug that sat in its code for 12 years.\n\nAnyone could run code on an unpatched server, per The Register. Patching is the whole fix.\n\n#gitlab #security";
+const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]);
+const SCENE = { style: "glossy 3D render", scene: "A cracked steel padlock on a dark server rack being welded shut by a small robotic arm, bright orange sparks, deep navy background, dramatic rim light." };
 
-describe("what the card says", () => {
-  it("uses the hook and the next sentence, without hashtags, and labels the kind of post", () => {
-    const base = { id: "00000000-0000-4000-8000-000000000001", platform: "linkedin", updatedAt: new Date(), review: {} };
-    const c = cardContent({ ...base, pillar: "news", text: POST }, { name: "Suyog Adhikari", role: "Senior Software Engineer" });
-    expect(c).toMatchObject({ tag: "News", tone: "news", hook: "GitLab fixed a bug that sat in its code for 12 years.", sub: "Anyone could run code on an unpatched server, per The Register.", name: "Suyog Adhikari" });
-    expect(JSON.stringify(c)).not.toContain("#");
-    expect(cardContent({ ...base, pillar: "learning", text: "An index is a shortcut.\nLike a book's index." }, { name: "", role: "" })).toMatchObject({ tag: "Lesson", tone: "lesson" });
-    expect(cardContent({ ...base, pillar: "news", text: POST, review: { move: "explain" } }, { name: "", role: "" }).tag).toBe("Heads-up");
-    const long = cardContent({ ...base, pillar: "news", text: "word ".repeat(80) }, { name: "", role: "" });
-    expect(long.hook.length).toBeLessThanOrEqual(151);
-    expect(long.hook.endsWith("…")).toBe(true);
+/** Pictures on, with the image model stubbed. Returns the prompts it was asked to draw. */
+function drawing(result: Buffer | null = JPEG) {
+  const prompts: string[] = [];
+  setImageMakingForTests(true);
+  setImageDrawerForTests(async (prompt) => {
+    prompts.push(prompt);
+    return result ? { data: result, mime: "image/jpeg" } : null;
+  });
+  return prompts;
+}
+
+async function scheduledPost(platform = "x") {
+  const [p] = await db().insert(schema.posts).values({ userId: me(), platform, pillar: "news", text: POST, status: "scheduled", scheduledAt: new Date(Date.now() + 3_600_000) }).returning();
+  return p;
+}
+
+describe("picture basics", () => {
+  it("alt text is the first line without hashtags or links", () => {
+    expect(altText({ text: POST })).toBe("GitLab fixed a bug that sat in its code for 12 years.");
+    expect(altText({ text: "#ai Big news https://x.co/a today\nmore" })).toBe("Big news today");
   });
 
-  it("only signed links render, and a changed post gets a new link", () => {
+  it("only signed links work, and a changed post gets a new link", () => {
     const post = { id: "00000000-0000-4000-8000-000000000002", updatedAt: new Date("2026-10-24T01:00:00Z") };
     const u = new URL(cardUrl(post));
     expect(verifyCard(post.id, u.searchParams.get("v"), u.searchParams.get("s"))).toBe(true);
@@ -38,29 +50,72 @@ describe("what the card says", () => {
     expect(wantsImage({ platform: "x", review: {} }, s)).toBe(false);
     expect(wantsImage({ platform: "linkedin", review: { noImage: true } }, s)).toBe(false);
   });
+
+  it("the image model is always told: no text, no logos", () => {
+    const p = drawPrompt(SCENE);
+    expect(p).toContain(SCENE.scene);
+    expect(p).toContain("glossy 3D render");
+    expect(p).toMatch(/No text, no letters, no numbers, no logos, no watermark/);
+  });
 });
 
-describe("the card image", () => {
+describe("drawing the picture", () => {
   beforeEach(resetDb);
 
-  it("renders a 1200x675 PNG for a signed link and refuses anything else", async () => {
+  it("asks the writer for a scene, draws it once, stores it, and counts it toward the daily limit", async () => {
+    const prompts = drawing();
+    const calls = fakeLLM((req) => (req.schemaName === "image_scene" ? SCENE : GOOD_REVIEW));
+    const p = await scheduledPost();
+    const img = await withUser(me(), () => ensurePostImage(p));
+    expect(img).toMatchObject({ mime: "image/jpeg" });
+    expect(calls.find((c) => c.schemaName === "image_scene")!.user).toContain("GitLab fixed a bug");
+    expect(prompts).toHaveLength(1);
+    expect(prompts[0]).toContain("cracked steel padlock");
+
+    // Second time it comes from storage: no new scene, no new drawing.
+    await withUser(me(), () => ensurePostImage(p));
+    expect(prompts).toHaveLength(1);
+    expect((await db().select().from(schema.llmCalls)).map((c) => c.task).sort()).toEqual(["draw_image", "image_scene"]);
+  });
+
+  it("a new picture replaces the old one and changes the link", async () => {
+    const prompts = drawing();
+    fakeLLM(() => SCENE);
+    const p = await scheduledPost();
+    await withUser(me(), () => ensurePostImage(p));
+    setImageDrawerForTests(async () => ({ data: Buffer.from([0xff, 0xd8, 9]), mime: "image/jpeg" }));
+    const again = await withUser(me(), () => redrawPostImage(p));
+    expect(again!.data).toEqual(Buffer.from([0xff, 0xd8, 9]));
+    expect(await db().select().from(schema.postImages)).toHaveLength(1);
+    const after = (await db().select().from(schema.posts).where(eq(schema.posts.id, p.id)))[0];
+    expect(cardUrl(after)).not.toBe(cardUrl(p));
+    expect(prompts).toHaveLength(1);
+  });
+
+  it("serves the stored picture on a signed link and refuses anything else", async () => {
+    drawing();
+    fakeLLM(() => SCENE);
     const { GET } = await import("../src/app/api/cards/[id]/route");
-    await saveSettings({ profile: { ...(await getSettings()).profile, name: "Suyog Adhikari", role: "Senior Software Engineer" } });
-    const [p] = await db().insert(schema.posts).values({ userId: me(), platform: "linkedin", pillar: "news", text: POST, status: "scheduled", scheduledAt: new Date(Date.now() + 3_600_000) }).returning();
+    const p = await scheduledPost();
     const res = await GET(new Request(cardUrl(p)), { params: Promise.resolve({ id: p.id }) });
     expect(res.status).toBe(200);
-    expect(res.headers.get("content-type")).toBe("image/png");
-    const png = Buffer.from(await res.arrayBuffer());
-    expect(png.subarray(1, 4).toString()).toBe("PNG");
-    expect(png.readUInt32BE(16)).toBe(1200);
-    expect(png.readUInt32BE(20)).toBe(675);
+    expect(res.headers.get("content-type")).toBe("image/jpeg");
+    expect(Buffer.from(await res.arrayBuffer())).toEqual(JPEG);
 
     const bad = await GET(new Request(`http://localhost/api/cards/${p.id}?v=1&s=nope`), { params: Promise.resolve({ id: p.id }) });
     expect(bad.status).toBe(404);
-  }, 60_000);
+  });
+
+  it("when the image model fails, nothing is stored and the link says so", async () => {
+    drawing(null);
+    fakeLLM(() => SCENE);
+    const p = await scheduledPost();
+    expect(await withUser(me(), () => ensurePostImage(p))).toBeNull();
+    expect(await db().select().from(schema.postImages)).toHaveLength(0);
+  });
 });
 
-describe("publishing with the card", () => {
+describe("publishing with the picture", () => {
   beforeEach(resetDb);
   const NOW = new Date("2026-10-21T04:00:00Z");
 
@@ -85,17 +140,19 @@ describe("publishing with the card", () => {
     return p;
   }
 
-  it("attaches the card, with the hook as its alt text", async () => {
-    setCardLoaderForTests(async () => Buffer.from("png-bytes"));
+  it("attaches the picture, with the first line as its alt text", async () => {
+    drawing();
+    fakeLLM(() => SCENE);
     const calls = recordingClient();
     await duePost();
     expect((await publishDue({ now: NOW })).published).toBe(1);
     expect(calls[0].media).toHaveLength(1);
-    expect(calls[0].media![0]).toMatchObject({ mime: "image/png", alt: "GitLab fixed a bug that sat in its code for 12 years." });
+    expect(calls[0].media![0]).toMatchObject({ mime: "image/jpeg", alt: "GitLab fixed a bug that sat in its code for 12 years." });
   });
 
-  it("still posts, as text only, when the image cannot be made or the upload fails", async () => {
-    setCardLoaderForTests(async () => null);
+  it("still posts, as text only, when the picture cannot be made or the upload fails", async () => {
+    drawing(null);
+    fakeLLM(() => SCENE);
     let calls = recordingClient();
     const a = await duePost();
     await publishDue({ now: NOW });
@@ -103,7 +160,8 @@ describe("publishing with the card", () => {
     expect((await db().select().from(schema.posts).where(eq(schema.posts.id, a.id)))[0].status).toBe("published");
 
     await resetDb();
-    setCardLoaderForTests(async () => Buffer.from("png-bytes"));
+    drawing();
+    fakeLLM(() => SCENE);
     calls = recordingClient((o) => (o.media?.length ? "X media upload failed (HTTP 400): bad image" : null));
     const b = await duePost();
     await publishDue({ now: NOW });
@@ -112,13 +170,15 @@ describe("publishing with the card", () => {
     expect((await db().select().from(schema.posts).where(eq(schema.posts.id, b.id)))[0].status).toBe("published");
   });
 
-  it("goes without the card when images are off for the platform", async () => {
-    setCardLoaderForTests(async () => Buffer.from("png-bytes"));
+  it("goes without a picture when pictures are off for the platform", async () => {
+    const prompts = drawing();
+    fakeLLM(() => SCENE);
     const calls = recordingClient();
     await duePost();
     await saveSettings({ images: { linkedin: true, x: false } });
     await publishDue({ now: NOW });
     expect(calls[0].media).toBeUndefined();
+    expect(prompts).toHaveLength(0);
   });
 });
 
@@ -151,5 +211,43 @@ describe("rewriting queued posts in the new style", () => {
     fakeLLM((req) => (req.schemaName === "write_post" ? { text: "Something worse about GitLab and nothing else at all." } : { ...GOOD_REVIEW, worth_posting: 2, issues: ["Says nothing."] }));
     expect(await rewriteFresh(another.id)).toBe("kept");
     expect((await db().select().from(schema.posts).where(eq(schema.posts.id, another.id)))[0]).toMatchObject({ status: "scheduled", text: "Old but fine." });
+  });
+});
+
+describe("picture buttons in Telegram", () => {
+  beforeEach(resetDb);
+
+  it("New picture draws again and sends the post back with it; No picture switches it off", async () => {
+    const { handleTelegramUpdate } = await import("../src/server/telegram-inbound");
+    const { resetEnvCache } = await import("../src/server/env");
+    drawing();
+    fakeLLM(() => SCENE);
+    const p = await scheduledPost();
+    await withUser(me(), () => ensurePostImage(p));
+    setImageDrawerForTests(async () => ({ data: Buffer.from([0xff, 0xd8, 7]), mime: "image/jpeg" }));
+
+    process.env.TELEGRAM_BOT_TOKEN = "123:test";
+    resetEnvCache();
+    const sent: { method: string; body: Record<string, unknown> }[] = [];
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async (u: string, init?: { body?: string }) => {
+      sent.push({ method: String(u).split("/").pop()!, body: JSON.parse(init?.body ?? "{}") });
+      return new Response(JSON.stringify({ ok: true }));
+    }) as typeof fetch;
+    try {
+      await handleTelegramUpdate({ callback_query: { id: "1", data: `ni:${p.id}`, message: { chat: { id: 42 } } } });
+      const photo = sent.find((m) => m.method === "sendPhoto")!;
+      expect(photo.body.caption).toMatch(/^🎨 New picture/);
+      expect(JSON.stringify(photo.body.reply_markup)).toContain(`xi:${p.id}`);
+      expect((await db().select().from(schema.postImages))[0].data).toEqual(Buffer.from([0xff, 0xd8, 7]));
+
+      await handleTelegramUpdate({ callback_query: { id: "2", data: `xi:${p.id}`, message: { chat: { id: 42 } } } });
+      const row = (await db().select().from(schema.posts).where(eq(schema.posts.id, p.id)))[0];
+      expect(row.review).toMatchObject({ noImage: true });
+    } finally {
+      globalThis.fetch = realFetch;
+      delete process.env.TELEGRAM_BOT_TOKEN;
+      resetEnvCache();
+    }
   });
 });

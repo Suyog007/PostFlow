@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { boolean, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, customType, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 /** "local" is the tech scene of the place the user names in their profile (for example "Nepal" or "Berlin"). */
 export const PILLARS = ["own_work", "news", "local", "learning"] as const;
@@ -241,5 +241,20 @@ export const waitlist = pgTable("waitlist", {
   email: text("email").notNull().unique(),
   plan: text("plan"), // starter | pro | agency (what they were looking at)
   role: text("role"), // optional: what they do
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => "bytea" });
+
+/** The picture made for a post: drawn by an image model from a scene the writer model describes. One per post. */
+export const postImages = pgTable("post_images", {
+  postId: uuid("post_id")
+    .primaryKey()
+    .references(() => posts.id, { onDelete: "cascade" }),
+  userId: owner(),
+  data: bytea("data").notNull(),
+  mime: text("mime").notNull(),
+  /** What the image model was asked to draw. */
+  prompt: text("prompt").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

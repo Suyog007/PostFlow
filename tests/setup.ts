@@ -2,7 +2,7 @@ import { beforeEach } from "vitest";
 import { setNewsSearchForTests } from "../src/server/verify";
 import { setFetchArticleForTests } from "../src/server/net";
 import { setArticleFinderForTests, setXReaderForTests } from "../src/server/research";
-import { setCardLoaderForTests } from "../src/server/cards";
+import { setImageDrawerForTests, setImageMakingForTests } from "../src/server/post-images";
 
 // Never touch the network from tests. By default every story is "confirmed" by two other publishers.
 beforeEach(() => {
@@ -13,5 +13,6 @@ beforeEach(() => {
   setFetchArticleForTests(async (url) => ({ title: `Article at ${new URL(url).hostname}`, text: "A long enough article body. ".repeat(40) }));
   setArticleFinderForTests(async () => []);
   setXReaderForTests(async () => null);
-  setCardLoaderForTests(async () => null);
+  setImageMakingForTests(false);
+  setImageDrawerForTests(async () => null);
 });

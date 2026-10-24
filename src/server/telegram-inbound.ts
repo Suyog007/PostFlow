@@ -4,7 +4,7 @@ import { uid, withUser } from "./context";
 import { approvalGate, entitlementFor, entitlementOf } from "./billing/plans";
 import { DateTime } from "luxon";
 import { sendPhotoTo, sendTo, telegramApi } from "./telegram";
-import { cardUrl, wantsImage } from "./cards";
+import { cardUrl, ensurePostImage, redrawPostImage, wantsImage } from "./post-images";
 import { getSettings, saveSettings } from "./settings";
 import { approvePost, postNow, removePost, PostError, upcoming } from "./posts";
 import { publishDue } from "./publisher";
@@ -123,17 +123,19 @@ async function sendPost(chat: number | string, id: string, heading: string) {
   const note = p.status === "draft" ? "\n\nThe reviewer had concerns, so it is a draft: open the app to look at it." : "";
   const story = await storyLine(p, s.timezone);
   const text = `${heading}\n${p.platform === "x" ? "X" : "LinkedIn"} · ${formatLocal(p.scheduledAt, s.timezone)}${story ? `\n${story}` : ""}\n\n${p.text}${note}`;
-  if (wantsImage(p, s)) await sendPhotoTo(chat, cardUrl(p), text, postButtons(id));
+  const picture = wantsImage(p, s) && !!(await ensurePostImage(p));
+  if (picture) await sendPhotoTo(chat, cardUrl(p), text, postButtons(id, true));
   else await sendTo(chat, text, postButtons(id));
 }
 
 const QUICK_REWORD = "Take a different angle and a fresh opening. Keep the same story and the same facts.";
 
 /** Buttons under a post you may want to act on. */
-function postButtons(id: string) {
+function postButtons(id: string, picture = false) {
   return [
     [{ text: "✅ Approve", data: `ok:${id}` }, { text: "🗑 Remove", data: `rm:${id}` }],
     [{ text: "🔁 Another story", data: `rj:${id}` }, { text: "✍️ New wording", data: `rw:${id}` }],
+    ...(picture ? [[{ text: "🎨 New picture", data: `ni:${id}` }, { text: "🚫 No picture", data: `xi:${id}` }]] : []),
   ];
 }
 
@@ -233,6 +235,30 @@ async function handleForUser(u: Update, chat: number): Promise<void> {
         await run(); // outside a request (tests)
       }
       return;
+    } else if (data.startsWith("ni:")) {
+      // Draw the picture again. Takes a few seconds, so acknowledge first; the post comes back with the new one.
+      await telegramApi("answerCallbackQuery", { callback_query_id: u.callback_query.id, text: "Drawing a new picture…" });
+      const id = data.slice(3);
+      const run = () =>
+        withUser(userId, async () => {
+          const p = await db().query.posts.findFirst({ where: and(eq(schema.posts.id, id), eq(schema.posts.userId, userId)) });
+          if (!p || !["scheduled", "draft"].includes(p.status)) return void (await sendTo(chat, "That post is not waiting to go out any more."));
+          if (!(await redrawPostImage(p))) return void (await sendTo(chat, "Could not draw a new picture right now. The post keeps going out as planned."));
+          await sendPost(chat, id, "🎨 New picture");
+        });
+      try {
+        after(run);
+      } catch {
+        await run(); // outside a request (tests)
+      }
+      return;
+    } else if (data.startsWith("xi:")) {
+      const p = await db().query.posts.findFirst({ where: and(eq(schema.posts.id, data.slice(3)), eq(schema.posts.userId, userId)) });
+      if (!p) answer = "Post not found.";
+      else {
+        await db().update(schema.posts).set({ review: { ...((p.review ?? {}) as Record<string, unknown>), noImage: true }, updatedAt: new Date() }).where(eq(schema.posts.id, p.id));
+        answer = "🚫 This post will go out without a picture.";
+      }
     } else if (data.startsWith("fw:")) {
       // "Write it anyway" after the research said a link or topic was weak.
       await telegramApi("answerCallbackQuery", { callback_query_id: u.callback_query.id, text: "Writing it anyway…" });

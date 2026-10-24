@@ -1,3 +1,4 @@
+import { DateTime } from "luxon";
 import { beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { db, schema } from "../src/server/db/client";
@@ -46,11 +47,13 @@ describe("telegram inbound", () => {
       return new Response(JSON.stringify({ ok: true }));
     }) as typeof fetch;
     try {
-      const tomorrow = new Date(Date.now() + 26 * 3_600_000);
-      const later = new Date(Date.now() + 74 * 3_600_000);
+      // Fixed local hours, so the first two posts always share a day whatever the clock says.
+      const at = (days: number, hour: number) => DateTime.now().setZone("Asia/Kathmandu").plus({ days }).set({ hour, minute: 0, second: 0, millisecond: 0 }).toJSDate();
+      const tomorrow = at(2, 9);
+      const later = at(4, 9);
       await db().insert(schema.posts).values([
-        { userId: me(), platform: "linkedin", pillar: "news", text: long, status: "scheduled", scheduledAt: new Date(Date.now() + 2 * 3_600_000) },
-        { userId: me(), platform: "x", pillar: "news", text: "Second post of the first day.", status: "scheduled", scheduledAt: new Date(Date.now() + 3 * 3_600_000) },
+        { userId: me(), platform: "linkedin", pillar: "news", text: long, status: "scheduled", scheduledAt: at(1, 9) },
+        { userId: me(), platform: "x", pillar: "news", text: "Second post of the first day.", status: "scheduled", scheduledAt: at(1, 10) },
         { userId: me(), platform: "x", pillar: "news", text: "A post for tomorrow.", status: "scheduled", scheduledAt: tomorrow, approvedAt: new Date() },
         { userId: me(), platform: "x", pillar: "news", text: "A post for later.", status: "scheduled", scheduledAt: later },
       ]);

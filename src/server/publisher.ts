@@ -3,7 +3,7 @@ import { db, schema } from "./db/client";
 import { uid } from "./context";
 import { approvalGate, entitlementFor } from "./billing/plans";
 import { getSettings, type Settings } from "./settings";
-import { cardContent, loadCard, wantsImage } from "./cards";
+import { altText, ensurePostImage, wantsImage } from "./post-images";
 import { getCredentials, getPlatformClient, markAccountError, NotConnectedError } from "./platforms/accounts";
 import { ReconcileNotSupported, type Platform, type PublishMedia } from "./platforms/types";
 import { addEvent } from "./events";
@@ -88,12 +88,12 @@ async function publishOne(post: PostRow, now: Date): Promise<"published" | "othe
     return "other";
   }
 
-  // The image card goes with the post when it is switched on. If it cannot be made or uploaded, the post still goes out.
+  // The picture goes with the post when it is switched on. If it cannot be made or uploaded, the post still goes out.
   const s = await getSettings();
   const media: PublishMedia[] = [];
   if (wantsImage(post, s)) {
-    const png = await loadCard(post);
-    if (png) media.push({ data: png, mime: "image/png", alt: cardContent(post, s.profile).hook });
+    const img = await ensurePostImage(post);
+    if (img) media.push({ data: img.data, mime: img.mime, alt: altText(post) });
   }
   let result = await getPlatformClient(platform).publish([post.text], creds, media.length ? { media } : {});
   if (media.length && result.kind === "failed" && /image|media|upload|asset/i.test(result.error)) {
@@ -137,7 +137,9 @@ async function sendReminders(now: Date, blocks: boolean, s: Settings) {
     .where(and(eq(schema.posts.userId, await uid()), eq(schema.posts.status, "scheduled"), isNull(schema.posts.remindedAt), gt(schema.posts.scheduledAt, now), lte(schema.posts.scheduledAt, new Date(now.getTime() + REMIND_MINUTES * 60_000))))
     .returning();
   for (const post of due) {
-    await notifyReminder(post, timezone, blocks, Math.max(1, Math.round((post.scheduledAt.getTime() - now.getTime()) / 60_000)), wantsImage(post, s)).catch(warnOnError("reminder_notify_failed", { postId: post.id }));
+    // The picture is drawn now if it is not there yet, so the heads-up shows exactly what will go out.
+    const withImage = wantsImage(post, s) && !!(await ensurePostImage(post));
+    await notifyReminder(post, timezone, blocks, Math.max(1, Math.round((post.scheduledAt.getTime() - now.getTime()) / 60_000)), withImage).catch(warnOnError("reminder_notify_failed", { postId: post.id }));
   }
 }
 
