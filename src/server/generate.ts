@@ -45,6 +45,10 @@ export interface Material {
   ownUrl?: string;
   /** A must-know event (vulnerability, attack, outage): explained plainly rather than given a quick take. */
   mustKnow?: boolean;
+  /** When the story itself happened or was published (shown to the owner, never put in the post). */
+  publishedAt?: Date;
+  /** Who published it, in a few words. */
+  publisher?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -81,7 +85,7 @@ async function itemMaterial(it: ItemRow, v?: Verification): Promise<Material> {
   const text = [`Source: ${src?.name ?? new URL(it.url).hostname}`, `Title: ${it.title}`, `Published: ${it.publishedAt.toISOString().slice(0, 10)}`, `Summary: ${it.summary}`, body ? `Article text:\n${body}` : "(Only the headline and summary are available; do not claim details beyond them.)", v?.mentions.length ? `Also reported by (independent publishers; you may say "according to X and Y"):\n${v.mentions.map((m) => `- ${m.domain}: ${m.title}`).join("\n")}` : "", it.angle ? `Suggested angle (from an assistant, not a fact): ${it.angle}` : ""]
     .filter(Boolean)
     .join("\n");
-  return { kind: "news", pillar: it.pillar, source: text, label: it.title, itemId: it.id, sourceUrl: it.url, expiresAt: itemExpiry(it), firstPerson: false, verification: v, mustKnow: it.kind === "must_know" };
+  return { kind: "news", pillar: it.pillar, source: text, label: it.title, itemId: it.id, sourceUrl: it.url, expiresAt: itemExpiry(it), firstPerson: false, verification: v, mustKnow: it.kind === "must_know", publishedAt: it.publishedAt, publisher: src?.name ?? new URL(it.url).hostname };
 }
 
 function noteMaterial(n: typeof schema.notes.$inferSelect): Material {
@@ -472,7 +476,7 @@ export async function produceForSlot(platform: Platform, at: Date, m: Material, 
   const finalText = m.ownUrl ? compose(text) : verdict.approved ? withLink(text, m, platform, s) : text;
   // Posts you asked for are never thrown away: if the reviewer is unhappy or you wanted a draft, you get a draft.
   const status: "scheduled" | "rejected" | "draft" = opts.requested ? (verdict.approved && opts.requested === "schedule" ? "scheduled" : "draft") : verdict.approved ? "scheduled" : "rejected";
-  const reviewJson = { ...lastReview, checks, verdict, evidence: chosen.evidence, move, alternative, rounds: chosen.rounds, material: { kind: m.kind, label: m.label }, verification: m.verification ?? null, reviewedAt: new Date().toISOString() } as Record<string, unknown>;
+  const reviewJson = { ...lastReview, checks, verdict, evidence: chosen.evidence, move, alternative, rounds: chosen.rounds, material: { kind: m.kind, label: m.label, publishedAt: m.publishedAt?.toISOString() ?? null, publisher: m.publisher ?? null }, verification: m.verification ?? null, reviewedAt: new Date().toISOString() } as Record<string, unknown>;
   const [row] = await db()
     .insert(schema.posts)
     .values({
@@ -687,7 +691,8 @@ export async function recheckPost(id: string): Promise<{ approved: boolean; mess
 export async function rejectAndReplace(id: string): Promise<{ replacementId: string | null; message: string }> {
   const p = await db().query.posts.findFirst({ where: and(eq(schema.posts.id, id), await mine(schema.posts)) });
   if (!p) throw new Error("Post not found.");
-  if (!["scheduled", "draft"].includes(p.status)) throw new Error(`A ${p.status} post cannot be rejected.`);
+  if (p.status === "declined") throw new Error("That post was already swapped for another story. The new one was sent to you separately.");
+  if (!["scheduled", "draft"].includes(p.status)) throw new Error(`That post is ${p.status === "cancelled" ? "removed" : p.status} now, so there is nothing to swap.`);
   await db().update(schema.posts).set({ status: "declined", approvedAt: null, updatedAt: new Date() }).where(eq(schema.posts.id, id));
   await addEvent("declined", `You rejected a ${p.platform} post; looking for a different story.`, id);
 

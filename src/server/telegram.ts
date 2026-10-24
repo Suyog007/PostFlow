@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import { storyLine } from "./story-date";
 import { env } from "./env";
 import { log } from "./log";
 import { formatLocal } from "./slots";
@@ -77,7 +78,8 @@ export async function notifyText(text: string, buttons?: { text: string; data: s
 const label = (p: string) => (p === "x" ? "X" : "LinkedIn");
 
 export async function notifyScheduled(post: PostRow, tz: string, requireApproval = false) {
-  const head = `${post.fast ? "⚡ Fast lane" : "🗓"} ${label(post.platform)} · ${formatLocal(post.scheduledAt, tz)}${post.expiresAt ? " · time-sensitive" : ""}\n\n${post.text}\n\n`;
+  const story = await storyLine(post, tz);
+  const head = `${post.fast ? "⚡ Fast lane" : "🗓"} ${label(post.platform)} · ${formatLocal(post.scheduledAt, tz)}${post.expiresAt ? " · time-sensitive" : ""}${story ? `\n${story}` : ""}\n\n${post.text}\n\n`;
   if (requireApproval) {
     await notifyText(`${head}It is only posted if you approve it before ${formatLocal(post.scheduledAt, tz)}. Otherwise it is skipped.`, [[{ text: "✅ Approve", data: `ok:${post.id}` }, { text: "🔁 Reject, find another", data: `rj:${post.id}` }], [{ text: "🚀 Post now", data: `pn:${post.id}` }]]);
     return;
@@ -92,7 +94,8 @@ export async function notifyScheduled(post: PostRow, tz: string, requireApproval
 export async function notifyReminder(post: PostRow, tz: string, blocks: boolean, minutes: number) {
   const when = `${label(post.platform)} · ${formatLocal(post.scheduledAt, tz)}`;
   const inTxt = minutes <= 1 ? "in about a minute" : `in about ${minutes} minutes`;
-  const head = `⏰ Going out ${inTxt}\n${when}\n\n${post.text}\n\n`;
+  const story = await storyLine(post, tz);
+  const head = `⏰ Going out ${inTxt}\n${when}${story ? `\n${story}` : ""}\n\n${post.text}\n\n`;
   if (blocks && !post.approvedAt) {
     await notifyText(`${head}Not approved yet. If you do nothing it is skipped.`, [
       [{ text: "✅ Approve", data: `ok:${post.id}` }, { text: "🗑 Remove", data: `rm:${post.id}` }],

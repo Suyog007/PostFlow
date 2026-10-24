@@ -11,6 +11,7 @@ import { SubmitButton } from "@/components/submit-button";
 import { PostEditor } from "@/components/post-editor";
 import { Icon, PlatformGlyph, StatusBadge } from "@/components/ui";
 import { Flash } from "../../flash";
+import { storyDate } from "@/server/story-date";
 
 interface Claim { claim: string; support: string; evidence: string }
 interface Mention { domain: string; title: string; url: string }
@@ -52,6 +53,8 @@ export default async function PostPage({ params, searchParams }: { params: Promi
   const open = ["scheduled", "draft"].includes(p.status);
   const needsApproval = approvalGate(s, entitlementOf(user).features.autoMode).blocks && p.status === "scheduled" && !p.approvedAt;
   const platformName = p.platform === "x" ? "X" : "LinkedIn";
+  // When the story itself happened: for you to judge freshness, never part of the post.
+  const story = await storyDate(p, s.timezone);
   const name = s.profile.name || "Your Name";
   const handle = (acct?.handle ?? name.toLowerCase().replace(/[^a-z0-9]/g, "")).replace(/^@/, "");
 
@@ -70,6 +73,11 @@ export default async function PostPage({ params, searchParams }: { params: Promi
         <span className="text-[13px] text-[var(--muted)] tnum">{p.status === "draft" ? "Not scheduled" : local.toFormat("cccc d LLL, HH:mm")}</span>
         {p.url && <a href={p.url} target="_blank" rel="noreferrer" className="btn btn-sm ml-auto"><Icon name="external" size={13} />View live post</a>}
       </div>
+      {story && (
+        <p className="mb-3 flex items-center gap-1.5 text-[13px] text-[var(--muted)]">
+          <Icon name="clock" size={13} /> Story from {story.when} ({story.ago}){story.publisher ? ` · ${story.publisher}` : ""}
+        </p>
+      )}
       {p.error && <p className="mb-3 rounded-lg border border-[var(--bad)]/30 bg-[var(--bad-soft)] px-3 py-2 text-[13px] text-[var(--bad)]">{p.error}</p>}
 
       <PostEditor id={p.id} platform={p.platform} initialText={p.text} name={name} role={s.profile.role} handle={handle} editable={editable} />

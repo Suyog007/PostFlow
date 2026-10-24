@@ -10,6 +10,7 @@ import { publishDue } from "./publisher";
 import { refillSlot, rejectAndReplace, rewordPost, writeLesson } from "./generate";
 import { requestFillNow } from "./tick";
 import { formatLocal } from "./slots";
+import { storyLine } from "./story-date";
 import type { Pillar } from "./db/schema";
 import { after } from "next/server";
 import { createRequest, processRequests, retryAnyway, type RequestMode } from "./requests";
@@ -64,7 +65,8 @@ async function sendPost(chat: number | string, id: string, heading: string) {
   if (!p) return;
   const s = await getSettings();
   const note = p.status === "draft" ? "\n\nThe reviewer had concerns, so it is a draft: open the app to look at it." : "";
-  await sendTo(chat, `${heading}\n${p.platform === "x" ? "X" : "LinkedIn"} · ${formatLocal(p.scheduledAt, s.timezone)}\n\n${p.text}${note}`, postButtons(id));
+  const story = await storyLine(p, s.timezone);
+  await sendTo(chat, `${heading}\n${p.platform === "x" ? "X" : "LinkedIn"} · ${formatLocal(p.scheduledAt, s.timezone)}${story ? `\n${story}` : ""}\n\n${p.text}${note}`, postButtons(id));
 }
 
 const QUICK_REWORD = "Take a different angle and a fresh opening. Keep the same story and the same facts.";
@@ -319,6 +321,9 @@ async function handleForUser(u: Update, chat: number): Promise<void> {
       days.get(key)!.posts.push(p);
     }
     const nWaiting = q.filter(waiting).length;
+    // When each news story happened, so a stale one can be swapped out. Never part of the post itself.
+    const stories: Record<string, string> = {};
+    for (const p of q) stories[p.id] = await storyLine(p, s.timezone);
     await sendTo(chat, `🗓 ${q.length} scheduled post${q.length === 1 ? "" : "s"} over ${days.size} day${days.size === 1 ? "" : "s"}${approvalOn ? (nWaiting ? ` · ${nWaiting} waiting for your OK` : " · all approved") : ""}`);
     let n = 0;
     for (const day of days.values()) {
@@ -328,7 +333,7 @@ async function handleForUser(u: Update, chat: number): Promise<void> {
       day.posts.forEach((p, i) => {
         n++;
         const time = DateTime.fromJSDate(p.scheduledAt, { zone: s.timezone }).toFormat("HH:mm");
-        body += `\n\n${i + 1}. ${p.platform === "x" ? "X" : "LinkedIn"} · ${time}${tag(p)}\n${p.text}`;
+        body += `\n\n${i + 1}. ${p.platform === "x" ? "X" : "LinkedIn"} · ${time}${tag(p)}${stories[p.id] ? `\n${stories[p.id]}` : ""}\n${p.text}`;
         const row = [];
         if (waiting(p)) row.push({ text: `✅ Approve ${i + 1}`, data: `ok:${p.id}` });
         row.push({ text: `🚀 Now ${i + 1}`, data: `pn:${p.id}` });
@@ -343,7 +348,7 @@ async function handleForUser(u: Update, chat: number): Promise<void> {
         await sendTo(chat, `📅 ${day.label}`);
         for (const [i, p] of day.posts.entries()) {
           const time = DateTime.fromJSDate(p.scheduledAt, { zone: s.timezone }).toFormat("HH:mm");
-          await sendTo(chat, `${i + 1}. ${p.platform === "x" ? "X" : "LinkedIn"} · ${time}${tag(p)}\n${p.text}`, [rows[i]]);
+          await sendTo(chat, `${i + 1}. ${p.platform === "x" ? "X" : "LinkedIn"} · ${time}${tag(p)}${stories[p.id] ? `\n${stories[p.id]}` : ""}\n${p.text}`, [rows[i]]);
         }
       }
     }

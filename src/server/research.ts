@@ -214,7 +214,7 @@ export interface Research {
   assessment: Assessment;
 }
 
-function buildMaterial(parts: { label: string; sourceUrl?: string; sections: string[]; assessment: Assessment; verification: Material["verification"]; angle?: string }): Material {
+function buildMaterial(parts: { label: string; sourceUrl?: string; sections: string[]; assessment: Assessment; verification: Material["verification"]; angle?: string; publishedAt?: Date; publisher?: string }): Material {
   const a = parts.assessment;
   const source = [
     ...parts.sections,
@@ -224,7 +224,7 @@ function buildMaterial(parts: { label: string; sourceUrl?: string; sections: str
   ]
     .filter(Boolean)
     .join("\n\n");
-  return { kind: "news", pillar: "news", source, label: parts.label, sourceUrl: parts.sourceUrl, firstPerson: false, verification: parts.verification, mustKnow: a.kind === "must_know" };
+  return { kind: "news", pillar: "news", source, label: parts.label, sourceUrl: parts.sourceUrl, firstPerson: false, verification: parts.verification, mustKnow: a.kind === "must_know", publishedAt: parts.publishedAt, publisher: parts.publisher };
 }
 
 const coverageBlock = (mentions: Mention[]) => (mentions.length ? `OTHER COVERAGE (headlines from other publishers):\n${mentions.slice(0, 6).map((m) => `- ${m.domain}: ${m.title}`).join("\n")}` : "");
@@ -234,12 +234,16 @@ export async function researchLink(url: string, s: Settings, angle?: string): Pr
   const sections: string[] = [];
   let title = "";
   let summary = "";
+  let publishedAt: Date | undefined;
+  let publisher: string | undefined;
   const exclude: string[] = [];
 
   if (parseXUrl(url)) {
     const post = await readXPost(url);
     if (!post) throw new Error("I could not read that X post (it may be private, deleted or age-restricted). Paste its text and I will work from that.");
     title = `${post.author || `@${post.handle}`}: ${post.text.split("\n")[0].slice(0, 120)}`;
+    publisher = `@${post.handle} on X`;
+    if (post.createdAt && !isNaN(Date.parse(post.createdAt))) publishedAt = new Date(post.createdAt);
     summary = post.text;
     sections.push(`THE X POST by ${post.author} (@${post.handle})${post.createdAt ? `, ${post.createdAt}` : ""}:\n${untrusted("x post", post.text, 3000)}`);
     if (post.quoted) sections.push(`IT QUOTES a post by ${post.quoted.author} (@${post.quoted.handle}):\n${untrusted("quoted post", post.quoted.text, 1500)}`);
@@ -255,6 +259,7 @@ export async function researchLink(url: string, s: Settings, angle?: string): Pr
     const a = await fetchArticle(url, 8000);
     if (!a && (!angle || angle.length < 20)) throw new Error("I could not read that page (it may be behind a paywall). Paste the key points as text and I will work from those.");
     title = a?.title ?? new URL(url).hostname;
+    publisher = new URL(url).hostname.replace(/^www\./, "");
     summary = a?.text.slice(0, 600) ?? angle ?? "";
     sections.push(a ? `THE ARTICLE (${new URL(url).hostname}), "${a.title}":\n${untrusted("article", a.text, 8000)}` : `(The page could not be read; rely only on the owner's description.)`);
     exclude.push(registrableDomain(url));
@@ -271,7 +276,7 @@ export async function researchLink(url: string, s: Settings, angle?: string): Pr
 
   const assessment = await assess(s, sections.filter(Boolean).join("\n\n"));
   const verification = await checkStory({ url, title, summary });
-  return { material: buildMaterial({ label: title, sourceUrl: url, sections: sections.filter(Boolean), assessment, verification, angle }), assessment };
+  return { material: buildMaterial({ label: title, sourceUrl: url, sections: sections.filter(Boolean), assessment, verification, angle, publishedAt, publisher }), assessment };
 }
 
 /** Research a topic the owner described in their own words: find coverage, read the best of it, judge it. */

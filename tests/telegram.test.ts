@@ -259,3 +259,44 @@ describe("telegram inbound", () => {
     expect(await db().select().from(schema.notes)).toHaveLength(0);
   });
 });
+
+describe("when the story happened", () => {
+  beforeEach(resetDb);
+
+  it("shows the story's date and publisher in /queue and reminders, never in the post text", async () => {
+    const { storyLine } = await import("../src/server/story-date");
+    const [src] = await db().insert(schema.sources).values({ userId: me(), name: "The Register", url: "https://theregister.com/rss" }).returning();
+    const published = new Date(Date.now() - 3 * 86_400_000);
+    const [it] = await db().insert(schema.items).values({ userId: me(), sourceId: src.id, url: "https://theregister.com/gitlab", title: "GitLab patches a 12-year-old RCE", summary: "s", pillar: "news", publishedAt: published }).returning();
+    const [p] = await db().insert(schema.posts).values({ userId: me(), platform: "linkedin", pillar: "news", itemId: it.id, text: "GitLab fixed a bug that sat in its code for 12 years.", status: "scheduled", scheduledAt: new Date(Date.now() + 3_600_000) }).returning();
+    const line = await storyLine(p, "Asia/Kathmandu");
+    expect(line).toMatch(/^📰 Story from \w{3} \d{1,2} \w{3}, \d{2}:\d{2} \(3 days ago\) · The Register$/);
+    expect(p.text).not.toContain("days ago");
+
+    process.env.TELEGRAM_BOT_TOKEN = "123:test";
+    resetEnvCache();
+    const sent: string[] = [];
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async (_u: string, init?: { body?: string }) => {
+      const b = JSON.parse(init?.body ?? "{}");
+      if (b.text) sent.push(b.text);
+      return new Response(JSON.stringify({ ok: true }));
+    }) as typeof fetch;
+    try {
+      await handleTelegramUpdate(msg("/queue"));
+    } finally {
+      globalThis.fetch = realFetch;
+      delete process.env.TELEGRAM_BOT_TOKEN;
+      resetEnvCache();
+    }
+    expect(sent.some((t) => t.includes(line))).toBe(true);
+  });
+
+  it("a lesson has no story date, and a swapped post says so instead of 'declined'", async () => {
+    const { storyLine } = await import("../src/server/story-date");
+    const { rejectAndReplace } = await import("../src/server/generate");
+    const [p] = await db().insert(schema.posts).values({ userId: me(), platform: "x", pillar: "learning", topic: "caching", text: "A cache remembers answers.", status: "declined", scheduledAt: new Date(Date.now() + 3_600_000) }).returning();
+    expect(await storyLine(p, "UTC")).toBe("");
+    await expect(rejectAndReplace(p.id)).rejects.toThrow(/already swapped for another story/);
+  });
+});
