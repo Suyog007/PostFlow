@@ -36,7 +36,7 @@ describe("skipping weak stories", () => {
   });
 
   it("leaves the slot empty when nothing is worth posting, instead of filling it with an explainer", async () => {
-    await saveSettings({ pillars: { own_work: 1, news: 1, local: 0, learning: 1 }, fillerPosts: false });
+    await saveSettings({ pillars: { own_work: 1, news: 1, local: 0, learning: 0 }, fillerPosts: false });
     const calls = fakeLLM(() => ({}));
     const r = await fillCalendar({ now: NOW, max: 3 });
     expect(await db().select().from(schema.posts)).toHaveLength(0);
@@ -51,8 +51,8 @@ describe("skipping weak stories", () => {
     expect((await db().select().from(schema.posts)).length).toBe(1);
   });
 
-  it("with no 'my work' notes and explainers off, posts come from news only", async () => {
-    await saveSettings({ pillars: { own_work: 3, news: 3, local: 0, learning: 1 } });
+  it("with no 'my work' notes and no learning share, posts come from news only", async () => {
+    await saveSettings({ pillars: { own_work: 3, news: 3, local: 0, learning: 0 } });
     await addItem("A strong story about a database release for developers", 9);
     const calls = fakeLLM((req) => (req.schemaName === "write_post" ? { text: "A database release landed today. According to the notes, it speeds up backups for small teams." } : GOOD_REVIEW));
     await fillCalendar({ now: NOW, max: 3 });
@@ -265,6 +265,69 @@ describe("stock opinion phrases", () => {
     expect(moves).toHaveLength(2);
     expect(new Set(moves).size).toBe(2);
     expect(calls.filter((c) => c.schemaName === "write_post").every((c) => c.user.includes("THIS POST'S MOVE"))).toBe(true);
+  });
+});
+
+describe("lessons for your audience", () => {
+  it("a learning share writes short, simple lessons, and the writer is told how to teach", async () => {
+    await saveSettings({ slots: [{ ...BOTH[0], time: "00:30" }], horizonDays: 2, pillars: { own_work: 0, news: 0, local: 0, learning: 1 } });
+    const calls = fakeLLM((req) =>
+      req.schemaName === "pick_topic"
+        ? { topic: "What an index does in a database", angle: "a book's index, for rows" }
+        : req.schemaName === "write_post"
+          ? { text: "Your query is slow and the table is fine.\nAn index is a sorted shortcut to rows, like a book's index for pages.\nAdd one where you filter or join a lot. #postgres" }
+          : GOOD_REVIEW,
+    );
+    await fillCalendar({ max: 1 });
+    const [p] = await db().select().from(schema.posts);
+    expect(p).toMatchObject({ pillar: "learning", status: "scheduled", topic: "What an index does in a database" });
+    const topic = calls.find((c) => c.schemaName === "pick_topic")!;
+    expect(topic.system).toMatch(/easy for a beginner to follow/);
+    const write = calls.find((c) => c.schemaName === "write_post")!;
+    expect(write.system).toMatch(/Teach exactly ONE idea/);
+    expect(write.system).toMatch(/HOOK \(line 1\)/);
+  });
+
+  it("writeLesson takes the next free slot on every connected platform, with your topic if you give one", async () => {
+    const { writeLesson } = await import("../src/server/generate");
+    await saveSettings({ slots: BOTH.map((b) => ({ ...b, time: "00:30" })), horizonDays: 2 });
+    const calls = fakeLLM((req) => (req.schemaName === "write_post" ? { text: "A cache is a shortcut you trust until it is stale.\nIt remembers an answer so you do not ask twice.\nCheck how it expires before you rely on it." } : GOOD_REVIEW));
+    const ids = await writeLesson({ topic: "what a cache is" });
+    expect(ids).toHaveLength(2);
+    expect(calls.some((c) => c.schemaName === "pick_topic")).toBe(false); // the topic was yours
+    const rows = await db().select().from(schema.posts);
+    expect(rows.map((r) => r.platform).sort()).toEqual(["linkedin", "x"]);
+    expect(rows.every((r) => r.topic === "what a cache is" && r.pillar === "learning")).toBe(true);
+  });
+
+  it("a removed slot can be filled with a lesson at the same time and platform", async () => {
+    const { refillSlot } = await import("../src/server/generate");
+    await saveSettings({ slots: [{ ...BOTH[0], time: "00:30" }], horizonDays: 2 });
+    const at = new Date(Date.now() + 30 * 3_600_000);
+    const [gone] = await db().insert(schema.posts).values({ userId: me(), platform: "x", pillar: "news", text: "A post I removed.", status: "cancelled", scheduledAt: at }).returning();
+    fakeLLM((req) =>
+      req.schemaName === "pick_topic" ? { topic: "What a queue is", angle: "a line at a counter" } : req.schemaName === "write_post" ? { text: "A queue is a line for work.\nProducers add jobs; workers take them one at a time.\nUse one when a task can wait." } : GOOD_REVIEW,
+    );
+    const id = await refillSlot(gone.id, "lesson");
+    const row = (await db().select().from(schema.posts).where(eq(schema.posts.id, id)))[0];
+    expect(row).toMatchObject({ platform: "x", pillar: "learning", status: "scheduled" });
+    expect(row.scheduledAt.getTime()).toBe(at.getTime());
+    await expect(refillSlot(id, "lesson")).rejects.toThrow(/not empty/);
+  });
+});
+
+describe("hooks for reach", () => {
+  it("the writer is asked for a hook first, plain-language explanation and no invented advice; the reviewer checks the opener", async () => {
+    const { writerSystem, REVIEWER_SYSTEM } = await import("../src/server/prompts");
+    const { getSettings } = await import("../src/server/settings");
+    const sys = writerSystem(await getSettings(), "linkedin");
+    expect(sys).toMatch(/HOOK \(line 1, at most 14 words\)/);
+    expect(sys).toMatch(/Do NOT give advice, steps, experiments or recommendations of your own/);
+    expect(sys).toMatch(/3 to 5 short lines, 300 to 600 characters/);
+    expect(REVIEWER_SYSTEM).toMatch(/FIRST LINE make a busy developer stop scrolling/);
+    const { MOVES } = await import("../src/server/generate");
+    expect(Object.keys(MOVES)).not.toContain("try"); // "the first thing you would try" made the writer invent experiments
+    expect(Object.keys(MOVES)).toContain("plain");
   });
 });
 

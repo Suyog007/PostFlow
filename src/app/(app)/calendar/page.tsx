@@ -8,7 +8,7 @@ import { requireActiveUser } from "@/server/auth";
 import { activePlatforms, approvalGate, entitlementOf } from "@/server/billing/plans";
 import { Icon, PageHeader, PlatformGlyph, StatusBadge } from "@/components/ui";
 import { Flash } from "../flash";
-import { fillCalendarAction } from "@/app/actions";
+import { fillCalendarAction, writeLessonAction } from "@/app/actions";
 import { fillNowDays } from "@/server/generate";
 import { slotsBetween } from "@/server/slots";
 
@@ -191,7 +191,10 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
             <Link href={`/calendar?w=${offset - 1}`} className="btn btn-sm" aria-label="Previous week"><Icon name="left" size={14} /></Link>
             <Link href="/calendar" className="btn btn-sm">Today</Link>
             <Link href={`/calendar?w=${offset + 1}`} className="btn btn-sm" aria-label="Next week"><Icon name="right" size={14} /></Link>
-            <form action={fillCalendarAction} className="ml-1">
+            <form action={writeLessonAction} className="ml-1">
+              <button className="btn btn-sm" title="Write a short, simple lesson for your audience in the next free slot"><Icon name="notes" size={14} />Add a lesson</button>
+            </form>
+            <form action={fillCalendarAction}>
               <button className="btn btn-sm" disabled={filling} title={`Write posts now for every open slot in the next ${fillNowDays(s)} days, retrying slots that failed`}>
                 <Icon name="bolt" size={14} />{filling ? "Filling…" : "Fill now"}
               </button>

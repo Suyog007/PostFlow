@@ -7,7 +7,7 @@ import { DateTime } from "luxon";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { requireActiveUser, requireOwnerUser } from "@/server/auth";
 import { withUser } from "@/server/context";
-import { assertFeature, assertFeedQuota, LimitError } from "@/server/billing/plans";
+import { activePlatforms, assertFeature, assertFeedQuota, CONNECT_FIRST, LimitError } from "@/server/billing/plans";
 import { db, schema } from "@/server/db/client";
 import { PILLARS, type Pillar } from "@/server/db/schema";
 import { getSettings, saveSettings } from "@/server/settings";
@@ -20,7 +20,8 @@ import { registerWebhook, unlinkTelegram } from "@/server/telegram";
 import { requestFillNow, runForUser, tick } from "@/server/tick";
 import { addEvent } from "@/server/events";
 import { publishDue } from "@/server/publisher";
-import { fillNowDays, recheckPost, rejectAndReplace, rewordPost, swapToAlternative } from "@/server/generate";
+import { fillNowDays, recheckPost, refillSlot, rejectAndReplace, rewordPost, swapToAlternative, writeLesson } from "@/server/generate";
+import { warnOnError } from "@/server/log";
 import { isPublicHttpUrl } from "@/server/net";
 
 function back(path: string, kind: "error" | "ok", message: string): never {
@@ -109,6 +110,36 @@ export async function swapVersionAction(form: FormData) {
   const id = String(form.get("id"));
   if (!/^[0-9a-f-]{36}$/i.test(id)) back("/calendar", "error", "Post not found.");
   await guarded(`/posts/${id}`, () => swapToAlternative(id), "Switched versions. Approve it when you are happy.");
+}
+
+/** Fill a slot you emptied by removing a post, with a lesson or a news story. */
+export async function refillSlotAction(form: FormData) {
+  const id = String(form.get("id"));
+  const kind = form.get("kind") === "lesson" ? "lesson" : "news";
+  if (!/^[0-9a-f-]{36}$/i.test(id)) back("/calendar", "error", "Post not found.");
+  await requireActiveUser();
+  let newId = "";
+  try {
+    newId = await refillSlot(id, kind);
+  } catch (err) {
+    back(`/posts/${id}`, "error", (err as Error).message);
+  }
+  revalidatePath("/", "layout");
+  back(`/posts/${newId}`, "ok", kind === "lesson" ? "Here is a short lesson for that slot. Check it and approve it." : "Here is a story for that slot. Check it and approve it.");
+}
+
+/** "Add a lesson": a short, simple post that teaches your audience one thing, in the next free slots. */
+export async function writeLessonAction(form: FormData) {
+  const user = await requireActiveUser();
+  const topic = String(form.get("topic") ?? "").trim().slice(0, 200);
+  await guarded(
+    "/calendar",
+    async () => {
+      if (!(await activePlatforms(user.id)).length) throw new Error(CONNECT_FIRST);
+      after(() => withUser(user.id, () => writeLesson({ topic: topic || undefined })).then(() => undefined).catch(warnOnError("lesson_failed", { userId: user.id })));
+    },
+    topic ? `Writing a short lesson on "${topic}". It appears in the next free slot within a minute or two.` : "Writing a short lesson on one of your topics. It appears in the next free slot within a minute or two.",
+  );
 }
 
 /** A second, more careful review of a post the reviewer held back. */

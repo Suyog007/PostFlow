@@ -184,6 +184,25 @@ describe("telegram inbound", () => {
       });
     });
 
+    it("/learn writes a lesson and sends it back with buttons; removing a post offers to fill the slot", async () => {
+      const { fakeLLM, GOOD_REVIEW } = await import("./helpers");
+      const { saveSettings } = await import("../src/server/settings");
+      await saveSettings({ slots: [{ platform: "x", days: [1, 2, 3, 4, 5, 6, 7], time: "00:30" }], horizonDays: 2 });
+      fakeLLM((req) => (req.schemaName === "write_post" ? { text: "A cache is a shortcut you trust until it is stale.\nIt remembers an answer so you do not ask twice.\nCheck how it expires first. #backend" } : GOOD_REVIEW));
+      await capture(async (sent) => {
+        await handleTelegramUpdate(msg("/learn what a cache is"));
+        expect(sent[0].text).toMatch(/Writing a short lesson on "what a cache is"/);
+        const lesson = sent.find((m) => m.text.startsWith("🎓 Lesson"))!;
+        expect(lesson.text).toContain("A cache is a shortcut");
+        expect(lesson.buttons!.flat().map((b) => b.text)).toEqual(["✅ Approve", "🗑 Remove", "🔁 Another story", "✍️ New wording"]);
+
+        const [p] = await db().select().from(schema.posts);
+        await handleTelegramUpdate({ callback_query: { id: "5", data: `rm:${p.id}`, message: { chat: { id: 42 } } } });
+        const offer = sent.find((m) => m.text.includes("Want to put something else in that slot?"))!;
+        expect(offer.buttons!.flat().map((b) => b.text)).toEqual(["🎓 Fill with a lesson", "📰 Fill with news"]);
+      });
+    });
+
     it("the New wording button writes the same story again and sends it back with buttons", async () => {
       const { fakeLLM, GOOD_REVIEW } = await import("./helpers");
       const [p] = await db().insert(schema.posts).values({ userId: me(), platform: "x", pillar: "own_work", text: "Cut CI from 14 minutes to 4. The cache did most of it.", status: "scheduled", scheduledAt: new Date(Date.now() + 3_600_000) }).returning();

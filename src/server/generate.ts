@@ -141,6 +141,12 @@ async function pickNote(platform: Platform, pillar: Pillar) {
 
 const topicOut = z.object({ topic: z.string(), angle: z.string() });
 
+/** A short lesson on a topic the owner named, with no model call needed to choose it. */
+function lessonMaterial(topic: string): Material {
+  const t = topic.trim().slice(0, 200);
+  return { kind: "evergreen", pillar: "learning", source: `Topic: ${t}\n(Short lesson for the audience: use only well-established, widely known facts.)`, label: t, topic: t, firstPerson: false };
+}
+
 async function pickEvergreenTopic(s: Settings, platform: Platform): Promise<Material> {
   const recent = await db()
     .select({ topic: schema.posts.topic, text: schema.posts.text })
@@ -151,7 +157,7 @@ async function pickEvergreenTopic(s: Settings, platform: Platform): Promise<Mate
   const res = await runTask({
     task: "pick_topic",
     role: "writer",
-    system: `Pick ONE specific, genuinely useful topic for an evergreen explainer post. It must sit inside the owner's expertise and teach one concrete thing a working developer can use (a technique, a mental model, a common mistake, a tool comparison). Not a news item. Not a personal story.\n${profileBlock(s)}\nDo not repeat or closely overlap any recent topic.`,
+    system: `Pick ONE specific, genuinely useful topic for a short lesson that teaches the owner's audience one thing in plain words. It must sit inside the owner's expertise, be easy for a beginner to follow, and be something a working developer or founder can use (a technique, a mental model, a common mistake, how a tool or concept works). Prefer "what is X and when do you need it" and "the mistake people make with X" over deep internals. Not a news item. Not a personal story.\n${profileBlock(s)}\nDo not repeat or closely overlap any recent topic.`,
     user: `Recent topics:\n${recent.map((r) => `- ${r.topic ?? r.text.slice(0, 80)}`).join("\n") || "(none)"}`,
     output: topicOut,
     maxTokens: 300,
@@ -174,8 +180,8 @@ async function pickByPillar(platform: Platform, pillar: Pillar, s: Settings, now
   }
   if (pillar === "learning") {
     const n = await pickNote(platform, "learning");
-    // Evergreen explainers only when the owner switched them on; otherwise only their own learning notes.
-    return n ? noteMaterial(n) : s.fillerPosts ? pickEvergreenTopic(s, platform) : null;
+    // The learning share in Settings is the opt-in: your own learning notes first, otherwise a short lesson on one of your topics.
+    return n ? noteMaterial(n) : pickEvergreenTopic(s, platform);
   }
   if (pillar === "news" || pillar === "local") {
     const hit = await pickVerified(await candidateItems(platform, s, pillar, now, slotAt));
@@ -250,6 +256,8 @@ export async function chooseMaterial(platform: Platform, slotAt: Date, s: Settin
     const m = await pickByPillar(platform, p, s, now, slotAt);
     if (m) return m;
   }
+  // No learning share, but "fill empty slots" is on: a lesson is better than an empty slot.
+  if (s.fillerPosts && !order.includes("learning")) return pickEvergreenTopic(s, platform);
   return null;
 }
 
@@ -262,7 +270,8 @@ export const MOVES = {
   reaction: "Your honest first reaction: what is surprising, clever, overdue or odd about it, and why, in one breath.",
   who: "Who this actually helps, named concretely (a solo dev with a side project, a two-person SaaS, an agency), and what changes for them.",
   catch: "The catch: a trade-off, limit, cost or thing to check before relying on it. Fair, not cynical.",
-  try: "The first small thing you would try with it, as a concrete experiment.",
+  plain: "Explain it in plain words, as to a smart friend outside tech: what happened and why anyone should care, in two lines. No jargon without a short explanation.",
+  stance: "Take a clear, fair side (it is good news, it is overdue, it is a worry, it is overhyped) and give the one reason for it that comes from the material.",
   before: "How people handled this before, and what this replaces or makes easier.",
   dry: "A short, dry, slightly wry observation about it. Clever, not a joke for its own sake.",
   guess: "A guess about what builders will do next, worded freshly and clearly as a guess (no stock phrases).",
@@ -500,6 +509,46 @@ export async function produceForSlot(platform: Platform, at: Date, m: Material, 
     await addEvent("rejected", `Reviewer rejected a ${platform} draft (${m.label.slice(0, 60)}): ${verdict.reasons[0] ?? ""}`, row.id);
   }
   return { status, postId: row.id, reasons: verdict.reasons };
+}
+
+/**
+ * "Educate": a short, simple lesson for the next free slot on each connected platform.
+ * With a topic it teaches that; without one it picks something from the owner's expertise.
+ */
+export async function writeLesson(opts: { topic?: string } = {}): Promise<string[]> {
+  const s = await getSettings();
+  const active = await activePlatforms();
+  if (!active.length) throw new Error("Connect LinkedIn or X in Settings first.");
+  const ids: string[] = [];
+  for (const platform of active) {
+    const at = await nextFreeSlot(s, platform, new Date(Date.now() + 20 * 60_000));
+    if (!at) continue;
+    const m = opts.topic?.trim() ? lessonMaterial(opts.topic) : await pickEvergreenTopic(s, platform);
+    ids.push((await produceForSlot(platform, at, m, s, 3, { requested: "schedule" })).postId);
+  }
+  if (!ids.length) throw new Error("No free slot in the next 14 days. Add slots in Settings or remove a post.");
+  return ids;
+}
+
+/**
+ * A slot you emptied by removing a post: fill it with a short lesson or with a news story.
+ * The new post takes the same platform and time (or the next free slot if that time is too close).
+ */
+export async function refillSlot(removedId: string, kind: "lesson" | "news"): Promise<string> {
+  const p = await db().query.posts.findFirst({ where: and(eq(schema.posts.id, removedId), await mine(schema.posts)) });
+  if (!p) throw new Error("Post not found.");
+  if (p.status !== "cancelled") throw new Error("That slot is not empty.");
+  const s = await getSettings();
+  const platform = p.platform as Platform;
+  let at = p.scheduledAt;
+  if (at.getTime() < Date.now() + 10 * 60_000) {
+    const next = await nextFreeSlot(s, platform, new Date(Date.now() + 20 * 60_000));
+    if (!next) throw new Error("No free slot in the next 14 days.");
+    at = next;
+  }
+  const m = kind === "lesson" ? await pickEvergreenTopic(s, platform) : await pickByPillar(platform, "news", s, new Date(), at);
+  if (!m) throw new Error("No news story is strong enough for that slot right now. Try a lesson instead.");
+  return (await produceForSlot(platform, at, m, s, 3, { requested: "schedule" })).postId;
 }
 
 /** Swaps a post with its alternative version (normal take vs plain explainer). The swapped-out text becomes the alternative. */

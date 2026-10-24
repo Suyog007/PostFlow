@@ -7,7 +7,7 @@ import { sendTo, telegramApi } from "./telegram";
 import { getSettings, saveSettings } from "./settings";
 import { approvePost, postNow, removePost, PostError, upcoming } from "./posts";
 import { publishDue } from "./publisher";
-import { rejectAndReplace, rewordPost } from "./generate";
+import { refillSlot, rejectAndReplace, rewordPost, writeLesson } from "./generate";
 import { requestFillNow } from "./tick";
 import { formatLocal } from "./slots";
 import type { Pillar } from "./db/schema";
@@ -30,11 +30,21 @@ Other ways to feed me:
 - Any plain text is saved as a note (what you built, learned or think). Tags: #local, #learning
 - A plain link is a story tip: I cross-check it against other publishers and post it only if it holds up
 
+/learn  a short, simple lesson for your audience in the next free slots. Add a topic to choose it: /learn how indexes work
 /fill   write posts now for every open slot in the next 5 days
 /queue  upcoming posts by day, in full. Each has Approve, Post now, Remove, Another story and New wording buttons
 /pause  stop all posting
 /resume start again
 /unlink disconnect this chat from PostFlow`;
+
+/** Sends one post's full text with its buttons. */
+async function sendPost(chat: number | string, id: string, heading: string) {
+  const p = await db().query.posts.findFirst({ where: eq(schema.posts.id, id) });
+  if (!p) return;
+  const s = await getSettings();
+  const note = p.status === "draft" ? "\n\nThe reviewer had concerns, so it is a draft: open the app to look at it." : "";
+  await sendTo(chat, `${heading}\n${p.platform === "x" ? "X" : "LinkedIn"} · ${formatLocal(p.scheduledAt, s.timezone)}\n\n${p.text}${note}`, postButtons(id));
+}
 
 const QUICK_REWORD = "Take a different angle and a fresh opening. Keep the same story and the same facts.";
 
@@ -100,6 +110,7 @@ async function handleForUser(u: Update, chat: number): Promise<void> {
   if (u.callback_query) {
     const data = u.callback_query.data ?? "";
     let answer = "Done";
+    let removedId: string | null = null;
     if (data.startsWith("ok:")) {
       try {
         await approvePost(data.slice(3));
@@ -170,16 +181,42 @@ async function handleForUser(u: Update, chat: number): Promise<void> {
       }
     } else if (data === "no:") {
       answer = "Cancelled. Nothing was posted.";
+    } else if (data.startsWith("fl:") || data.startsWith("fn:")) {
+      // Fill a slot you emptied with a lesson (fl) or a news story (fn).
+      const lesson = data.startsWith("fl:");
+      await telegramApi("answerCallbackQuery", { callback_query_id: u.callback_query.id, text: lesson ? "Writing a lesson…" : "Looking for a story…" });
+      const id = data.slice(3);
+      const run = () =>
+        withUser(userId, async () => {
+          try {
+            const newId = await refillSlot(id, lesson ? "lesson" : "news");
+            await sendPost(chat, newId, lesson ? "🎓 Lesson for that slot" : "📰 Story for that slot");
+          } catch (err) {
+            await sendTo(chat, (err as Error).message);
+          }
+        });
+      try {
+        after(run);
+      } catch {
+        await run(); // outside a request (tests)
+      }
+      return;
     } else if (data.startsWith("rm:")) {
       try {
         await removePost(data.slice(3));
+        removedId = data.slice(3);
         answer = "Removed. It will not be posted.";
       } catch (err) {
         answer = err instanceof PostError ? err.message : "Could not remove it.";
       }
     }
     await telegramApi("answerCallbackQuery", { callback_query_id: u.callback_query.id, text: answer });
-    await sendTo(chat, answer === "Removed. It will not be posted." ? "🗑 Removed. It will not be posted." : answer);
+    if (removedId) {
+      // An empty slot is unlikely to fill itself with something good soon, so offer to fill it.
+      await sendTo(chat, "🗑 Removed. It will not be posted. Want to put something else in that slot?", [[{ text: "🎓 Fill with a lesson", data: `fl:${removedId}` }, { text: "📰 Fill with news", data: `fn:${removedId}` }]]);
+      return;
+    }
+    await sendTo(chat, answer);
     return;
   }
 
@@ -195,6 +232,26 @@ async function handleForUser(u: Update, chat: number): Promise<void> {
   if (text === "/resume") {
     await saveSettings({ paused: false });
     return void (await sendTo(chat, "▶️ Resumed."));
+  }
+  const learn = text.match(/^\/learn(?:@\w+)?\s*([\s\S]*)$/i);
+  if (learn) {
+    const topic = learn[1].trim();
+    await sendTo(chat, topic ? `🎓 Writing a short lesson on "${topic.slice(0, 80)}" for the next free slots. Expect it here in a minute or two.` : "🎓 Picking a topic from your expertise and writing a short lesson for the next free slots. Expect it here in a minute or two.");
+    const run = () =>
+      withUser(userId, async () => {
+        try {
+          const ids = await writeLesson({ topic: topic || undefined });
+          for (const id of ids) await sendPost(chat, id, "🎓 Lesson");
+        } catch (err) {
+          await sendTo(chat, (err as Error).message);
+        }
+      });
+    try {
+      after(run);
+    } catch {
+      await run(); // outside a request (tests)
+    }
+    return;
   }
   if (text === "/fill") {
     try {

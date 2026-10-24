@@ -6,7 +6,7 @@ import { requireActiveUser } from "@/server/auth";
 import { approvalGate, entitlementOf } from "@/server/billing/plans";
 import { db, schema } from "@/server/db/client";
 import { getSettings } from "@/server/settings";
-import { approvePostAction, recheckPostAction, swapVersionAction, postNowAction, rejectPostAction, removePostAction, reschedulePostAction, resolveAction, restorePostAction, rewordPostAction, scheduleDraftAction, unapprovePostAction } from "@/app/actions";
+import { approvePostAction, recheckPostAction, refillSlotAction, swapVersionAction, postNowAction, rejectPostAction, removePostAction, reschedulePostAction, resolveAction, restorePostAction, rewordPostAction, scheduleDraftAction, unapprovePostAction } from "@/app/actions";
 import { SubmitButton } from "@/components/submit-button";
 import { PostEditor } from "@/components/post-editor";
 import { Icon, PlatformGlyph, StatusBadge } from "@/components/ui";
@@ -107,6 +107,20 @@ export default async function PostPage({ params, searchParams }: { params: Promi
             <input type="hidden" name="id" value={p.id} />
             <SubmitButton className="btn btn-accent" pending="Checking again…"><Icon name="shield" size={14} />Check again</SubmitButton>
           </form>
+        )}
+        {p.status === "cancelled" && p.scheduledAt.getTime() > Date.now() && (
+          <>
+            <form action={refillSlotAction}>
+              <input type="hidden" name="id" value={p.id} />
+              <input type="hidden" name="kind" value="lesson" />
+              <SubmitButton className="btn btn-accent" pending="Writing a lesson…"><Icon name="notes" size={14} />Fill with a lesson</SubmitButton>
+            </form>
+            <form action={refillSlotAction}>
+              <input type="hidden" name="id" value={p.id} />
+              <input type="hidden" name="kind" value="news" />
+              <SubmitButton className="btn" pending="Finding a story…"><Icon name="link" size={14} />Fill with news</SubmitButton>
+            </form>
+          </>
         )}
         {["cancelled", "failed", "expired"].includes(p.status) && <form action={restorePostAction}><input type="hidden" name="id" value={p.id} /><button className="btn">Put back on calendar</button></form>}
       </div>
