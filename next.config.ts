@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["postgres", "rss-parser", "jsdom"],
+  serverExternalPackages: ["postgres", "rss-parser", "jsdom", "sharp"],
   poweredByHeader: false,
   async headers() {
     return [

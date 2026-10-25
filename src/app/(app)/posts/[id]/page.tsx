@@ -94,7 +94,7 @@ export default async function PostPage({ params, searchParams }: { params: Promi
             {withImage && open && (
               <form action={redrawImageAction}>
                 <input type="hidden" name="id" value={p.id} />
-                <button className="btn btn-sm">New picture</button>
+                <SubmitButton className="btn btn-sm" pending="Finding a new picture…">New picture</SubmitButton>
               </form>
             )}
             <form action={togglePostImageAction}>

@@ -1,6 +1,7 @@
-// Pictures for posts. The writer model picks a few photo searches for the post's idea; the first good
-// photo from a free photo library (Pexels, or public-domain photos on Openverse) is used. These photos
-// are free to use on social media without credit, unlike pictures taken from news sites.
+// Pictures for posts. When Cloudflare Workers AI is set up, the writer model describes a scene for the
+// post's point and FLUX draws it. Otherwise (or if that fails) the writer picks photo searches and the
+// first good photo from a free photo library (Pexels, or public-domain photos on Openverse) is used.
+// Neither needs credit in the post, unlike pictures taken from news sites.
 // The photo is stored once per post, attached when the post is published, and shown in Telegram
 // and the app through the signed /api/cards/[id] link.
 
@@ -57,11 +58,85 @@ export function wantsImage(post: Pick<PostLike, "platform" | "review">, s: Pick<
   return !!s.images[post.platform as "x" | "linkedin"];
 }
 
+const SCENE_SYSTEM = `You are the art director for a software engineer's LinkedIn and X posts. Read the post and describe ONE image to go with it, for an image model to draw.
+
+The goal: make someone stop scrolling, and make this specific post's point clear at a glance.
+
+Rules:
+- Show the post's specific point as a concrete scene or visual metaphor. Not a generic symbol for the topic: no lone padlock, key, shield, code screen, glowing brain or circuit board. Ask "what is surprising or at stake here?" and show that. Examples: certificates issued with tiny 4-bit keys → a bank vault door held shut by a single paper clip; long-lived API keys nobody rotates → a dusty old key hanging on a hook marked by cobwebs, beside a busy modern office; a slow query with no index → a librarian buried under piles of books while a small card catalogue sits unused; an AI model trained on cached copies instead of the live web → a robot reading in a quiet archive while a storm rages outside the window.
+- One clear subject in the centre, with space above and below (the picture is cropped to a wide frame). Bold colour, dramatic lighting, strong contrast so it reads on a phone.
+- Never any text, letters, numbers, words, signs, captions, code, screens with writing, logos or watermarks. Company and product names must not appear; show the idea instead.
+- No real or recognisable people. Figures, if any, are small or stylised.
+- Pick the style that fits: "glossy 3D render", "isometric 3D diorama", "bold flat vector illustration" or "cinematic photograph".
+- The scene is 35 to 80 words in plain English describing what is seen. Do not mention the post, social media or the author.`;
+
+const Scene = z.object({
+  style: z.string().min(3).max(60),
+  scene: z.string().min(40).max(700),
+});
+
+/** The image model's prompt: the scene, its style, and the house rules repeated so the model keeps to them. */
+export function drawPrompt(scene: z.infer<typeof Scene>): string {
+  return `${scene.scene.trim()} Style: ${scene.style.trim()}, high detail, clean composition, subject centred. No text, no letters, no numbers, no logos, no watermark.`;
+}
+
+async function describeScene(post: PostLike): Promise<string> {
+  const kind = post.pillar === "learning" ? "a short lesson" : post.pillar === "own_work" ? "something the author built" : "a news story";
+  const out = await runTask({
+    task: "image_scene",
+    role: "writer",
+    system: SCENE_SYSTEM,
+    user: `The post (${kind}, for ${post.platform === "x" ? "X" : "LinkedIn"}):\n\n${post.text}`,
+    output: Scene,
+    maxTokens: 1200,
+    temperature: 0.9,
+  });
+  return drawPrompt(out);
+}
+
+/** FLUX schnell on Cloudflare Workers AI: free for about a hundred pictures a day. Returns JPEG/PNG bytes. */
+async function cloudflareDraw(prompt: string, seed: number): Promise<Buffer> {
+  const { CLOUDFLARE_ACCOUNT_ID: account, CLOUDFLARE_API_TOKEN: token } = env();
+  const res = await fetch(`https://api.cloudflare.com/client/v4/accounts/${account}/ai/run/@cf/black-forest-labs/flux-1-schnell`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt: prompt.slice(0, 2000), steps: 6, seed }),
+    signal: AbortSignal.timeout(45_000),
+  });
+  const type = res.headers.get("content-type") ?? "";
+  if (res.ok && type.startsWith("image/")) return Buffer.from(await res.arrayBuffer());
+  const json = (await res.json().catch(() => null)) as { result?: { image?: string }; errors?: { message?: string }[] } | null;
+  if (res.ok && json?.result?.image) return Buffer.from(json.result.image, "base64");
+  throw new Error(`Cloudflare HTTP ${res.status}: ${json?.errors?.map((e) => e.message).join("; ") ?? "no image"}`.slice(0, 300));
+}
+
+let aiOverride: ((prompt: string, seed: number) => Promise<Buffer>) | null | undefined;
+/** Tests swap the image model for a stub (or null for none). */
+export function setAiDrawerForTests(fn: ((prompt: string, seed: number) => Promise<Buffer>) | null | undefined) {
+  aiOverride = fn;
+}
+function aiDrawer() {
+  if (aiOverride !== undefined) return aiOverride;
+  return env().CLOUDFLARE_ACCOUNT_ID && env().CLOUDFLARE_API_TOKEN ? cloudflareDraw : null;
+}
+
+/** Every picture is cut to 1200x675 and saved as a compact JPEG, so it loads fast everywhere and both platforms accept it. */
+export async function shrink(data: Buffer): Promise<{ data: Buffer; mime: string } | null> {
+  try {
+    const { default: sharp } = await import("sharp");
+    const out = await sharp(data).rotate().resize(1200, 675, { fit: "cover", position: "attention" }).jpeg({ quality: 82, mozjpeg: true }).toBuffer();
+    return { data: out, mime: "image/jpeg" };
+  } catch (err) {
+    log.warn("image_shrink_failed", { error: (err as Error).message });
+    return data.length < 5_000_000 ? { data, mime: data[0] === 0x89 ? "image/png" : "image/jpeg" } : null;
+  }
+}
+
 const SEARCH_SYSTEM = `You pick photo searches for a software engineer's LinkedIn and X posts. A free photo library will be searched with them, and the first good photo goes with the post.
 
 Rules:
-- Give 3 searches, best first. Each is 1 to 3 plain words naming something you can photograph: objects, places, scenes. For example: "padlock", "server room", "laptop code", "library shelves", "robot", "city night", "chip circuit board".
-- Pick what shows the post's idea at a glance. A security fix → "padlock"; a slow database → "library shelves"; an AI model news story → "robot" or "circuit board".
+- Give 3 searches, most specific first. Each is 2 to 4 plain words naming a scene you can photograph that fits THIS post's point, not just its topic.
+- Avoid the generic picks everyone uses: padlock, key, lock, shield, hacker in hoodie, code on screen, binary, circuit board, glowing brain. Think of a real-world scene instead. Certificates with weak keys → "bank vault door", "cracked safe"; old API keys nobody rotates → "dusty old keys", "rusty gate"; a slow database → "library stacks", "traffic jam"; AI trained on old copies → "archive boxes", "old newspapers".
 - No brand, company, product or person names (the library will not have them), and no abstract words like "innovation" or "future".`;
 
 const Searches = z.object({ queries: z.array(z.string().min(2).max(40)).min(1).max(4) });
@@ -117,7 +192,7 @@ async function download(url: string): Promise<{ data: Buffer; mime: string } | n
   const mime = (res.headers.get("content-type") ?? "").split(";")[0].trim();
   if (mime !== "image/jpeg" && mime !== "image/png") return null;
   const data = Buffer.from(await res.arrayBuffer());
-  return data.length > 10_000 && data.length < 8_000_000 ? { data, mime } : null;
+  return data.length > 10_000 && data.length < 25_000_000 ? { data, mime } : null;
 }
 
 let fetchPhoto: (url: string) => Promise<{ data: Buffer; mime: string } | null> = download;
@@ -130,9 +205,26 @@ export function setPhotoDownloadForTests(fn: ((url: string) => Promise<{ data: B
  * calls so failures are visible and a broken library is not retried on every view.
  */
 async function makeImage(post: PostLike, avoid: string[] = []): Promise<PostImage | null> {
+  const errors: string[] = [];
+  // An illustration made for this post's point, when an image model is set up.
+  const ai = aiDrawer();
+  if (ai) {
+    try {
+      const prompt = await describeScene(post);
+      const seed = Math.floor(Math.random() * 1_000_000_000);
+      const img = await shrink(await ai(prompt, seed));
+      if (img) {
+        await db().insert(schema.llmCalls).values({ userId: post.userId, task: "find_image", model: "flux-1-schnell", status: "ok" });
+        return { ...img, prompt, source: `ai:${seed}`, credit: "AI illustration made for this post" };
+      }
+    } catch (err) {
+      errors.push(`illustration: ${(err as Error).message}`);
+      log.warn("image_draw_failed", { postId: post.id, error: (err as Error).message });
+    }
+  }
+  // Otherwise a free-licence photo.
   const queries = await photoSearches(post);
   const used = new Set([...avoid, ...(await db().select({ s: schema.postImages.source }).from(schema.postImages).where(eq(schema.postImages.userId, post.userId))).map((r) => r.s ?? "")]);
-  const errors: string[] = [];
   for (const query of queries) {
     for (const search of searchers) {
       const found = await search(query).catch((e: Error) => {
@@ -140,7 +232,8 @@ async function makeImage(post: PostLike, avoid: string[] = []): Promise<PostImag
         return [] as Photo[];
       });
       for (const photo of found.filter((f) => !used.has(f.source)).slice(0, 4)) {
-        const img = await fetchPhoto(photo.url);
+        const got = await fetchPhoto(photo.url);
+        const img = got && (await shrink(got.data));
         if (!img) continue;
         await db().insert(schema.llmCalls).values({ userId: post.userId, task: "find_image", model: "photo-search", status: "ok" });
         return { ...img, prompt: query, source: photo.source, credit: photo.credit };

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { db, schema } from "../src/server/db/client";
-import { altText, cardUrl, ensurePostImage, redrawPostImage, setImageMakingForTests, setPhotoDownloadForTests, setPhotoSearchForTests, verifyCard, wantsImage, type Photo } from "../src/server/post-images";
+import { altText, cardUrl, drawPrompt, ensurePostImage, setAiDrawerForTests, shrink, redrawPostImage, setImageMakingForTests, setPhotoDownloadForTests, setPhotoSearchForTests, verifyCard, wantsImage, type Photo } from "../src/server/post-images";
 import { withUser } from "../src/server/context";
 import { publishDue } from "../src/server/publisher";
 import { saveSettings } from "../src/server/settings";
@@ -297,5 +297,51 @@ describe("the photo libraries", () => {
       delete process.env.PEXELS_API_KEY;
       resetEnvCache();
     }
+  });
+});
+
+describe("AI illustrations", () => {
+  beforeEach(resetDb);
+  const SCENE = { style: "cinematic photograph", scene: "A massive bank vault door held shut by a single bent paper clip, cold blue light, dust in the air, a tiny figure staring up at it from the floor." };
+  const realPng = async (w: number, h: number) => (await import("sharp")).default({ create: { width: w, height: h, channels: 3, background: { r: 30, g: 60, b: 200 } } }).png().toBuffer();
+
+  it("when an image model is set up, the post gets an illustration of its point, cut to 1200x675 JPEG", async () => {
+    const prompts: string[] = [];
+    setImageMakingForTests(true);
+    setAiDrawerForTests(async (prompt) => {
+      prompts.push(prompt);
+      return realPng(1024, 1024);
+    });
+    const asked = library();
+    const calls = fakeLLM((req) => (req.schemaName === "image_scene" ? SCENE : SEARCHES));
+    const p = await scheduledPost("linkedin");
+    const img = await withUser(me(), () => ensurePostImage(p));
+    expect(calls.find((c) => c.schemaName === "image_scene")!.system).toMatch(/no lone padlock, key/);
+    expect(prompts[0]).toContain("paper clip");
+    expect(prompts[0]).toMatch(/No text, no letters/);
+    expect(img).toMatchObject({ mime: "image/jpeg", credit: "AI illustration made for this post" });
+    const meta = await (await import("sharp")).default(img!.data).metadata();
+    expect([meta.width, meta.height, meta.format]).toEqual([1200, 675, "jpeg"]);
+    expect(asked).toHaveLength(0); // no photo search needed
+  });
+
+  it("falls back to a photo when the image model fails, and keeps why", async () => {
+    setImageMakingForTests(true);
+    setAiDrawerForTests(async () => {
+      throw new Error("Cloudflare HTTP 429: daily free allocation used");
+    });
+    library();
+    fakeLLM((req) => (req.schemaName === "image_scene" ? SCENE : SEARCHES));
+    const img = await withUser(me(), async () => ensurePostImage(await scheduledPost()));
+    expect(img!.source).toBe("https://library.example/photo/1");
+  });
+
+  it("big downloaded photos are made small", async () => {
+    const big = await (await import("sharp")).default({ create: { width: 4000, height: 3000, channels: 3, background: { r: 200, g: 100, b: 50 } } }).jpeg({ quality: 100 }).toBuffer();
+    const out = await shrink(big);
+    const meta = await (await import("sharp")).default(out!.data).metadata();
+    expect([meta.width, meta.height]).toEqual([1200, 675]);
+    expect(out!.data.length).toBeLessThan(big.length);
+    expect(drawPrompt(SCENE)).toContain("bank vault");
   });
 });
