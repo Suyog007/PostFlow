@@ -345,3 +345,40 @@ describe("AI illustrations", () => {
     expect(drawPrompt(SCENE)).toContain("bank vault");
   });
 });
+
+describe("Cloudflare Workers AI", () => {
+  beforeEach(resetDb);
+
+  it("drops a setting the model refuses and asks again", async () => {
+    const { resetEnvCache } = await import("../src/server/env");
+    process.env.CLOUDFLARE_ACCOUNT_ID = "acc123";
+    process.env.CLOUDFLARE_API_TOKEN = "cf-token";
+    resetEnvCache();
+    setImageMakingForTests(true);
+    setAiDrawerForTests(undefined); // the real Cloudflare call, against a stubbed network
+    fakeLLM(() => ({ style: "glossy 3D render", scene: "A bank vault door held shut by a single bent paper clip under cold blue light, a tiny figure looking up." }));
+    const png = await (await import("sharp")).default({ create: { width: 1024, height: 1024, channels: 3, background: { r: 10, g: 20, b: 30 } } }).png().toBuffer();
+    const bodies: Record<string, unknown>[] = [];
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async (u: string, init?: { body?: string; headers?: Record<string, string> }) => {
+      expect(String(u)).toBe("https://api.cloudflare.com/client/v4/accounts/acc123/ai/run/@cf/black-forest-labs/flux-1-schnell");
+      expect(init?.headers?.Authorization).toBe("Bearer cf-token");
+      const b = JSON.parse(init!.body!);
+      bodies.push(b);
+      if ("seed" in b) return new Response(JSON.stringify({ success: false, errors: [{ message: "AiError: Bad input: Error: Additional or unevaluated properties '/seed' at '/' not allowed (abc)" }] }), { status: 400 });
+      return new Response(JSON.stringify({ success: true, result: { image: png.toString("base64") } }), { headers: { "content-type": "application/json" } });
+    }) as typeof fetch;
+    try {
+      const img = await withUser(me(), async () => ensurePostImage(await scheduledPost("linkedin")));
+      expect(img).toMatchObject({ mime: "image/jpeg", credit: "AI illustration made for this post" });
+      expect(bodies).toHaveLength(2);
+      expect(bodies[1]).not.toHaveProperty("seed");
+      expect(bodies[1].prompt).toContain("paper clip");
+    } finally {
+      globalThis.fetch = realFetch;
+      delete process.env.CLOUDFLARE_ACCOUNT_ID;
+      delete process.env.CLOUDFLARE_API_TOKEN;
+      resetEnvCache();
+    }
+  });
+});

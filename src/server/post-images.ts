@@ -97,17 +97,28 @@ async function describeScene(post: PostLike): Promise<string> {
 /** FLUX schnell on Cloudflare Workers AI: free for about a hundred pictures a day. Returns JPEG/PNG bytes. */
 async function cloudflareDraw(prompt: string, seed: number): Promise<Buffer> {
   const { CLOUDFLARE_ACCOUNT_ID: account, CLOUDFLARE_API_TOKEN: token } = env();
-  const res = await fetch(`https://api.cloudflare.com/client/v4/accounts/${account}/ai/run/@cf/black-forest-labs/flux-1-schnell`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ prompt: prompt.slice(0, 2000), steps: 6, seed }),
-    signal: AbortSignal.timeout(45_000),
-  });
-  const type = res.headers.get("content-type") ?? "";
-  if (res.ok && type.startsWith("image/")) return Buffer.from(await res.arrayBuffer());
-  const json = (await res.json().catch(() => null)) as { result?: { image?: string }; errors?: { message?: string }[] } | null;
-  if (res.ok && json?.result?.image) return Buffer.from(json.result.image, "base64");
-  throw new Error(`Cloudflare HTTP ${res.status}: ${json?.errors?.map((e) => e.message).join("; ") ?? "no image"}`.slice(0, 300));
+  // Only the prompt is required. Extra settings the model does not accept are dropped and the call retried.
+  const body: Record<string, unknown> = { prompt: prompt.slice(0, 2000), steps: 6, seed };
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const res = await fetch(`https://api.cloudflare.com/client/v4/accounts/${account}/ai/run/@cf/black-forest-labs/flux-1-schnell`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(45_000),
+    });
+    const type = res.headers.get("content-type") ?? "";
+    if (res.ok && type.startsWith("image/")) return Buffer.from(await res.arrayBuffer());
+    const json = (await res.json().catch(() => null)) as { result?: { image?: string }; errors?: { message?: string }[] } | null;
+    if (res.ok && json?.result?.image) return Buffer.from(json.result.image, "base64");
+    const msg = json?.errors?.map((e) => e.message).join("; ") ?? "no image";
+    const extra = msg.match(/properties '\/(\w+)'/)?.[1];
+    if (res.status === 400 && extra && extra !== "prompt" && extra in body) {
+      delete body[extra];
+      continue;
+    }
+    throw new Error(`Cloudflare HTTP ${res.status}: ${msg}`.slice(0, 300));
+  }
+  throw new Error("Cloudflare did not accept the request.");
 }
 
 let aiOverride: ((prompt: string, seed: number) => Promise<Buffer>) | null | undefined;
@@ -172,7 +183,7 @@ async function pexels(query: string): Promise<Photo[]> {
 
 /** Openverse: openly licensed photos. Only public-domain ones (CC0 / PDM), which need no credit. No key needed. */
 async function openverse(query: string): Promise<Photo[]> {
-  const q = new URLSearchParams({ q: query, license: "cc0,pdm", aspect_ratio: "wide", size: "large", extension: "jpg,png", mature: "false", page_size: "20" });
+  const q = new URLSearchParams({ q: query, license: "cc0,pdm", mature: "false", page_size: "20" });
   const res = await fetch(`https://api.openverse.org/v1/images/?${q}`, { headers: { "User-Agent": "PostFlow/1.0 (+https://postfloow.netlify.app)" }, signal: AbortSignal.timeout(15_000) });
   if (!res.ok) throw new Error(`Openverse HTTP ${res.status}`);
   const json = (await res.json()) as { results?: { url?: string; foreign_landing_url?: string; creator?: string; source?: string }[] };
@@ -185,12 +196,12 @@ export function setPhotoSearchForTests(fn: ((query: string) => Promise<Photo[]>)
   searchers = fn ? [fn] : [pexels, openverse];
 }
 
-/** Downloads a photo. Only real JPEG or PNG files of a sensible size, which both LinkedIn and X accept. */
+/** Downloads a photo of a sensible size. Any image format: it is turned into a JPEG afterwards. */
 async function download(url: string): Promise<{ data: Buffer; mime: string } | null> {
   const res = await fetch(url, { headers: { "User-Agent": "PostFlow/1.0 (+https://postfloow.netlify.app)" }, signal: AbortSignal.timeout(20_000), redirect: "follow" }).catch(() => null);
   if (!res?.ok) return null;
   const mime = (res.headers.get("content-type") ?? "").split(";")[0].trim();
-  if (mime !== "image/jpeg" && mime !== "image/png") return null;
+  if (!mime.startsWith("image/") || mime === "image/svg+xml") return null;
   const data = Buffer.from(await res.arrayBuffer());
   return data.length > 10_000 && data.length < 25_000_000 ? { data, mime } : null;
 }
