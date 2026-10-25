@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { db, schema } from "../src/server/db/client";
 import { handleTelegramUpdate } from "../src/server/telegram-inbound";
 import { getSettings } from "../src/server/settings";
-import { actAs, addUser, resetDb, me } from "./helpers";
+import { actAs, addUser, fakeLLM, resetDb, me } from "./helpers";
 import { resetEnvCache } from "../src/server/env";
 import { telegramLinkUrl } from "../src/server/telegram";
 
@@ -346,11 +346,44 @@ describe("/today and /tomorrow", () => {
 
     const today = await capture(() => handleTelegramUpdate(msg("/today")));
     if (sameDay) {
-      expect(today[1].text).toContain("A post for later today.");
+      expect(today[1].text).toMatch(/^📅 Today · /);
+      expect(today[2].text).toContain("A post for later today.");
       expect(today.map((m) => m.text).join("\n")).not.toContain("tomorrow noon");
     } else {
       expect(today[0].text).toMatch(/Nothing scheduled for today/);
     }
+  });
+
+  it("/today sends each post with its picture and picture buttons", async () => {
+    const { DateTime } = await import("luxon");
+    const { setImageMakingForTests, setPhotoSearchForTests, setPhotoDownloadForTests } = await import("../src/server/post-images");
+    const now = DateTime.now().setZone("Asia/Kathmandu");
+    const soon = now.plus({ minutes: 3 });
+    if (!soon.hasSame(now, "day")) return; // a minute before midnight there is no "later today"
+    setImageMakingForTests(true);
+    setPhotoSearchForTests(async () => [{ url: "https://images.example/1.jpg", source: "https://library.example/1", credit: "A on Pexels" }]);
+    setPhotoDownloadForTests(async () => ({ data: Buffer.alloc(20_000, 1), mime: "image/jpeg" }));
+    fakeLLM(() => ({ queries: ["bank vault"] }));
+    const [p] = await db().insert(schema.posts).values({ userId: me(), platform: "linkedin", pillar: "news", text: "A post for later today.", status: "scheduled", scheduledAt: soon.toJSDate() }).returning();
+    process.env.TELEGRAM_BOT_TOKEN = "123:test";
+    resetEnvCache();
+    const calls: { method: string; body: Record<string, unknown> }[] = [];
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async (u: string, init?: { body?: string }) => {
+      calls.push({ method: String(u).split("/").pop()!, body: JSON.parse(init?.body ?? "{}") });
+      return new Response(JSON.stringify({ ok: true }));
+    }) as typeof fetch;
+    try {
+      await handleTelegramUpdate(msg("/today"));
+    } finally {
+      globalThis.fetch = realFetch;
+      delete process.env.TELEGRAM_BOT_TOKEN;
+      resetEnvCache();
+    }
+    const photo = calls.find((c) => c.method === "sendPhoto")!;
+    expect(photo.body.photo).toMatch(new RegExp(`/api/cards/${p.id}\\?v=`));
+    expect(photo.body.caption).toContain("A post for later today.");
+    expect(JSON.stringify(photo.body.reply_markup)).toContain(`ni:${p.id}`);
   });
 
   it("says so when a day is empty, and a long day keeps the right buttons under each post", async () => {

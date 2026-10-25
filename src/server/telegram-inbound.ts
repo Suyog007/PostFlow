@@ -35,7 +35,8 @@ Other ways to feed me:
 /learn  a short, simple lesson for your audience in the next free slots. Add a topic to choose it: /learn how indexes work
 /refresh  rewrite every queued post you have not approved, in the latest style
 /fill   write posts now for every open slot in the next 5 days
-/today, /tomorrow  just that day's posts
+/today  today's posts, each with its picture
+/tomorrow  tomorrow's posts
 /queue  upcoming posts by day, in full. Each has Approve, Post now, Remove, Another story and New wording buttons
 /pause  stop all posting
 /resume start again
@@ -105,6 +106,20 @@ async function showQueue(chat: number | string, userId: string, onlyDay?: 0 | 1)
       // Not keen on it? A different story, or the same story written again.
       return [row, [{ text: `🔁 Another story ${i + 1}`, data: `rj:${p.id}` }, { text: `✍️ New wording ${i + 1}`, data: `rw:${p.id}` }]];
     };
+    // Today's few posts come one by one with the picture that will go out with each.
+    if (onlyDay === 0) {
+      await sendTo(chat, `📅 ${day.label}`);
+      for (const [i, p] of day.posts.entries()) {
+        const picture = wantsImage(p, s) && !!(await ensurePostImage(p));
+        if (!picture) {
+          await sendTo(chat, line(p, i), buttonsFor(p, i));
+          continue;
+        }
+        const fresh = (await db().query.posts.findFirst({ where: eq(schema.posts.id, p.id) })) ?? p;
+        await sendPhotoTo(chat, cardUrl(fresh), line(p, i), [...buttonsFor(p, i), [{ text: `🎨 New picture ${i + 1}`, data: `ni:${p.id}` }, { text: `🚫 No picture ${i + 1}`, data: `xi:${p.id}` }]]);
+      }
+      continue;
+    }
     const body = [`📅 ${day.label}`, ...day.posts.map(line)].join("\n\n");
     // Telegram messages hold 4,000 characters; a very long day is split into one message per post.
     if (body.length <= 3900) await sendTo(chat, body, day.posts.flatMap(buttonsFor));
@@ -399,7 +414,16 @@ async function handleForUser(u: Update, chat: number): Promise<void> {
     }
   }
   if (text === "/queue") return void (await showQueue(chat, userId));
-  if (text === "/today") return void (await showQueue(chat, userId, 0));
+  if (text === "/today") {
+    // Pictures can take a few seconds each the first time, so answer Telegram first and send them after.
+    const run = () => withUser(userId, () => showQueue(chat, userId, 0));
+    try {
+      after(run);
+    } catch {
+      await run(); // outside a request (tests)
+    }
+    return;
+  }
   if (text === "/tomorrow") return void (await showQueue(chat, userId, 1));
   const cmd = text.match(/^\/(post|now|draft|mine|dig)(?:@\w+)?\s*([\s\S]*)$/i);
   const plainLink = /^https?:\/\/\S+$/i.test(text);
