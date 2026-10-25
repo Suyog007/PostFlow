@@ -246,7 +246,7 @@ export const waitlist = pgTable("waitlist", {
 
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => "bytea" });
 
-/** The picture made for a post: drawn by an image model from a scene the writer model describes. One per post. */
+/** The photo found for a post in a free photo library. One per post. */
 export const postImages = pgTable("post_images", {
   postId: uuid("post_id")
     .primaryKey()
@@ -254,7 +254,11 @@ export const postImages = pgTable("post_images", {
   userId: owner(),
   data: bytea("data").notNull(),
   mime: text("mime").notNull(),
-  /** What the image model was asked to draw. */
+  /** The search that found it. */
   prompt: text("prompt").notNull(),
+  /** The photo's page in its library, so the same photo is not used twice. */
+  source: text("source"),
+  /** Who took it, for showing in the app. Free-licence photos: no credit is needed in the post. */
+  credit: text("credit"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

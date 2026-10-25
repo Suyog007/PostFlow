@@ -4,10 +4,10 @@ import { withUser } from "@/server/context";
 import { ensurePostImage, verifyCard } from "@/server/post-images";
 
 export const runtime = "nodejs";
-// Drawing a new picture can take a little while the first time.
+// Finding the photo can take a few seconds the first time.
 export const maxDuration = 60;
 
-/** The post's picture, behind a signed link. Drawn on first request if it does not exist yet. */
+/** The post's picture, behind a signed link. Found on first request if it does not exist yet. */
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const url = new URL(req.url);

@@ -237,13 +237,13 @@ async function handleForUser(u: Update, chat: number): Promise<void> {
       return;
     } else if (data.startsWith("ni:")) {
       // Draw the picture again. Takes a few seconds, so acknowledge first; the post comes back with the new one.
-      await telegramApi("answerCallbackQuery", { callback_query_id: u.callback_query.id, text: "Drawing a new picture…" });
+      await telegramApi("answerCallbackQuery", { callback_query_id: u.callback_query.id, text: "Finding another photo…" });
       const id = data.slice(3);
       const run = () =>
         withUser(userId, async () => {
           const p = await db().query.posts.findFirst({ where: and(eq(schema.posts.id, id), eq(schema.posts.userId, userId)) });
           if (!p || !["scheduled", "draft"].includes(p.status)) return void (await sendTo(chat, "That post is not waiting to go out any more."));
-          if (!(await redrawPostImage(p))) return void (await sendTo(chat, "Could not draw a new picture right now. The post keeps going out as planned."));
+          if (!(await redrawPostImage(p))) return void (await sendTo(chat, "Could not find another photo right now. The post keeps the one it has."));
           await sendPost(chat, id, "🎨 New picture");
         });
       try {

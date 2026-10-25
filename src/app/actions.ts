@@ -114,8 +114,8 @@ export async function redrawImageAction(form: FormData) {
   await guarded(`/posts/${id}`, async () => {
     const p = await db().query.posts.findFirst({ where: and(eq(schema.posts.id, id), eq(schema.posts.userId, user.id)) });
     if (!p) throw new Error("Post not found.");
-    if (!(await redrawPostImage(p))) throw new Error("Could not draw a new picture right now. Try again in a minute.");
-  }, "New picture drawn.");
+    if (!(await redrawPostImage(p))) throw new Error("Could not find another photo right now. Try again in a minute.");
+  }, "Swapped in a new photo.");
 }
 /** Switch the picture on or off for one post. */
 export async function togglePostImageAction(form: FormData) {

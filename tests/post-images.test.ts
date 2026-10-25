@@ -1,27 +1,29 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { db, schema } from "../src/server/db/client";
-import { altText, cardUrl, drawPrompt, ensurePostImage, redrawPostImage, setImageDrawerForTests, setImageMakingForTests, verifyCard, wantsImage } from "../src/server/post-images";
+import { altText, cardUrl, ensurePostImage, redrawPostImage, setImageMakingForTests, setPhotoDownloadForTests, setPhotoSearchForTests, verifyCard, wantsImage, type Photo } from "../src/server/post-images";
 import { withUser } from "../src/server/context";
 import { publishDue } from "../src/server/publisher";
-import { saveSettings, getSettings } from "../src/server/settings";
+import { saveSettings } from "../src/server/settings";
 import { setPlatformClientForTests } from "../src/server/platforms/accounts";
 import type { PublishOptions } from "../src/server/platforms/types";
 import { GOOD_REVIEW, fakeLLM, me, resetDb } from "./helpers";
 
 const POST = "GitLab fixed a bug that sat in its code for 12 years.\n\nAnyone could run code on an unpatched server, per The Register. Patching is the whole fix.\n\n#gitlab #security";
-const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]);
-const SCENE = { style: "glossy 3D render", scene: "A cracked steel padlock on a dark server rack being welded shut by a small robotic arm, bright orange sparks, deep navy background, dramatic rim light." };
+const SEARCHES = { queries: ["padlock", "server room", "code screen"] };
+const jpeg = (n: number) => Buffer.concat([Buffer.from([0xff, 0xd8, n]), Buffer.alloc(20)]);
+const photo = (n: number): Photo => ({ url: `https://images.example/${n}.jpg`, source: `https://library.example/photo/${n}`, credit: `Someone ${n} on Pexels` });
 
-/** Pictures on, with the image model stubbed. Returns the prompts it was asked to draw. */
-function drawing(result: Buffer | null = JPEG) {
-  const prompts: string[] = [];
+/** Photos on, with the library stubbed. Returns the searches it was asked for. */
+function library(results: (q: string) => Photo[] = () => [photo(1), photo(2), photo(3)]) {
+  const asked: string[] = [];
   setImageMakingForTests(true);
-  setImageDrawerForTests(async (prompt) => {
-    prompts.push(prompt);
-    return result ? { data: result, mime: "image/jpeg" } : null;
+  setPhotoSearchForTests(async (q) => {
+    asked.push(q);
+    return results(q);
   });
-  return prompts;
+  setPhotoDownloadForTests(async (url) => ({ data: jpeg(Number(url.match(/(\d+)\.jpg/)![1])), mime: "image/jpeg" }));
+  return asked;
 }
 
 async function scheduledPost(platform = "x") {
@@ -50,72 +52,80 @@ describe("picture basics", () => {
     expect(wantsImage({ platform: "x", review: {} }, s)).toBe(false);
     expect(wantsImage({ platform: "linkedin", review: { noImage: true } }, s)).toBe(false);
   });
-
-  it("the image model is always told: no text, no logos", () => {
-    const p = drawPrompt(SCENE);
-    expect(p).toContain(SCENE.scene);
-    expect(p).toContain("glossy 3D render");
-    expect(p).toMatch(/No text, no letters, no numbers, no logos, no watermark/);
-  });
 });
 
-describe("drawing the picture", () => {
+describe("finding the photo", () => {
   beforeEach(resetDb);
 
-  it("asks the writer for a scene, draws it once, stores it, and counts it toward the daily limit", async () => {
-    const prompts = drawing();
-    const calls = fakeLLM((req) => (req.schemaName === "image_scene" ? SCENE : GOOD_REVIEW));
+  it("asks the writer what to search for, takes the first photo, stores it with its credit", async () => {
+    const asked = library();
+    const calls = fakeLLM((req) => (req.schemaName === "image_search" ? SEARCHES : GOOD_REVIEW));
     const p = await scheduledPost();
     const img = await withUser(me(), () => ensurePostImage(p));
-    expect(img).toMatchObject({ mime: "image/jpeg" });
-    expect(calls.find((c) => c.schemaName === "image_scene")!.user).toContain("GitLab fixed a bug");
-    expect(prompts).toHaveLength(1);
-    expect(prompts[0]).toContain("cracked steel padlock");
+    expect(img).toMatchObject({ mime: "image/jpeg", prompt: "padlock", source: "https://library.example/photo/1", credit: "Someone 1 on Pexels" });
+    expect(calls.find((c) => c.schemaName === "image_search")!.user).toContain("GitLab fixed a bug");
+    expect(asked).toEqual(["padlock"]);
 
-    // Second time it comes from storage: no new scene, no new drawing.
+    // Second time it comes from storage.
     await withUser(me(), () => ensurePostImage(p));
-    expect(prompts).toHaveLength(1);
-    expect((await db().select().from(schema.llmCalls)).map((c) => c.task).sort()).toEqual(["draw_image", "image_scene"]);
+    expect(asked).toHaveLength(1);
   });
 
-  it("a new picture replaces the old one and changes the link", async () => {
-    const prompts = drawing();
-    fakeLLM(() => SCENE);
+  it("does not use the same photo for two posts, and moves on to the next search when one finds nothing", async () => {
+    library((q) => (q === "padlock" ? [photo(1)] : q === "server room" ? [] : [photo(7)]));
+    fakeLLM(() => SEARCHES);
+    const a = await withUser(me(), async () => ensurePostImage(await scheduledPost("x")));
+    const b = await withUser(me(), async () => ensurePostImage(await scheduledPost("linkedin")));
+    expect(a!.source).toBe("https://library.example/photo/1");
+    expect(b).toMatchObject({ prompt: "code screen", source: "https://library.example/photo/7" });
+  });
+
+  it("New picture swaps in a different photo and changes the link; if none is found the old one stays", async () => {
+    library();
+    fakeLLM(() => SEARCHES);
     const p = await scheduledPost();
     await withUser(me(), () => ensurePostImage(p));
-    setImageDrawerForTests(async () => ({ data: Buffer.from([0xff, 0xd8, 9]), mime: "image/jpeg" }));
     const again = await withUser(me(), () => redrawPostImage(p));
-    expect(again!.data).toEqual(Buffer.from([0xff, 0xd8, 9]));
+    expect(again!.source).toBe("https://library.example/photo/2");
     expect(await db().select().from(schema.postImages)).toHaveLength(1);
     const after = (await db().select().from(schema.posts).where(eq(schema.posts.id, p.id)))[0];
     expect(cardUrl(after)).not.toBe(cardUrl(p));
-    expect(prompts).toHaveLength(1);
+
+    library(() => []);
+    expect(await withUser(me(), () => redrawPostImage(after))).toBeNull();
+    expect((await db().select().from(schema.postImages))[0].source).toBe("https://library.example/photo/2");
   });
 
-  it("serves the stored picture on a signed link and refuses anything else", async () => {
-    drawing();
-    fakeLLM(() => SCENE);
+  it("serves the stored photo on a signed link and refuses anything else", async () => {
+    library();
+    fakeLLM(() => SEARCHES);
     const { GET } = await import("../src/app/api/cards/[id]/route");
     const p = await scheduledPost();
     const res = await GET(new Request(cardUrl(p)), { params: Promise.resolve({ id: p.id }) });
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("image/jpeg");
-    expect(Buffer.from(await res.arrayBuffer())).toEqual(JPEG);
+    expect(Buffer.from(await res.arrayBuffer())).toEqual(jpeg(1));
 
     const bad = await GET(new Request(`http://localhost/api/cards/${p.id}?v=1&s=nope`), { params: Promise.resolve({ id: p.id }) });
     expect(bad.status).toBe(404);
   });
 
-  it("when the image model fails, nothing is stored and the link says so", async () => {
-    drawing(null);
-    fakeLLM(() => SCENE);
+  it("when nothing is found, nothing is stored, the reason is kept, and it waits before searching again", async () => {
+    const asked = library(() => {
+      throw new Error("Openverse HTTP 503");
+    });
+    fakeLLM(() => SEARCHES);
     const p = await scheduledPost();
     expect(await withUser(me(), () => ensurePostImage(p))).toBeNull();
     expect(await db().select().from(schema.postImages)).toHaveLength(0);
+    expect((await db().select().from(schema.llmCalls)).find((c) => c.task === "find_image")!.error).toContain("Openverse HTTP 503");
+    const before = asked.length;
+    await withUser(me(), () => ensurePostImage(p));
+    expect(asked.length).toBe(before);
   });
 });
 
-describe("publishing with the picture", () => {
+describe("publishing with the photo", () => {
   beforeEach(resetDb);
   const NOW = new Date("2026-10-21T04:00:00Z");
 
@@ -140,9 +150,9 @@ describe("publishing with the picture", () => {
     return p;
   }
 
-  it("attaches the picture, with the first line as its alt text", async () => {
-    drawing();
-    fakeLLM(() => SCENE);
+  it("attaches the photo, with the first line as its alt text", async () => {
+    library();
+    fakeLLM(() => SEARCHES);
     const calls = recordingClient();
     await duePost();
     expect((await publishDue({ now: NOW })).published).toBe(1);
@@ -150,9 +160,9 @@ describe("publishing with the picture", () => {
     expect(calls[0].media![0]).toMatchObject({ mime: "image/jpeg", alt: "GitLab fixed a bug that sat in its code for 12 years." });
   });
 
-  it("still posts, as text only, when the picture cannot be made or the upload fails", async () => {
-    drawing(null);
-    fakeLLM(() => SCENE);
+  it("still posts, as text only, when no photo is found or the upload fails", async () => {
+    library(() => []);
+    fakeLLM(() => SEARCHES);
     let calls = recordingClient();
     const a = await duePost();
     await publishDue({ now: NOW });
@@ -160,8 +170,8 @@ describe("publishing with the picture", () => {
     expect((await db().select().from(schema.posts).where(eq(schema.posts.id, a.id)))[0].status).toBe("published");
 
     await resetDb();
-    drawing();
-    fakeLLM(() => SCENE);
+    library();
+    fakeLLM(() => SEARCHES);
     calls = recordingClient((o) => (o.media?.length ? "X media upload failed (HTTP 400): bad image" : null));
     const b = await duePost();
     await publishDue({ now: NOW });
@@ -170,15 +180,15 @@ describe("publishing with the picture", () => {
     expect((await db().select().from(schema.posts).where(eq(schema.posts.id, b.id)))[0].status).toBe("published");
   });
 
-  it("goes without a picture when pictures are off for the platform", async () => {
-    const prompts = drawing();
-    fakeLLM(() => SCENE);
+  it("goes without a photo when pictures are off for the platform", async () => {
+    const asked = library();
+    fakeLLM(() => SEARCHES);
     const calls = recordingClient();
     await duePost();
     await saveSettings({ images: { linkedin: true, x: false } });
     await publishDue({ now: NOW });
     expect(calls[0].media).toBeUndefined();
-    expect(prompts).toHaveLength(0);
+    expect(asked).toHaveLength(0);
   });
 });
 
@@ -217,14 +227,13 @@ describe("rewriting queued posts in the new style", () => {
 describe("picture buttons in Telegram", () => {
   beforeEach(resetDb);
 
-  it("New picture draws again and sends the post back with it; No picture switches it off", async () => {
+  it("New picture sends the post back with a different photo; No picture switches it off", async () => {
     const { handleTelegramUpdate } = await import("../src/server/telegram-inbound");
     const { resetEnvCache } = await import("../src/server/env");
-    drawing();
-    fakeLLM(() => SCENE);
+    library();
+    fakeLLM(() => SEARCHES);
     const p = await scheduledPost();
     await withUser(me(), () => ensurePostImage(p));
-    setImageDrawerForTests(async () => ({ data: Buffer.from([0xff, 0xd8, 7]), mime: "image/jpeg" }));
 
     process.env.TELEGRAM_BOT_TOKEN = "123:test";
     resetEnvCache();
@@ -236,10 +245,10 @@ describe("picture buttons in Telegram", () => {
     }) as typeof fetch;
     try {
       await handleTelegramUpdate({ callback_query: { id: "1", data: `ni:${p.id}`, message: { chat: { id: 42 } } } });
-      const photo = sent.find((m) => m.method === "sendPhoto")!;
-      expect(photo.body.caption).toMatch(/^🎨 New picture/);
-      expect(JSON.stringify(photo.body.reply_markup)).toContain(`xi:${p.id}`);
-      expect((await db().select().from(schema.postImages))[0].data).toEqual(Buffer.from([0xff, 0xd8, 7]));
+      const msg = sent.find((m) => m.method === "sendPhoto")!;
+      expect(msg.body.caption).toMatch(/^🎨 New picture/);
+      expect(JSON.stringify(msg.body.reply_markup)).toContain(`xi:${p.id}`);
+      expect((await db().select().from(schema.postImages))[0].source).toBe("https://library.example/photo/2");
 
       await handleTelegramUpdate({ callback_query: { id: "2", data: `xi:${p.id}`, message: { chat: { id: 42 } } } });
       const row = (await db().select().from(schema.posts).where(eq(schema.posts.id, p.id)))[0];
@@ -252,45 +261,40 @@ describe("picture buttons in Telegram", () => {
   });
 });
 
-describe("talking to Fireworks", () => {
+describe("the photo libraries", () => {
   beforeEach(resetDb);
 
-  it("tries the other request shapes when one is refused, and keeps Fireworks' words when all fail", async () => {
+  it("uses Pexels when a key is set, and public-domain Openverse photos otherwise", async () => {
     const { resetEnvCache } = await import("../src/server/env");
-    process.env.FIREWORKS_API_KEY = "fw-test";
-    resetEnvCache();
     setImageMakingForTests(true);
-    setImageDrawerForTests(null); // the real drawer, against a stubbed network
-    fakeLLM(() => SCENE);
+    setPhotoSearchForTests(null); // the real libraries, against a stubbed network
+    setPhotoDownloadForTests(async (url) => ({ data: Buffer.from(url), mime: "image/jpeg" }));
+    fakeLLM(() => SEARCHES);
+    const asked: { url: string; auth?: string }[] = [];
     const realFetch = globalThis.fetch;
-    const asked: string[] = [];
-    let works = true;
-    globalThis.fetch = (async (u: string) => {
-      asked.push(String(u));
-      if (works && String(u).endsWith("/images/generations")) return new Response(JSON.stringify({ data: [{ b64_json: Buffer.alloc(2000, 0xff).toString("base64") }] }), { headers: { "content-type": "application/json" } });
-      return new Response(JSON.stringify({ error: "Model not found" }), { status: 404, headers: { "content-type": "application/json" } });
+    globalThis.fetch = (async (u: string, init?: { headers?: Record<string, string> }) => {
+      asked.push({ url: String(u), auth: init?.headers?.Authorization });
+      if (String(u).startsWith("https://api.pexels.com/"))
+        return new Response(JSON.stringify({ photos: [{ id: 5, url: "https://www.pexels.com/photo/padlock-5/", photographer: "Ana", src: { landscape: "https://images.pexels.com/photos/5/landscape.jpeg" } }] }));
+      return new Response(JSON.stringify({ results: [{ url: "https://live.staticflickr.com/1/padlock.jpg", foreign_landing_url: "https://flickr.com/photos/1", creator: "Bo" }] }));
     }) as typeof fetch;
     try {
-      const p = await scheduledPost();
-      const img = await withUser(me(), () => ensurePostImage(p));
-      expect(img).toMatchObject({ mime: "image/jpeg" });
-      expect(asked.some((u) => u.includes("/text_to_image"))).toBe(true);
+      const a = await withUser(me(), async () => ensurePostImage(await scheduledPost("x")));
+      expect(a).toMatchObject({ source: "https://flickr.com/photos/1", credit: "Bo via Openverse (public domain)" });
+      const ov = new URL(asked.find((r) => r.url.includes("openverse"))!.url);
+      expect(ov.searchParams.get("license")).toBe("cc0,pdm");
+      expect(ov.searchParams.get("q")).toBe("padlock");
+      expect(asked.some((r) => r.url.includes("pexels"))).toBe(false);
 
-      works = false;
-      const q = await scheduledPost("linkedin");
-      expect(await withUser(me(), () => ensurePostImage(q))).toBeNull();
-      const failed = (await db().select().from(schema.llmCalls)).find((c) => c.task === "draw_image" && c.status === "error")!;
-      expect(failed.error).toContain("Model not found");
-
-      // Viewing it again soon after does not spend more calls; asking for a new picture does.
-      const before = asked.length;
-      expect(await withUser(me(), () => ensurePostImage(q))).toBeNull();
-      expect(asked.length).toBe(before);
-      await withUser(me(), () => redrawPostImage(q));
-      expect(asked.length).toBeGreaterThan(before);
+      process.env.PEXELS_API_KEY = "px-test";
+      resetEnvCache();
+      const b = await withUser(me(), async () => ensurePostImage(await scheduledPost("linkedin")));
+      expect(b).toMatchObject({ source: "https://www.pexels.com/photo/padlock-5/", credit: "Ana on Pexels" });
+      expect(b!.data.toString()).toBe("https://images.pexels.com/photos/5/landscape.jpeg");
+      expect(asked.find((r) => r.url.includes("pexels"))!.auth).toBe("px-test");
     } finally {
       globalThis.fetch = realFetch;
-      delete process.env.FIREWORKS_API_KEY;
+      delete process.env.PEXELS_API_KEY;
       resetEnvCache();
     }
   });

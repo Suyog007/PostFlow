@@ -137,7 +137,7 @@ async function sendReminders(now: Date, blocks: boolean, s: Settings) {
     .where(and(eq(schema.posts.userId, await uid()), eq(schema.posts.status, "scheduled"), isNull(schema.posts.remindedAt), gt(schema.posts.scheduledAt, now), lte(schema.posts.scheduledAt, new Date(now.getTime() + REMIND_MINUTES * 60_000))))
     .returning();
   for (const post of due) {
-    // The picture is drawn now if it is not there yet, so the heads-up shows exactly what will go out.
+    // The photo is found now if it is not there yet, so the heads-up shows exactly what will go out.
     const withImage = wantsImage(post, s) && !!(await ensurePostImage(post));
     await notifyReminder(post, timezone, blocks, Math.max(1, Math.round((post.scheduledAt.getTime() - now.getTime()) / 60_000)), withImage).catch(warnOnError("reminder_notify_failed", { postId: post.id }));
   }
