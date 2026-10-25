@@ -251,3 +251,47 @@ describe("picture buttons in Telegram", () => {
     }
   });
 });
+
+describe("talking to Fireworks", () => {
+  beforeEach(resetDb);
+
+  it("tries the other request shapes when one is refused, and keeps Fireworks' words when all fail", async () => {
+    const { resetEnvCache } = await import("../src/server/env");
+    process.env.FIREWORKS_API_KEY = "fw-test";
+    resetEnvCache();
+    setImageMakingForTests(true);
+    setImageDrawerForTests(null); // the real drawer, against a stubbed network
+    fakeLLM(() => SCENE);
+    const realFetch = globalThis.fetch;
+    const asked: string[] = [];
+    let works = true;
+    globalThis.fetch = (async (u: string) => {
+      asked.push(String(u));
+      if (works && String(u).endsWith("/images/generations")) return new Response(JSON.stringify({ data: [{ b64_json: Buffer.alloc(2000, 0xff).toString("base64") }] }), { headers: { "content-type": "application/json" } });
+      return new Response(JSON.stringify({ error: "Model not found" }), { status: 404, headers: { "content-type": "application/json" } });
+    }) as typeof fetch;
+    try {
+      const p = await scheduledPost();
+      const img = await withUser(me(), () => ensurePostImage(p));
+      expect(img).toMatchObject({ mime: "image/jpeg" });
+      expect(asked.some((u) => u.includes("/text_to_image"))).toBe(true);
+
+      works = false;
+      const q = await scheduledPost("linkedin");
+      expect(await withUser(me(), () => ensurePostImage(q))).toBeNull();
+      const failed = (await db().select().from(schema.llmCalls)).find((c) => c.task === "draw_image" && c.status === "error")!;
+      expect(failed.error).toContain("Model not found");
+
+      // Viewing it again soon after does not spend more calls; asking for a new picture does.
+      const before = asked.length;
+      expect(await withUser(me(), () => ensurePostImage(q))).toBeNull();
+      expect(asked.length).toBe(before);
+      await withUser(me(), () => redrawPostImage(q));
+      expect(asked.length).toBeGreaterThan(before);
+    } finally {
+      globalThis.fetch = realFetch;
+      delete process.env.FIREWORKS_API_KEY;
+      resetEnvCache();
+    }
+  });
+});

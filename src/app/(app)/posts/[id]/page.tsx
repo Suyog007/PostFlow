@@ -13,6 +13,7 @@ import { Icon, PlatformGlyph, StatusBadge } from "@/components/ui";
 import { Flash } from "../../flash";
 import { storyDate } from "@/server/story-date";
 import { cardUrl, wantsImage } from "@/server/post-images";
+import { PostPicture } from "@/components/post-picture";
 
 interface Claim { claim: string; support: string; evidence: string }
 interface Mention { domain: string; title: string; url: string }
@@ -103,11 +104,7 @@ export default async function PostPage({ params, searchParams }: { params: Promi
         </div>
         <div className="panel-body">
           {withImage ? (
-            <>
-              {/* eslint-disable-next-line @next/next/no-img-element -- a signed, generated picture; next/image would re-encode it for no gain */}
-              <img src={cardUrl(p)} alt={`Picture for: ${p.text.split("\n")[0]}`} width={1280} height={720} loading="lazy" className="h-auto w-full max-w-[640px] rounded-lg border border-[var(--line)]" />
-              <p className="mt-2 text-[12px] text-[var(--muted)]">Drawn for this post the first time it is shown. It can take a few seconds.</p>
-            </>
+            <PostPicture src={cardUrl(p)} alt={`Picture for: ${p.text.split("\n")[0]}`} />
           ) : (
             <p className="text-[13px] text-[var(--muted)]">{s.images[p.platform as "x" | "linkedin"] ? "This post goes out as text only." : `Pictures are off for ${platformName} in Settings.`}</p>
           )}
