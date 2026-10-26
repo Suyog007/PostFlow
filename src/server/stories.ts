@@ -82,5 +82,30 @@ export function storyIndex(corpus: { title: string; sourceId: string | null; id?
 export function sameStory(index: { keysOf: (title: string) => string[]; hot: Set<string> }, a: string, b: string): boolean {
   const kb = new Set(index.keysOf(b));
   const shared = index.keysOf(a).filter((w) => kb.has(w));
-  return shared.length >= 2 || shared.some((w) => index.hot.has(w));
+  return shared.length >= 2 || shared.some((w) => index.hot.has(w)) || closeHeadlines(a, b);
+}
+
+/** Meaningful words of a headline, names included, with plurals folded ("models" = "model"). */
+function headlineWords(title: string): Set<string> {
+  return new Set(
+    title
+      .toLowerCase()
+      .normalize("NFKD")
+      .replace(/[^a-z0-9]+/g, " ")
+      .split(" ")
+      .filter((w) => w.length >= 3 && /[a-z]/.test(w) && !STOP.has(w))
+      .map((w) => (w.length > 4 && w.endsWith("s") && !w.endsWith("ss") ? w.slice(0, -1) : w)),
+  );
+}
+
+/**
+ * Two headlines about the same event in different words: "OpenAI disables internet access during model
+ * training" and "OpenAI will stop training its models on the live internet" share openai, internet and
+ * training. Three shared words that make up a good part of the shorter headline.
+ */
+export function closeHeadlines(a: string, b: string): boolean {
+  const wa = headlineWords(a);
+  const wb = headlineWords(b);
+  const shared = [...wa].filter((w) => wb.has(w)).length;
+  return shared >= 3 && shared / Math.min(wa.size, wb.size) >= 0.4;
 }

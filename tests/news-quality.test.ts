@@ -54,10 +54,13 @@ describe("skipping weak stories", () => {
   it("with no 'my work' notes and no learning share, posts come from news only", async () => {
     await saveSettings({ pillars: { own_work: 3, news: 3, local: 0, learning: 0 } });
     await addItem("A strong story about a database release for developers", 9);
+    await addItem("Payments provider opens its fraud API to small teams", 9);
     const calls = fakeLLM((req) => (req.schemaName === "write_post" ? { text: "A database release landed today. According to the notes, it speeds up backups for small teams." } : GOOD_REVIEW));
     await fillCalendar({ now: NOW, max: 3 });
     const rows = await db().select().from(schema.posts);
     expect(rows.map((r) => r.pillar)).toEqual(["news", "news"]);
+    // One story, one post: the two platforms got different stories.
+    expect(new Set(rows.map((r) => r.itemId)).size).toBe(2);
     expect(calls.filter((c) => c.schemaName === "pick_topic")).toHaveLength(0);
   });
 
@@ -188,9 +191,11 @@ describe("must-know stories", () => {
     const writes = calls.filter((c) => c.schemaName === "write_post");
     expect(writes.some((w) => w.user.includes("Explain it simply"))).toBe(true);
     expect(writes.some((w) => !w.user.includes("Explain it simply"))).toBe(true);
-    expect(writes.find((w) => w.user.includes("Explain it simply") && w.system.includes("LinkedIn"))!.system).toContain("at most 700 characters");
+    const { writerSystem } = await import("../src/server/prompts");
+    const { getSettings } = await import("../src/server/settings");
+    expect(writerSystem(await getSettings(), "linkedin", { explainer: true })).toContain("at most 700 characters");
     const posts = await db().select().from(schema.posts);
-    expect(posts.length).toBe(2);
+    expect(posts.length).toBe(1); // one story is told once, not once per platform
     const p = posts[0];
     const alt = (p.review as { alternative: { text: string; move: string; approved: boolean } }).alternative;
     expect(alt.move).toBe("explain");
@@ -335,6 +340,7 @@ describe("hashtags", () => {
   it("X gets one or two specific hashtags by default, LinkedIn none, and the reviewer is told which", async () => {
     await saveSettings({ slots: BOTH.map((b) => ({ ...b, time: "00:30" })), horizonDays: 2 });
     await addItem("Acme ships Postgres backups in seconds", 9);
+    await addItem("Globex opens its maps API to hobby developers for free", 9);
     const calls = fakeLLM((req) => (req.schemaName === "write_post" ? { text: "Acme says Postgres backups now take seconds. Small teams with big nightly jobs should look first. #postgres" } : GOOD_REVIEW));
     await fillCalendar({ max: 4 });
     const writes = calls.filter((c) => c.schemaName === "write_post");

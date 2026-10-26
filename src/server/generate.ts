@@ -57,11 +57,12 @@ export interface Material {
 
 const URGENCY_WINDOW_MS = { breaking: 48 * 3_600_000, week: 7 * 86_400_000 } as const;
 
-async function usedIds(platform: Platform) {
+/** Articles and notes already turned into a post on ANY platform: each story is used once, not once per platform. */
+async function usedIds(_platform?: Platform) {
   const rows = await db()
     .select({ itemId: schema.posts.itemId, noteId: schema.posts.noteId })
     .from(schema.posts)
-    .where(and(await mine(schema.posts), eq(schema.posts.platform, platform)));
+    .where(await mine(schema.posts));
   return {
     items: new Set(rows.map((r) => r.itemId).filter((x): x is string => !!x)),
     notes: new Set(rows.map((r) => r.noteId).filter((x): x is string => !!x)),
@@ -109,20 +110,70 @@ async function candidateItems(platform: Platform, s: Settings, pillar: Pillar | 
     )
     .orderBy(desc(schema.items.relevance), desc(schema.items.publishedAt))
     .limit(60);
-  // One post per story on each platform: twenty articles about the same event are still one story.
-  const posted = await db()
-    .select({ title: schema.items.title })
+  // One post per story, across LinkedIn and X: twenty articles about the same event are still one story.
+  const { index, titles } = await storiesTold(now);
+  const covered = (title: string) => titles.some((t) => sameStory(index, title, t));
+  // Time-sensitive items must still be fresh an hour after the slot they would take.
+  return rows.filter((r) => !used.items.has(r.id) && !((e) => e && e.getTime() <= slotAt.getTime() + 3_600_000)(itemExpiry(r)) && !covered(r.title));
+}
+
+const STORY_MEMORY_DAYS = 14;
+
+/** What a post is about, for spotting repeats: its article's title, or what it was written from. */
+function storyTitle(p: { itemTitle: string | null; review: unknown; topic: string | null }): string {
+  return p.itemTitle ?? ((p.review as { material?: { label?: string } } | null)?.material?.label || p.topic || "");
+}
+
+/** Stories already posted or queued (any platform, last two weeks), with the index used to compare headlines. */
+async function storiesTold(now: Date, exceptPostId?: string) {
+  const since = new Date(now.getTime() - STORY_MEMORY_DAYS * 86_400_000);
+  const rows = await db()
+    .select({ id: schema.posts.id, itemTitle: schema.items.title, review: schema.posts.review, topic: schema.posts.topic })
     .from(schema.posts)
-    .innerJoin(schema.items, eq(schema.items.id, schema.posts.itemId))
-    .where(and(await mine(schema.posts), eq(schema.posts.platform, platform), inArray(schema.posts.status, ["scheduled", "publishing", "published", "unconfirmed"]), gte(schema.posts.scheduledAt, new Date(now.getTime() - 4 * 86_400_000))));
+    .leftJoin(schema.items, eq(schema.items.id, schema.posts.itemId))
+    .where(and(await mine(schema.posts), inArray(schema.posts.status, ["scheduled", "publishing", "published", "unconfirmed"]), gte(schema.posts.scheduledAt, since), eq(schema.posts.pillar, "news")));
   const corpus = await db()
     .select({ id: schema.items.id, title: schema.items.title, sourceId: schema.items.sourceId })
     .from(schema.items)
-    .where(and(await mine(schema.items), gte(schema.items.publishedAt, new Date(now.getTime() - 4 * 86_400_000))));
-  const index = storyIndex(corpus);
-  const covered = (title: string) => posted.some((p) => sameStory(index, title, p.title));
-  // Time-sensitive items must still be fresh an hour after the slot they would take.
-  return rows.filter((r) => !used.items.has(r.id) && !((e) => e && e.getTime() <= slotAt.getTime() + 3_600_000)(itemExpiry(r)) && !covered(r.title));
+    .where(and(await mine(schema.items), gte(schema.items.publishedAt, since)));
+  return { index: storyIndex(corpus), titles: rows.filter((r) => r.id !== exceptPostId).map(storyTitle).filter(Boolean) };
+}
+
+/**
+ * Queued news posts that repeat a story already posted or queued earlier (on either platform).
+ * The earliest telling of a story stays; later ones are repeats. Posts you approved or edited are never listed.
+ */
+export async function repeatedQueuedPosts(now = new Date()): Promise<string[]> {
+  const since = new Date(now.getTime() - STORY_MEMORY_DAYS * 86_400_000);
+  const rows = await db()
+    .select({ id: schema.posts.id, itemId: schema.posts.itemId, itemTitle: schema.items.title, review: schema.posts.review, topic: schema.posts.topic, status: schema.posts.status, approvedAt: schema.posts.approvedAt, userEdited: schema.posts.userEdited })
+    .from(schema.posts)
+    .leftJoin(schema.items, eq(schema.items.id, schema.posts.itemId))
+    .where(and(await mine(schema.posts), inArray(schema.posts.status, ["scheduled", "publishing", "published", "unconfirmed"]), gte(schema.posts.scheduledAt, since), eq(schema.posts.pillar, "news")))
+    .orderBy(asc(schema.posts.scheduledAt));
+  const { index } = await storiesTold(now);
+  const told: { itemId: string | null; title: string }[] = [];
+  const repeats: string[] = [];
+  for (const r of rows) {
+    const title = storyTitle(r);
+    const seen = told.some((t) => (r.itemId && t.itemId === r.itemId) || (title && t.title && sameStory(index, title, t.title)));
+    if (seen && r.status === "scheduled" && !r.approvedAt && !r.userEdited) repeats.push(r.id);
+    else told.push({ itemId: r.itemId, title });
+  }
+  return repeats;
+}
+
+/**
+ * Queued news posts whose story no longer clears the bar for its platform (for example after the scorer
+ * got stricter about routine releases). Posts you approved or edited are never listed.
+ */
+export async function weakQueuedPosts(s: Settings): Promise<string[]> {
+  const rows = await db()
+    .select({ id: schema.posts.id, platform: schema.posts.platform, relevance: schema.items.relevance })
+    .from(schema.posts)
+    .innerJoin(schema.items, eq(schema.items.id, schema.posts.itemId))
+    .where(and(await mine(schema.posts), eq(schema.posts.status, "scheduled"), eq(schema.posts.pillar, "news"), isNull(schema.posts.approvedAt), eq(schema.posts.userEdited, false), eq(schema.posts.fast, false)));
+  return rows.filter((r) => r.relevance !== null && r.relevance < (r.platform === "linkedin" ? s.linkedinMinRelevance : s.minRelevance)).map((r) => r.id);
 }
 
 /** First candidate that enough independent publishers confirm. Checks are cached on the item and capped per call. */
