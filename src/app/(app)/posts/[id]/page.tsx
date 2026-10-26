@@ -19,7 +19,7 @@ interface Claim { claim: string; support: string; evidence: string }
 interface Mention { domain: string; title: string; url: string }
 interface Verif { ok: boolean; independent: number; needed: number; reason: string; mentions: Mention[] }
 interface ReviewData {
-  worth_posting?: number; factual?: number; slop?: number; claims?: Claim[]; issues?: string[]; rounds?: number;
+  worth_posting?: number; factual?: number; clarity?: number; slop?: number; claims?: Claim[]; issues?: string[]; rounds?: number;
   checks?: { severity: string; message: string }[]; material?: { kind: string; label: string }; verdict?: { approved: boolean; reasons: string[] };
   verification?: Verif | null;
   evidence?: { claim: string; quote: string; found: boolean }[];
@@ -236,9 +236,10 @@ export default async function PostPage({ params, searchParams }: { params: Promi
                 Written from {r.material.kind === "news" ? "an article" : r.material.kind === "note" ? "your note" : "an evergreen topic"}: <span className="text-[var(--ink)]">{r.material.label}</span>
                 {p.sourceUrl && <> · <a className="underline" href={p.sourceUrl} target="_blank" rel="noreferrer">open source</a></>}
               </p>
-              <div className="grid grid-cols-3 gap-4">
+              <div className={`grid gap-4 ${r.clarity !== undefined ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"}`}>
                 <Meter label="Worth posting" value={r.worth_posting} />
                 <Meter label="Facts" value={r.factual} />
+                {r.clarity !== undefined && <Meter label="Clear" value={r.clarity} />}
                 <Meter label="Human" value={r.slop} />
               </div>
               {r.verification && (

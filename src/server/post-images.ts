@@ -58,26 +58,39 @@ export function wantsImage(post: Pick<PostLike, "platform" | "review">, s: Pick<
   return !!s.images[post.platform as "x" | "linkedin"];
 }
 
-const SCENE_SYSTEM = `You are the art director for a software engineer's LinkedIn and X posts. Read the post and describe ONE image to go with it, for an image model to draw.
+const SCENE_SYSTEM = `You are the art director for a software engineer's LinkedIn and X posts. Read the post and describe ONE simple image to go with it. Every picture is drawn in the same calm, minimal house style, so you only choose WHAT is shown.
 
-The goal: make someone stop scrolling, and make this specific post's point clear at a glance.
+The goal: someone glancing at it on a phone gets the post's point, or is curious enough to read it.
 
 Rules:
-- Show the post's specific point as a concrete scene or visual metaphor. Not a generic symbol for the topic: no lone padlock, key, shield, code screen, glowing brain or circuit board. Ask "what is surprising or at stake here?" and show that. Examples: certificates issued with tiny 4-bit keys → a bank vault door held shut by a single paper clip; long-lived API keys nobody rotates → a dusty old key hanging on a hook marked by cobwebs, beside a busy modern office; a slow query with no index → a librarian buried under piles of books while a small card catalogue sits unused; an AI model trained on cached copies instead of the live web → a robot reading in a quiet archive while a storm rages outside the window.
-- One clear subject in the centre, with space above and below (the picture is cropped to a wide frame). Bold colour, dramatic lighting, strong contrast so it reads on a phone.
-- Never any text, letters, numbers, words, signs, captions, code, screens with writing, logos or watermarks. Company and product names must not appear; show the idea instead.
-- No real or recognisable people. Figures, if any, are small or stylised.
-- Pick the style that fits: "glossy 3D render", "isometric 3D diorama", "bold flat vector illustration" or "cinematic photograph".
-- The scene is 35 to 80 words in plain English describing what is seen. Do not mention the post, social media or the author.`;
+- Show the post's specific point as one simple visual metaphor made of everyday objects. Not a generic symbol for the topic: no lone padlock, key, shield, code screen, glowing brain, circuit board, robot or server rack. Ask "what is surprising or at stake here?" and show that.
+  Examples: certificates issued with tiny 4-bit keys → a huge vault door held shut by one small paper clip; long-lived API keys nobody rotates → one old key covered in cobwebs on a clean hook; a slow query with no index → a tall messy pile of books next to a small, tidy card drawer; a page rebuilt in the background while visitors still get the old one (ISR) → a baker sliding a fresh loaf onto a shelf behind one already on display.
+- At most TWO objects and nothing else. No crowds, no busy backgrounds, no little extra details. Simple shapes the eye reads in one second.
+- Never any text, letters, numbers, labels, tags, signs, captions, screens, documents with writing, logos or watermarks. Never write "labeled", "reading", "marked" or put words in quotes: show the idea with the objects themselves.
+- No people, faces or hands.
+- One or two sentences, 15 to 40 words, describing only the objects, what they are doing and where they sit. No style words, no lighting, no camera terms (the house style adds those).`;
 
-const Scene = z.object({
-  style: z.string().min(3).max(60),
-  scene: z.string().min(40).max(700),
-});
+const Scene = z.object({ scene: z.string().min(20).max(500) });
 
-/** The image model's prompt: the scene, its style, and the house rules repeated so the model keeps to them. */
-export function drawPrompt(scene: z.infer<typeof Scene>): string {
-  return `${scene.scene.trim()} Style: ${scene.style.trim()}, high detail, clean composition, subject centred. No text, no letters, no numbers, no logos, no watermark.`;
+/** One look for every picture, so the feed is recognisable and the model never draws busy scenes. */
+const HOUSE_STYLE =
+  "Minimal editorial 3D illustration, smooth matte clay-like materials, rounded simple shapes, plain softly lit studio background in one muted colour, one bold accent colour, soft shadows, lots of empty space, calm and premium, wide 16:9 composition with the subject in the centre. No text, no letters, no numbers, no labels, no signs, no logos, no watermark, no people.";
+
+/** The scene without anything that invites the model to draw writing (quoted words, "labeled ...", "a sign saying ..."). */
+export function cleanScene(scene: string): string {
+  const LABEL = "(?:labell?ed|marked|reading|saying|that says|with the words?|inscribed|stamped)";
+  return scene
+    .replace(new RegExp(`,?\\s*\\b${LABEL}\\s*["“‘][^"”’]{0,40}["”’]`, "gi"), "")
+    .replace(/["“‘][^"”’]{1,40}["”’]/g, "")
+    .replace(new RegExp(`,?\\s*\\b${LABEL}\\b(?:\\s+[^\\s,.;]+){0,4}(?=[,.;]|$)`, "gi"), "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+([,.;])/g, "$1")
+    .trim();
+}
+
+/** The image model's prompt: the cleaned scene, then the house style. */
+export function drawPrompt(scene: { scene: string }): string {
+  return `${cleanScene(scene.scene)} ${HOUSE_STYLE}`;
 }
 
 async function describeScene(post: PostLike): Promise<string> {
@@ -89,36 +102,60 @@ async function describeScene(post: PostLike): Promise<string> {
     user: `The post (${kind}, for ${post.platform === "x" ? "X" : "LinkedIn"}):\n\n${post.text}`,
     output: Scene,
     maxTokens: 1200,
-    temperature: 0.9,
+    temperature: 0.8,
   });
   return drawPrompt(out);
 }
 
-/** FLUX schnell on Cloudflare Workers AI: free for about a hundred pictures a day. Returns JPEG/PNG bytes. */
+const CF_RUN = (account: string, model: string) => `https://api.cloudflare.com/client/v4/accounts/${account}/ai/run/@cf/black-forest-labs/${model}`;
+
+async function imageFromCloudflare(res: Response): Promise<Buffer | { error: string }> {
+  const type = res.headers.get("content-type") ?? "";
+  if (res.ok && type.startsWith("image/")) return Buffer.from(await res.arrayBuffer());
+  const json = (await res.json().catch(() => null)) as { result?: { image?: string }; errors?: { message?: string }[] } | null;
+  if (res.ok && json?.result?.image) return Buffer.from(json.result.image, "base64");
+  return { error: `HTTP ${res.status}: ${json?.errors?.map((e) => e.message).join("; ") ?? "no image"}` };
+}
+
+/**
+ * Cloudflare Workers AI. FLUX.2 [klein] 9B first: newer and much better at following the scene, drawn
+ * natively at 16:9. It uses more of the free daily allowance (roughly 7 pictures a day), so when it
+ * refuses or the allowance is used up, FLUX.1 [schnell] (roughly 100 a day) draws it instead.
+ */
 async function cloudflareDraw(prompt: string, seed: number): Promise<Buffer> {
   const { CLOUDFLARE_ACCOUNT_ID: account, CLOUDFLARE_API_TOKEN: token } = env();
-  // Only the prompt is required. Extra settings the model does not accept are dropped and the call retried.
-  const body: Record<string, unknown> = { prompt: prompt.slice(0, 2000), steps: 6, seed };
+  const auth = { Authorization: `Bearer ${token}` };
+  const errors: string[] = [];
+
+  // FLUX.2 models take multipart form data, even for a prompt alone.
+  const form = new FormData();
+  form.append("prompt", prompt.slice(0, 2000));
+  form.append("width", "1280");
+  form.append("height", "720");
+  form.append("seed", String(seed));
+  const klein = await fetch(CF_RUN(account!, "flux-2-klein-9b"), { method: "POST", headers: auth, body: form, signal: AbortSignal.timeout(45_000) }).catch((e: Error) => e);
+  if (klein instanceof Error) errors.push(`klein: ${klein.message}`);
+  else {
+    const out = await imageFromCloudflare(klein);
+    if (Buffer.isBuffer(out)) return out;
+    errors.push(`klein ${out.error}`);
+  }
+
+  // FLUX.1 schnell takes JSON with the prompt and steps only (it refuses seed and size).
+  const body: Record<string, unknown> = { prompt: prompt.slice(0, 2000), steps: 8 };
   for (let attempt = 0; attempt < 3; attempt++) {
-    const res = await fetch(`https://api.cloudflare.com/client/v4/accounts/${account}/ai/run/@cf/black-forest-labs/flux-1-schnell`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(45_000),
-    });
-    const type = res.headers.get("content-type") ?? "";
-    if (res.ok && type.startsWith("image/")) return Buffer.from(await res.arrayBuffer());
-    const json = (await res.json().catch(() => null)) as { result?: { image?: string }; errors?: { message?: string }[] } | null;
-    if (res.ok && json?.result?.image) return Buffer.from(json.result.image, "base64");
-    const msg = json?.errors?.map((e) => e.message).join("; ") ?? "no image";
-    const extra = msg.match(/properties '\/(\w+)'/)?.[1];
+    const res = await fetch(CF_RUN(account!, "flux-1-schnell"), { method: "POST", headers: { ...auth, "Content-Type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(45_000) });
+    const out = await imageFromCloudflare(res);
+    if (Buffer.isBuffer(out)) return out;
+    const extra = out.error.match(/properties '\/(\w+)'/)?.[1];
     if (res.status === 400 && extra && extra !== "prompt" && extra in body) {
       delete body[extra];
       continue;
     }
-    throw new Error(`Cloudflare HTTP ${res.status}: ${msg}`.slice(0, 300));
+    errors.push(`schnell ${out.error}`);
+    break;
   }
-  throw new Error("Cloudflare did not accept the request.");
+  throw new Error(`Cloudflare: ${errors.join(" || ")}`.slice(0, 600));
 }
 
 let aiOverride: ((prompt: string, seed: number) => Promise<Buffer>) | null | undefined;
@@ -234,7 +271,10 @@ async function makeImage(post: PostLike, avoid: string[] = []): Promise<PostImag
     }
   }
   // Otherwise a free-licence photo.
-  const queries = await photoSearches(post);
+  const queries = await photoSearches(post).catch((err: Error) => {
+    errors.push(`photo search: ${err.message}`);
+    return [] as string[];
+  });
   const used = new Set([...avoid, ...(await db().select({ s: schema.postImages.source }).from(schema.postImages).where(eq(schema.postImages.userId, post.userId))).map((r) => r.s ?? "")]);
   for (const query of queries) {
     for (const search of searchers) {

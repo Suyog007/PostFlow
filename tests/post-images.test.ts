@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { db, schema } from "../src/server/db/client";
-import { altText, cardUrl, drawPrompt, ensurePostImage, setAiDrawerForTests, shrink, redrawPostImage, setImageMakingForTests, setPhotoDownloadForTests, setPhotoSearchForTests, verifyCard, wantsImage, type Photo } from "../src/server/post-images";
+import { altText, cardUrl, cleanScene, drawPrompt, ensurePostImage, setAiDrawerForTests, shrink, redrawPostImage, setImageMakingForTests, setPhotoDownloadForTests, setPhotoSearchForTests, verifyCard, wantsImage, type Photo } from "../src/server/post-images";
 import { withUser } from "../src/server/context";
 import { publishDue } from "../src/server/publisher";
 import { saveSettings } from "../src/server/settings";
@@ -349,36 +349,70 @@ describe("AI illustrations", () => {
 describe("Cloudflare Workers AI", () => {
   beforeEach(resetDb);
 
-  it("drops a setting the model refuses and asks again", async () => {
+  async function withCloudflare(reply: (model: string, req: { form?: FormData; json?: Record<string, unknown> }) => Response | Promise<Response>) {
     const { resetEnvCache } = await import("../src/server/env");
     process.env.CLOUDFLARE_ACCOUNT_ID = "acc123";
     process.env.CLOUDFLARE_API_TOKEN = "cf-token";
     resetEnvCache();
     setImageMakingForTests(true);
     setAiDrawerForTests(undefined); // the real Cloudflare call, against a stubbed network
-    fakeLLM(() => ({ style: "glossy 3D render", scene: "A bank vault door held shut by a single bent paper clip under cold blue light, a tiny figure looking up." }));
-    const png = await (await import("sharp")).default({ create: { width: 1024, height: 1024, channels: 3, background: { r: 10, g: 20, b: 30 } } }).png().toBuffer();
-    const bodies: Record<string, unknown>[] = [];
+    fakeLLM(() => ({ scene: 'A huge vault door held shut by one small paper clip "4-bit", labeled weak key.' }));
+    const seen: { model: string; form?: FormData; json?: Record<string, unknown> }[] = [];
     const realFetch = globalThis.fetch;
-    globalThis.fetch = (async (u: string, init?: { body?: string; headers?: Record<string, string> }) => {
-      expect(String(u)).toBe("https://api.cloudflare.com/client/v4/accounts/acc123/ai/run/@cf/black-forest-labs/flux-1-schnell");
+    globalThis.fetch = (async (u: string, init?: { body?: unknown; headers?: Record<string, string> }) => {
+      expect(String(u)).toMatch(/^https:\/\/api\.cloudflare\.com\/client\/v4\/accounts\/acc123\/ai\/run\/@cf\/black-forest-labs\//);
       expect(init?.headers?.Authorization).toBe("Bearer cf-token");
-      const b = JSON.parse(init!.body!);
-      bodies.push(b);
-      if ("seed" in b) return new Response(JSON.stringify({ success: false, errors: [{ message: "AiError: Bad input: Error: Additional or unevaluated properties '/seed' at '/' not allowed (abc)" }] }), { status: 400 });
-      return new Response(JSON.stringify({ success: true, result: { image: png.toString("base64") } }), { headers: { "content-type": "application/json" } });
+      const model = String(u).split("/").pop()!;
+      const req = init?.body instanceof FormData ? { form: init.body } : { json: JSON.parse(String(init?.body)) };
+      seen.push({ model, ...req });
+      return reply(model, req);
     }) as typeof fetch;
     try {
       const img = await withUser(me(), async () => ensurePostImage(await scheduledPost("linkedin")));
-      expect(img).toMatchObject({ mime: "image/jpeg", credit: "AI illustration made for this post" });
-      expect(bodies).toHaveLength(2);
-      expect(bodies[1]).not.toHaveProperty("seed");
-      expect(bodies[1].prompt).toContain("paper clip");
+      return { img, seen };
     } finally {
       globalThis.fetch = realFetch;
       delete process.env.CLOUDFLARE_ACCOUNT_ID;
       delete process.env.CLOUDFLARE_API_TOKEN;
       resetEnvCache();
     }
+  }
+  const png = async () => (await import("sharp")).default({ create: { width: 1280, height: 720, channels: 3, background: { r: 10, g: 20, b: 30 } } }).png().toBuffer();
+  const ok = async () => new Response(JSON.stringify({ success: true, result: { image: (await png()).toString("base64") } }), { headers: { "content-type": "application/json" } });
+
+  it("draws with FLUX.2 klein at 16:9 first, with the house style and without any words for the model to draw", async () => {
+    const { img, seen } = await withCloudflare(() => ok());
+    expect(img).toMatchObject({ mime: "image/jpeg", credit: "AI illustration made for this post" });
+    expect(seen.map((s) => s.model)).toEqual(["flux-2-klein-9b"]);
+    expect([seen[0].form!.get("width"), seen[0].form!.get("height")]).toEqual(["1280", "720"]);
+    const prompt = String(seen[0].form!.get("prompt"));
+    expect(prompt).toContain("vault door held shut by one small paper clip");
+    expect(prompt).not.toMatch(/4-bit|labeled|weak key/);
+    expect(prompt).toMatch(/Minimal editorial 3D illustration/);
+  });
+
+  it("falls back to FLUX.1 schnell when klein refuses (for example, the free allowance is used up), dropping settings schnell refuses", async () => {
+    const { img, seen } = await withCloudflare(async (model, req) => {
+      if (model === "flux-2-klein-9b") return new Response(JSON.stringify({ success: false, errors: [{ message: "4006: you have used up your daily free allocation of 10,000 neurons" }] }), { status: 429 });
+      if (req.json && "steps" in req.json) return new Response(JSON.stringify({ success: false, errors: [{ message: "AiError: Bad input: Error: Additional or unevaluated properties '/steps' at '/' not allowed" }] }), { status: 400 });
+      return ok();
+    });
+    expect(img).toMatchObject({ mime: "image/jpeg" });
+    expect(seen.map((s) => s.model)).toEqual(["flux-2-klein-9b", "flux-1-schnell", "flux-1-schnell"]);
+    expect(seen[2].json).toEqual({ prompt: expect.stringContaining("paper clip") });
+  });
+
+  it("keeps both models' errors when neither draws", async () => {
+    library(() => []);
+    const { img } = await withCloudflare(() => new Response(JSON.stringify({ success: false, errors: [{ message: "Internal error" }] }), { status: 500 }));
+    expect(img).toBeNull();
+    const err = (await db().select().from(schema.llmCalls)).find((c) => c.task === "find_image")!.error!;
+    expect(err).toMatch(/klein HTTP 500/);
+    expect(err).toMatch(/schnell HTTP 500/);
+  });
+
+  it("removes quoted words and labels from scenes", () => {
+    expect(cleanScene('A jar labeled "64 MB" sits on a chip.')).toBe("A jar sits on a chip.");
+    expect(cleanScene("A cup marked old version, next to a fresh loaf.")).toBe("A cup, next to a fresh loaf.");
   });
 });

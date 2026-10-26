@@ -61,7 +61,7 @@ export function fakeLLM(handler: LlmHandler) {
   return calls;
 }
 
-export const GOOD_REVIEW = { worth_posting: 9, factual: 9, slop: 9, claims: [{ claim: "x", support: "supported", evidence: "e" }], issues: [], revision_instructions: "", is_duplicate: false };
+export const GOOD_REVIEW = { worth_posting: 9, factual: 9, clarity: 9, slop: 9, claims: [{ claim: "x", support: "supported", evidence: "e" }], issues: [], revision_instructions: "", is_duplicate: false };
 
 export function fakePlatform(platform: "x" | "linkedin", result: () => PublishResult) {
   const published: string[][] = [];

@@ -366,6 +366,7 @@ async function write(m: Material, platform: Platform, s: Settings, recent: strin
 const reviewOut = z.object({
   worth_posting: z.number().min(0).max(10),
   factual: z.number().min(0).max(10),
+  clarity: z.number().min(0).max(10),
   slop: z.number().min(0).max(10),
   claims: z.array(z.object({ claim: z.string(), support: z.enum(["supported", "unsupported", "unverifiable"]), evidence: z.string() })),
   issues: z.array(z.string()),
@@ -405,6 +406,7 @@ export function gate(r: Review, checks: Check[], m: Material): Verdict {
   for (const c of unsupported) reasons.push(`Unsupported claim: "${c.claim}"`);
   const unverifiable = r.claims.filter((c) => c.support === "unverifiable");
   if (unverifiable.length > (m.kind === "evergreen" ? 1 : 0)) reasons.push(`Unverifiable claim(s): ${unverifiable.map((c) => `"${c.claim}"`).join("; ")}`);
+  if (r.clarity < 7) reasons.push(`Hard to follow (${r.clarity}/10): ${r.issues.find((i) => /unclear|acronym|explain|vague|jargon|understand/i.test(i)) ?? "a newcomer would not get what it is about"}`);
   if (r.slop < 7) reasons.push(`Reads like AI slop (${r.slop}/10).`);
   if (r.is_duplicate) reasons.push("Repeats a recent post.");
   for (const c of checks.filter((c) => c.severity === "block")) reasons.push(c.message);
