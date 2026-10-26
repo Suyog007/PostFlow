@@ -11,12 +11,24 @@ import { Flash } from "../flash";
 import { fillCalendarAction, refreshQueuedAction, writeLessonAction } from "@/app/actions";
 import { fillNowDays } from "@/server/generate";
 import { slotsBetween } from "@/server/slots";
+import { cardUrl, wantsImage } from "@/server/post-images";
 
 type Post = typeof schema.posts.$inferSelect;
 /** A slot in the planning window with nothing on it yet. */
 interface OpenSlot { open: true; id: string; platform: "x" | "linkedin"; scheduledAt: Date }
 type Entry = Post | OpenSlot;
 const isOpen = (e: Entry): e is OpenSlot => "open" in e;
+
+/** Each platform's own colour: a stripe on the left and a light wash behind the card. */
+const platformTone = (platform: string) => (platform === "x" ? "var(--x)" : "var(--li)");
+const platformWash = (platform: string) => `color-mix(in srgb, ${platformTone(platform)} 7%, var(--surface))`;
+
+function Thumb({ src, size }: { src: string; size: number }) {
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- a signed, already-made picture; next/image would re-encode it
+    <img src={src} alt="" aria-hidden="true" loading="lazy" width={size} height={size} className="flex-none rounded-[5px] border border-[var(--line)] object-cover" style={{ width: size, height: size }} />
+  );
+}
 
 // fixmyslop-ignore[ui/off-scale-values] the app uses one fixed dense type scale (11/12/13/14/15px) on every screen by design; snapping to Tailwind steps would change the whole interface
 function OpenSlotBox({ e, tz, top, left, width }: { e: OpenSlot; tz: string; top: number; left: number; width: number }) {
@@ -35,14 +47,14 @@ function OpenSlotBox({ e, tz, top, left, width }: { e: OpenSlot; tz: string; top
 const HOUR_PX = 64;
 const EVENT_MIN_PX = 54;
 
-function Event({ p, tz, top, left, width, narrow, needsOk }: { p: Post; tz: string; top: number; left: number; width: number; narrow: boolean; needsOk: boolean }) {
+function Event({ p, tz, top, left, width, narrow, needsOk, thumb }: { p: Post; tz: string; top: number; left: number; width: number; narrow: boolean; needsOk: boolean; thumb?: string }) {
   const t = DateTime.fromJSDate(p.scheduledAt, { zone: tz }).toFormat("HH:mm");
   const dead = p.status === "cancelled" || p.status === "expired";
   return (
     <Link
       href={`/posts/${p.id}`}
       className={`cal-event ${dead ? "opacity-55" : ""}`}
-      style={{ top, left: `calc(${left}% + 2px)`, width: `calc(${width}% - 4px)`, height: EVENT_MIN_PX, borderLeftColor: p.platform === "x" ? "var(--x)" : "var(--li)" }}
+      style={{ top, left: `calc(${left}% + 2px)`, width: `calc(${width}% - 4px)`, height: EVENT_MIN_PX, borderLeftColor: platformTone(p.platform), background: platformWash(p.platform) }}
       title={p.text}
     >
       <div className="flex items-center gap-1 text-[11px] text-[var(--muted)]">
@@ -53,7 +65,12 @@ function Event({ p, tz, top, left, width, narrow, needsOk }: { p: Post; tz: stri
         {needsOk && <span className="ml-auto rounded bg-[var(--warn-soft)] px-1 text-[10px] font-medium text-[var(--warn)]" title="Needs your approval">Needs OK</span>}
         {(p.status === "failed" || p.status === "unconfirmed") && <Icon name="alert" size={12} className="ml-auto text-[var(--bad)]" />}
       </div>
-      {!narrow && <div className={`line-clamp-2 break-words text-[12px] ${p.status === "cancelled" ? "line-through" : ""}`}>{p.text}</div>}
+      {!narrow && (
+        <div className="flex gap-1.5">
+          <div className={`line-clamp-2 min-w-0 flex-1 break-words text-[12px] ${p.status === "cancelled" ? "line-through" : ""}`}>{p.text}</div>
+          {thumb && <Thumb src={thumb} size={30} />}
+        </div>
+      )}
     </Link>
   );
 }
@@ -105,6 +122,10 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     .from(schema.posts)
     .where(and(mine, gte(schema.posts.scheduledAt, weekStart.toJSDate()), lt(schema.posts.scheduledAt, weekEnd.toJSDate()), inArray(schema.posts.status, ["scheduled", "publishing", "published", "unconfirmed", "failed", "cancelled", "expired"])))
     .orderBy(schema.posts.scheduledAt);
+  // Thumbnails only for pictures that already exist: opening the calendar never makes new ones.
+  const withPicture = week.length
+    ? new Set((await db().select({ id: schema.postImages.postId }).from(schema.postImages).where(inArray(schema.postImages.postId, week.map((p) => p.id)))).map((r) => r.id))
+    : new Set<string>();
   const drafts = await db().select().from(schema.posts).where(and(mine, eq(schema.posts.status, "draft"))).orderBy(desc(schema.posts.createdAt)).limit(6);
   const held = (await db().select().from(schema.posts).where(and(mine, eq(schema.posts.status, "rejected"), gte(schema.posts.createdAt, new Date(Date.now() - 3 * 86_400_000)))).orderBy(desc(schema.posts.createdAt)).limit(12)).filter((p) => p.text);
   const upcoming = await db().select().from(schema.posts).where(and(mine, eq(schema.posts.status, "scheduled"), gte(schema.posts.scheduledAt, new Date()))).orderBy(schema.posts.scheduledAt).limit(1);
@@ -140,6 +161,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     : [];
   const entries: Entry[] = [...week, ...openSlots].sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime());
   const postedCount = week.filter((p) => p.status === "published").length;
+  const thumbFor = (p: Post) => (withPicture.has(p.id) && wantsImage(p, s) ? cardUrl(p) : undefined);
 
   return (
     <div>
@@ -216,7 +238,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
             return (
               <div key={d.toISODate()} className="border-l border-[var(--line)] px-2 py-2 text-center">
                 <div className="text-[11px] font-medium uppercase tracking-wide text-[var(--subtle)]">{d.toFormat("ccc")}</div>
-                <div className={`mx-auto mt-0.5 flex h-7 w-7 items-center justify-center rounded-full text-[14px] font-semibold tnum ${isToday ? "bg-[var(--accent)] text-[var(--accent-ink)]" : ""}`}>{d.day}</div>
+                <div className={`mx-auto mt-0.5 flex h-7 w-7 items-center justify-center rounded-full text-[14px] font-semibold tnum ${isToday ? "bg-[var(--mark)] text-[var(--mark-ink)]" : ""}`}>{d.day}</div>
               </div>
             );
           })}
@@ -238,7 +260,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                   isOpen(it.p) ? (
                     <OpenSlotBox key={it.p.id} e={it.p} tz={tz} top={it.top} left={(it.lane / it.lanes) * 100} width={100 / it.lanes} />
                   ) : (
-                    <Event key={it.p.id} p={it.p} tz={tz} top={it.top} left={(it.lane / it.lanes) * 100} width={100 / it.lanes} narrow={it.lanes > 2} needsOk={needsOk(it.p)} />
+                    <Event key={it.p.id} p={it.p} tz={tz} top={it.top} left={(it.lane / it.lanes) * 100} width={100 / it.lanes} narrow={it.lanes > 2} needsOk={needsOk(it.p)} thumb={thumbFor(it.p)} />
                   ),
                 )}
                 {d.hasSame(today, "day") && nowTop > 0 && nowTop < gridHeight && (
@@ -268,12 +290,13 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                       <div className="flex min-w-0 flex-1 items-center gap-1.5 text-[13px]"><PlatformGlyph platform={p.platform} size={13} />Open slot, waiting for a story that will still be fresh</div>
                     </div>
                   ) : (
-                    <Link key={p.id} href={`/posts/${p.id}`} className="flex gap-3 px-3 py-2.5">
+                    <Link key={p.id} href={`/posts/${p.id}`} className="flex gap-3 border-l-[3px] px-3 py-2.5" style={{ borderLeftColor: platformTone(p.platform), background: platformWash(p.platform) }}>
                       <div className="w-11 flex-none pt-0.5 text-[12px] text-[var(--muted)] mono">{DateTime.fromJSDate(p.scheduledAt, { zone: tz }).toFormat("HH:mm")}</div>
                       <div className="min-w-0 flex-1">
                         <div className="mb-0.5 flex items-center gap-1.5"><PlatformGlyph platform={p.platform} size={13} />{p.fast && <Icon name="bolt" size={12} className="text-[var(--warn)]" />}<StatusBadge status={p.status} needsApproval={needsOk(p)} /></div>
                         <p className="line-clamp-2 break-words text-[13px]">{p.text}</p>
                       </div>
+                      {thumbFor(p) && <Thumb src={thumbFor(p)!} size={52} />}
                     </Link>
                   ))}
                 </div>

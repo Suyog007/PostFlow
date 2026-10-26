@@ -28,7 +28,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <span className="self-center"><Logo size={24} /></span>
             <span className="display text-[22px]">PostFlow</span>
           </Link>
-          <p className="typed mt-1 text-[12px] text-[var(--accent)]">news desk</p>
           <div className="press-stripe mt-3" aria-hidden="true" />
         </div>
         <SideNav owner={user.isOwner} />
@@ -65,7 +64,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <header className="relative flex items-center gap-2 bg-[var(--surface)] px-4 py-3 md:hidden">
           <Logo size={22} />
           <span className="display text-[20px]">PostFlow</span>
-          <span className="typed text-[11px] text-[var(--accent)]">news desk</span>
           <div className="press-stripe absolute inset-x-0 bottom-0" aria-hidden="true" />
           <span className="ml-auto flex items-center gap-1.5 text-[12px] text-[var(--muted)]">
             <span className={`inline-block h-2 w-2 rounded-full ${s.paused ? "bg-[var(--warn)]" : "bg-[var(--good)]"}`} />

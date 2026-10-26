@@ -10,7 +10,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 const NAV = [
   { href: "#how", label: "How it works" },
   { href: "#desk", label: "What's inside" },
-  { href: "#pricing", label: "Fair pricing" },
+  { href: "#pricing", label: "Pricing" },
   { href: "#faq", label: "FAQ" },
 ];
 
@@ -28,7 +28,6 @@ export function DeskNav({ loggedIn }: { loggedIn: boolean }) {
         <Link href="/" className="flex items-baseline gap-2" aria-label="PostFlow home">
           <span className="self-center"><Logo size={28} /></span>
           <span className="display text-[28px]">PostFlow</span>
-          <span className="typed red hidden text-[14px] sm:inline">news desk</span>
         </Link>
         <nav aria-label="Sections" className="ml-auto hidden items-center gap-7 text-[16px] font-semibold lg:flex">
           {NAV.map((n) => (
@@ -136,9 +135,9 @@ const PICTURES: Record<string, ReactNode> = {
 
 const FIELDS = [
   { id: "security", label: "Security" },
-  { id: "ai", label: "AI & machine learning" },
-  { id: "web", label: "Web development" },
-  { id: "saas", label: "SaaS & startups" },
+  { id: "ai", label: "AI" },
+  { id: "web", label: "Web dev" },
+  { id: "saas", label: "Startups" },
 ] as const;
 type Field = (typeof FIELDS)[number]["id"];
 
@@ -173,28 +172,25 @@ export function HeroDemo({ name = "Your Name" }: { name?: string }) {
   const s = SAMPLES[field];
   const text = platform === "x" ? `${s.x}\n\n${s.tags}` : s.linkedin;
   return (
-    <div className="rounded-2xl border-[1.5px] border-[var(--d-sky-line)] bg-[var(--d-sky)] p-5 sm:p-7">
-      <p className="flex items-center gap-2 text-[16px] font-bold">
-        <span className="h-2.5 w-2.5 rounded-full bg-[var(--d-red)]" aria-hidden="true" /> Your next post
-      </p>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <label className="block text-[14px] font-semibold text-[var(--d-muted)]">
-          News from
-          <select value={field} onChange={(e) => setField(e.target.value as Field)} className="mt-1.5 block h-12 w-full rounded-lg border-[1.5px] border-[var(--d-sky-line)] bg-[var(--surface)] px-3 text-[15px] font-semibold text-[var(--d-ink)]">
-            {FIELDS.map((f) => (
-              <option key={f.id} value={f.id}>{f.label}</option>
-            ))}
-          </select>
-        </label>
-        <label className="block text-[14px] font-semibold text-[var(--d-muted)]">
-          Posted on
-          <select value={platform} onChange={(e) => setPlatform(e.target.value as "linkedin" | "x")} className="mt-1.5 block h-12 w-full rounded-lg border-[1.5px] border-[var(--d-sky-line)] bg-[var(--surface)] px-3 text-[15px] font-semibold text-[var(--d-ink)]">
-            <option value="linkedin">LinkedIn</option>
-            <option value="x">X</option>
-          </select>
-        </label>
+    <div className="relative">
+      {/* Pick a beat and a platform: newspaper section tabs, not a form. */}
+      <div className="flex flex-wrap items-end justify-between gap-3 border-b-2 border-[var(--ink)] pb-2">
+        <div role="radiogroup" aria-label="News from" className="flex flex-wrap gap-x-4 gap-y-1">
+          {FIELDS.map((f) => (
+            <button key={f.id} type="button" role="radio" aria-checked={field === f.id} onClick={() => setField(f.id)} className={`typed py-1 text-[13px] uppercase tracking-[.1em] ${field === f.id ? "font-semibold text-[var(--ink)] underline decoration-[var(--mark)] decoration-[3px] underline-offset-[7px]" : "text-[var(--d-muted)] hover:text-[var(--ink)]"}`}>
+              {f.label}
+            </button>
+          ))}
+        </div>
+        <div role="radiogroup" aria-label="Posted on" className="flex rounded-full border border-[var(--line-strong)] p-0.5">
+          {(["linkedin", "x"] as const).map((pl) => (
+            <button key={pl} type="button" role="radio" aria-checked={platform === pl} aria-label={pl === "x" ? "X" : "LinkedIn"} onClick={() => setPlatform(pl)} className={`flex h-8 w-11 items-center justify-center rounded-full ${platform === pl ? "bg-[var(--ink)] text-[var(--bg)]" : ""}`}>
+              {pl === "x" ? <span className="text-[14px] font-bold">𝕏</span> : <span className="text-[13px] font-bold">in</span>}
+            </button>
+          ))}
+        </div>
       </div>
-      <article aria-live="polite" className="mt-5 overflow-hidden rounded-xl border border-[var(--d-sky-line)] bg-[var(--surface)] shadow-[0_6px_0_var(--d-sky-line)]">
+      <article aria-live="polite" className="mt-6 -rotate-[0.6deg] overflow-hidden rounded-[4px] border border-[var(--line-strong)] bg-[var(--surface)] shadow-[0_18px_40px_-22px_rgba(24,34,30,.45)]">
         <div className="flex items-center gap-3 px-5 pt-4">
           <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--d-cream)] text-[14px] font-bold" aria-hidden="true">{name.split(" ").map((w) => w[0]).join("").slice(0, 2)}</span>
           <div className="min-w-0">
@@ -206,20 +202,13 @@ export function HeroDemo({ name = "Your Name" }: { name?: string }) {
         <p className="whitespace-pre-line px-5 pb-4 pt-3 text-[15px] leading-relaxed">{text}</p>
         {PICTURES[field]}
       </article>
-      <div className="mt-4 flex items-end justify-between gap-4">
-        <p className="text-[14px] leading-snug">
-          Change the field.
-          <br />
-          <strong>The news is yours to pick.</strong>
-        </p>
-        <p className="typed text-right text-[12px] text-[var(--d-muted)]">Sample post · made-up story</p>
-      </div>
+      <p className="typed mt-4 text-right text-[12px] text-[var(--d-muted)]">Sample post · made-up story · pick a beat above</p>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// "Send it a link. Keep the final say."
+// Three ways a post starts.
 
 const TABS = [
   {
@@ -256,7 +245,7 @@ export function DeskTabs() {
   const t = TABS[tab];
   return (
     <div>
-      <div role="tablist" aria-label="Ways to start a post" className="flex flex-wrap gap-2.5">
+      <div role="tablist" aria-label="Ways to start a post" className="flex flex-wrap gap-x-7 gap-y-2 border-b border-[var(--line)]">
         {TABS.map((x, i) => (
           <button
             key={x.id}
@@ -265,36 +254,36 @@ export function DeskTabs() {
             aria-selected={tab === i}
             aria-controls={`panel-${x.id}`}
             onClick={() => setTab(i)}
-            className={`h-12 rounded-lg border-[1.5px] px-5 text-[16px] font-bold transition-colors ${tab === i ? "border-[var(--d-ink)] bg-[var(--d-ink)] text-[var(--d-paper)]" : "border-[var(--d-sky-line)] hover:border-[var(--d-ink)]"}`}
+            className={`-mb-px border-b-[3px] pb-3 text-[17px] font-semibold transition-colors ${tab === i ? "border-[var(--mark)] text-[var(--ink)]" : "border-transparent text-[var(--d-muted)] hover:text-[var(--ink)]"}`}
           >
             {x.label}
           </button>
         ))}
       </div>
-      <div role="tabpanel" id={`panel-${t.id}`} aria-labelledby={`tab-${t.id}`} className="mt-0 grid gap-8 border-t-2 border-[var(--d-ink)] bg-[var(--d-sky)] px-5 py-10 sm:px-12 lg:grid-cols-2 lg:gap-14">
+      <div role="tabpanel" id={`panel-${t.id}`} aria-labelledby={`tab-${t.id}`} className="grid gap-8 py-10 lg:grid-cols-2 lg:gap-14">
         <div>
           <h3 className="display text-[38px] sm:text-[46px]">
             {t.title[0]}
             <br />
-            {t.title[1]}
+            <span className="red">{t.title[1]}</span>
           </h3>
           <p className="mt-4 max-w-[460px] text-[18px] leading-relaxed text-[var(--d-muted)]">{t.body}</p>
           <p className="mt-10 hidden lg:block"><span className="stamp text-[22px]">Approved</span></p>
         </div>
-        <div className="rounded-xl border-[1.5px] border-[var(--d-sky-line)] bg-[var(--surface)] p-5 shadow-[0_6px_0_var(--d-sky-line)] sm:p-7">
+        <div className="rounded-[6px] border border-[var(--line-strong)] bg-[var(--surface)] p-5 shadow-[0_18px_40px_-24px_rgba(24,34,30,.4)] sm:p-7">
           <div className="flex items-center justify-between border-b border-[var(--d-sky-line)] pb-4">
             <p className="text-[18px] font-bold">PostFlow bot</p>
             <p className="text-[13px] text-[var(--d-muted)]">Telegram · example</p>
           </div>
           {t.you && <p className="mt-5 ml-auto w-fit max-w-[90%] rounded-lg bg-[var(--d-sky)] px-4 py-3 text-[15px]">{t.you}</p>}
           <div className="mt-5 flex gap-3">
-            <span className="flex h-9 w-9 flex-none items-center justify-center rounded-lg bg-[var(--d-red)] text-[15px] font-bold text-white" aria-hidden="true">P</span>
+            <span className="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-[var(--ink)] text-[15px] font-bold text-[var(--bg)]" aria-hidden="true">P</span>
             <div>
               <p className="text-[16px] font-bold">{t.bot[0]}</p>
               <p className="mt-0.5 text-[14px] text-[var(--d-muted)]">{t.bot[1]}</p>
             </div>
           </div>
-          <div className="mt-5 border-t-[3px] border-[var(--d-red)] pt-4">
+          <div className="mt-5 border-t-2 border-[var(--mark)] pt-4">
             <p className="typed text-[12px] uppercase tracking-[.1em] text-[var(--d-muted)]">Draft</p>
             <p className="mt-2 text-[15px] leading-relaxed">{t.draft}</p>
           </div>

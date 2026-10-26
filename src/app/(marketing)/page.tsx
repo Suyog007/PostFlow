@@ -118,30 +118,15 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
             <p className="mt-7 max-w-[560px] text-[19px] leading-[1.7] text-[var(--d-muted)] sm:text-[21px]">
               PostFlow reads <span className="hl">the news in your field</span>, writes <span className="hl">a clear post with a picture</span> and checks every fact. Ten minutes before it goes out, Telegram asks for your OK.
             </p>
-            <p className="mt-6 text-[22px] font-bold">
-              <span className="underline decoration-[var(--d-red)] decoration-[3px] underline-offset-[6px]">Written for you.</span> You keep the final say.
-            </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
               <a href={cta.href} className="btn-desk">{cta.label}</a>
               <a href="#how" className="btn-outline">See how it works</a>
             </div>
             <p className="mt-3 text-[14px] text-[var(--d-muted)]">{open ? "No charge during the trial. Cancel anytime." : `${TRIAL_DAYS}-day free trial at launch. No card to join.`}</p>
-            <ul className="mt-9 grid gap-2.5 text-[17px] font-semibold sm:grid-cols-2">
-              {[
-                { ok: true, t: "Real news, fact-checked" },
-                { ok: true, t: "A picture with every post" },
-                { ok: false, t: "generic AI filler" },
-                { ok: false, t: "writing posts at midnight" },
-              ].map((x) => (
-                <li key={x.t} className="flex items-center gap-3">
-                  <span aria-hidden="true" className={`w-5 text-[20px] font-black ${x.ok ? "" : "red"}`}>{x.ok ? "✓" : "✕"}</span>
-                  <span className={x.ok ? "" : "text-[var(--d-muted)]"}>
-                    <span className="sr-only">{x.ok ? "Yes: " : "No: "}</span>
-                    {x.t}
-                  </span>
-                </li>
-              ))}
-            </ul>
+            {/* A byline strip: what every post comes with. */}
+            <p className="typed mt-10 flex flex-wrap items-center gap-x-3 gap-y-1 border-y border-[var(--line)] py-3 text-[13px] uppercase tracking-[.12em] text-[var(--d-muted)]">
+              <span>Fact-checked</span><span aria-hidden="true">·</span><span>Picture included</span><span aria-hidden="true">·</span><span>Sent only when you approve</span>
+            </p>
           </div>
           <HeroDemo />
         </section>
@@ -151,7 +136,7 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
         {/* ---------- how it works ---------- */}
         <section id="how" className="mx-auto max-w-[1200px] scroll-mt-24 px-4 py-20 sm:px-6 sm:py-24">
           <div className="mb-10 grid gap-6 lg:grid-cols-2 lg:items-end">
-            <Headline a="Send it a link." b="Keep the final say." className="text-[46px] sm:text-[68px]" />
+            <Headline a="Bring a link, or nothing." b="It does the reading." className="text-[46px] sm:text-[68px]" />
             <p className="max-w-[520px] text-[19px] leading-relaxed text-[var(--d-muted)] lg:justify-self-end">
               A story you spotted, a launch you shipped, a lesson worth sharing. Start with whatever you have, or let the desk find the news.
             </p>
@@ -171,8 +156,7 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
             {DESK.map((d, i) => (
               <div key={d.t} className="card-lift reveal p-7" style={{ "--d": `${(i % 3) * 80}ms` } as React.CSSProperties}>
                 <div className="flex items-center justify-between">
-                  <span className="typed text-[14px] text-[var(--d-muted)]">{String(i + 1).padStart(2, "0")}</span>
-                  <span aria-hidden="true" className="text-[22px]">→</span>
+                  <span className="typed pt-3 text-[13px] uppercase tracking-[.14em] text-[var(--d-muted)]">No. {i + 1}</span>
                 </div>
                 <h3 className="display mt-5 text-[28px] tracking-[-0.03em]">{d.t}</h3>
                 <p className="mt-2 text-[16px] leading-relaxed text-[var(--d-muted)]">{d.b}</p>
@@ -187,8 +171,7 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
         <section id="pricing" className="mx-auto max-w-[1200px] scroll-mt-24 px-4 py-20 sm:px-6 sm:py-24">
           <div className="mb-12 grid gap-6 lg:grid-cols-2 lg:items-end">
             <div>
-              <Headline a="Pay for posts." b="Not for hype." className="text-[46px] sm:text-[68px]" />
-              <p className="typed mt-5 -rotate-1 text-[16px] text-[var(--d-muted)]">Every claim gets a very thorough inspection.</p>
+              <Headline a="One price a month." b="Every post checked." className="text-[46px] sm:text-[68px]" />
             </div>
             <p className="max-w-[520px] text-[19px] leading-relaxed text-[var(--d-muted)] lg:justify-self-end">
               Every plan includes the fact-checker and the pictures. No free plan, because checking costs real money. A {TRIAL_DAYS}-day trial instead.
@@ -201,7 +184,7 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
 
         {/* ---------- FAQ ---------- */}
         <section id="faq" className="mx-auto grid max-w-[1200px] scroll-mt-24 gap-10 px-4 py-20 sm:px-6 sm:py-24 lg:grid-cols-[0.8fr_1.2fr]">
-          <Headline a="Fair questions." b="Straight answers." className="text-[46px] sm:text-[60px]" />
+          <Headline a="Before you" b="sign up." className="text-[46px] sm:text-[60px]" />
           <div className="divide-y divide-[var(--d-sky-line)] border-y border-[var(--d-sky-line)]">
             {FAQ.map((f) => (
               <details key={f.q} className="group py-5">

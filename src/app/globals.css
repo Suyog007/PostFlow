@@ -2,19 +2,22 @@
 
 /* Neutral, product-style palette. One accent. Platform colours appear only inside previews and glyphs. */
 :root {
-  /* The news desk: navy ink, signal red, sky panels, cream highlights. */
-  --bg: #f7f9fd;
-  --side: #eef4fd;
-  --surface: #ffffff;
-  --raised: #f7faff;
-  --line: #d9e3f2;
-  --line-strong: #c3d1e6;
-  --ink: #16305e;
-  --muted: #55637a;
-  --subtle: #7b88a0;
-  --accent: #cf3a2a;
+  /* Newsprint: warm paper, green-black ink, a teal for links and marks, marigold for the main action. */
+  --bg: #f7f4ec;
+  --side: #efeadf;
+  --surface: #fffdf8;
+  --raised: #faf7f0;
+  --line: #e2dacb;
+  --line-strong: #cfc5b1;
+  --ink: #18221e;
+  --muted: #5b645e;
+  --subtle: #858b83;
+  --accent: #0e6b5b;
   --accent-ink: #ffffff;
-  --accent-soft: #fdebdc;
+  --accent-soft: #dcefe8;
+  --mark: #f2b233;
+  --mark-ink: #18221e;
+  --mark-soft: #fbedc6;
   --good: #11713f;
   --good-soft: #e1f3e8;
   --warn: #a8530a;
@@ -30,18 +33,21 @@
 /* Dark: follows the device unless a theme was picked with the toggle (data-theme on <html>). */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0b1120;
-    --side: #0f1729;
-    --surface: #121b2e;
-    --raised: #16213a;
-    --line: #24324d;
-    --line-strong: #2f3f5e;
-    --ink: #e8eef9;
-    --muted: #a3b0c6;
-    --subtle: #8190aa;
-    --accent: #ff6d5c;
-    --accent-ink: #0b1120;
-    --accent-soft: #3b2419;
+    --bg: #121512;
+    --side: #171b17;
+    --surface: #1b201c;
+    --raised: #20261f;
+    --line: #2d3530;
+    --line-strong: #3b453e;
+    --ink: #f1ede2;
+    --muted: #b1b5aa;
+    --subtle: #888f84;
+    --accent: #45c2a8;
+    --accent-ink: #0d1210;
+    --accent-soft: #15302a;
+    --mark: #f2b233;
+    --mark-ink: #18221e;
+    --mark-soft: #3a3016;
     --good: #4cc27c;
     --good-soft: #0f2a1b;
     --warn: #e5a24a;
@@ -54,18 +60,21 @@
   }
 }
 :root[data-theme="dark"] {
-    --bg: #0b1120;
-    --side: #0f1729;
-    --surface: #121b2e;
-    --raised: #16213a;
-    --line: #24324d;
-    --line-strong: #2f3f5e;
-    --ink: #e8eef9;
-    --muted: #a3b0c6;
-    --subtle: #8190aa;
-    --accent: #ff6d5c;
-    --accent-ink: #0b1120;
-    --accent-soft: #3b2419;
+    --bg: #121512;
+    --side: #171b17;
+    --surface: #1b201c;
+    --raised: #20261f;
+    --line: #2d3530;
+    --line-strong: #3b453e;
+    --ink: #f1ede2;
+    --muted: #b1b5aa;
+    --subtle: #888f84;
+    --accent: #45c2a8;
+    --accent-ink: #0d1210;
+    --accent-soft: #15302a;
+    --mark: #f2b233;
+    --mark-ink: #18221e;
+    --mark-soft: #3a3016;
     --good: #4cc27c;
     --good-soft: #0f2a1b;
     --warn: #e5a24a;
@@ -102,9 +111,9 @@ h1, h2, h3 { text-wrap: balance; }
 .btn, .btn-primary, .btn-secondary { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 7px; font-size: 13px; font-weight: 600; white-space: nowrap; cursor: pointer; border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); transition: background .12s, border-color .12s; }
 .btn:hover, .btn-secondary:hover { background: var(--raised); border-color: var(--subtle); }
 .btn:disabled, .btn-primary:disabled, .btn-secondary:disabled { opacity: .5; cursor: not-allowed; }
-.btn-primary { background: var(--ink); color: var(--bg); border-color: var(--ink); box-shadow: 0 2px 0 color-mix(in srgb, var(--ink) 60%, #000); }
-.btn-primary:hover { background: var(--ink); opacity: .92; border-color: var(--ink); transform: translateY(1px); box-shadow: 0 1px 0 color-mix(in srgb, var(--ink) 60%, #000); }
-.btn-accent { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); box-shadow: 0 2px 0 color-mix(in srgb, var(--accent) 55%, #000); }
+.btn-primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.btn-primary:hover { background: var(--ink); opacity: .88; border-color: var(--ink); }
+.btn-accent { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .btn-accent:hover { background: var(--accent); opacity: .9; border-color: var(--accent); }
 .btn-danger { color: var(--bad); }
 .btn-ghost { border-color: transparent; background: transparent; color: var(--muted); }
@@ -135,7 +144,7 @@ h1, h2, h3 { text-wrap: balance; }
 .chip-input:focus-visible + .chip { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ---- surfaces ---- */
-.panel, .card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 3px 0 var(--line); }
+.panel, .card { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
 .panel-head { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--line); font-weight: 700; font-size: 14px; }
 .panel-body { padding: 16px; }
 .divide > * + * { border-top: 1px solid var(--line); }
@@ -224,60 +233,42 @@ h1, h2, h3 { text-wrap: balance; }
   .hero-shot { transform: none; }
 }
 
-/* ---------- landing page: the news desk ----------
-   Navy ink, signal red, sky panels and a cream highlighter. The shared tokens are redefined inside
-   .desk so reused pieces (pricing, waitlist form, buttons) pick up the same palette. */
+/* ---------- landing page ----------
+   Same newsprint palette as the app, with more room. Shared tokens keep reused pieces (pricing, the
+   waitlist form) in step. */
 .desk {
-  --d-ink: #16305e;
-  --d-red: #cf3a2a;
-  --d-sky: #eef4fd;
-  --d-sky-line: #d6e2f3;
-  --d-cream: #fdebdc;
-  --d-paper: #ffffff;
-  --d-muted: #55637a;
-  --bg: var(--d-paper);
-  --surface: #ffffff;
-  --raised: #f7f9fd;
-  --side: var(--d-sky);
-  --line: var(--d-sky-line);
-  --line-strong: #c3d1e6;
-  --ink: var(--d-ink);
-  --muted: var(--d-muted);
-  --subtle: #7b88a0;
-  --accent: var(--d-red);
-  --accent-soft: var(--d-cream);
-  --accent-ink: #ffffff;
-  background: var(--d-paper);
-  color: var(--d-ink);
+  --d-ink: var(--ink);
+  --d-red: var(--accent);
+  --d-sky: var(--side);
+  --d-sky-line: var(--line);
+  --d-cream: var(--mark-soft);
+  --d-paper: var(--bg);
+  --d-muted: var(--muted);
+  background: var(--bg);
+  color: var(--ink);
   font-family: var(--font-body), var(--font);
 }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .desk {
-    --d-ink: #e8eef9; --d-red: #ff6d5c; --d-sky: #121b2e; --d-sky-line: #24324d; --d-cream: #3b2419; --d-paper: #0b1120; --d-muted: #a3b0c6;
-    --surface: #0f1729; --raised: #121b2e; --line-strong: #2f3f5e; --subtle: #8190aa; --accent-ink: #0b1120;
-  }
-}
-:root[data-theme="dark"] .desk {
-  --d-ink: #e8eef9; --d-red: #ff6d5c; --d-sky: #121b2e; --d-sky-line: #24324d; --d-cream: #3b2419; --d-paper: #0b1120; --d-muted: #a3b0c6;
-  --surface: #0f1729; --raised: #121b2e; --line-strong: #2f3f5e; --subtle: #8190aa; --accent-ink: #0b1120;
-}
-.desk .display { font-family: var(--font-display), var(--font); font-weight: 800; letter-spacing: -0.045em; line-height: 0.95; }
+.desk .display { font-weight: 600; letter-spacing: -0.025em; line-height: 0.98; }
 .desk .typed { font-family: var(--font-type), var(--mono); }
-.desk .hl { background: var(--d-cream); color: var(--d-ink); padding: 0 .18em; border-radius: 3px; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
-.desk .red { color: var(--d-red); }
-/* Press stripe: slanted navy and red dashes, like the edge of a wire-service envelope. */
-.desk .press-stripe { height: 5px; background: repeating-linear-gradient(110deg, var(--d-ink) 0 34px, transparent 34px 70px, var(--d-red) 70px 104px, transparent 104px 140px); }
-.desk .btn-desk { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 48px; padding: 0 22px; border-radius: 8px; background: var(--d-red); color: #fff; font-weight: 700; font-size: 16px; box-shadow: 0 3px 0 color-mix(in srgb, var(--d-red) 55%, #000); transition: transform .12s, box-shadow .12s; }
-.desk .btn-desk:hover { transform: translateY(1px); box-shadow: 0 2px 0 color-mix(in srgb, var(--d-red) 55%, #000); }
-.desk .btn-outline { display: inline-flex; align-items: center; justify-content: center; height: 44px; padding: 0 18px; border-radius: 8px; border: 1.5px solid var(--line-strong); color: var(--d-ink); font-weight: 600; background: transparent; }
-.desk .btn-outline:hover { border-color: var(--d-ink); }
-.desk .card-lift { border: 1.5px solid var(--d-sky-line); border-radius: 10px; background: var(--raised); box-shadow: 0 4px 0 var(--d-sky-line); transition: transform .15s, box-shadow .15s; }
-.desk .card-lift:hover { transform: translateY(-2px); box-shadow: 0 6px 0 var(--d-sky-line); }
-.desk .stamp { display: inline-block; border: 3px double var(--d-red); color: var(--d-red); padding: 4px 12px; border-radius: 6px; transform: rotate(-8deg); font-family: var(--font-type), var(--mono); font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
-.desk :focus-visible { outline: 2px solid var(--d-red); outline-offset: 3px; }
+/* Highlighter: a marigold stroke under the words, not a box. */
+.desk .hl { background: linear-gradient(transparent 58%, var(--mark-soft) 58%, var(--mark-soft) 92%, transparent 92%); padding: 0 .1em; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.desk .red { font-style: italic; color: var(--accent); font-variation-settings: "opsz" 144, "SOFT" 100; }
+.desk .press-stripe { height: 6px; background: linear-gradient(var(--ink) 0 3px, transparent 3px 5px, var(--ink) 5px 6px); }
+.desk .btn-desk { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 50px; padding: 0 24px; border-radius: 4px; background: var(--mark); color: var(--mark-ink); font-weight: 700; font-size: 16px; border: 1.5px solid var(--ink); transition: background .15s, transform .15s; }
+.desk .btn-desk:hover { background: color-mix(in srgb, var(--mark) 85%, #fff); transform: translateY(-1px); }
+.desk .btn-outline { display: inline-flex; align-items: center; justify-content: center; height: 46px; padding: 0 18px; border-radius: 4px; border: 1.5px solid var(--ink); color: var(--ink); font-weight: 600; background: transparent; }
+.desk .btn-outline:hover { background: var(--side); }
+/* Feature columns: a heavy rule on top, like a newspaper column, no card box. */
+.desk .card-lift { border-top: 2px solid var(--ink); padding-left: 0 !important; padding-right: 0 !important; transition: border-color .15s; }
+.desk .card-lift:hover { border-top-color: var(--accent); }
+.desk .stamp { display: inline-block; border: 2px solid var(--accent); color: var(--accent); padding: 6px 14px; border-radius: 999px; transform: rotate(-6deg); font-family: var(--font-type), var(--mono); font-weight: 600; letter-spacing: .14em; text-transform: uppercase; }
+.desk :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
 /* ---------- the news desk, app-wide ----------
    Display type for titles, typewriter type for times and small notes, the press stripe. */
-.display { font-family: var(--font-display), var(--font); font-weight: 800; letter-spacing: -0.035em; line-height: 1; }
+.display { font-family: var(--font-display), Georgia, serif; font-weight: 600; letter-spacing: -0.02em; line-height: 1.02; font-variation-settings: "opsz" 144, "SOFT" 30; }
+/* The words that matter in a title: italic, in teal. */
+.em { font-style: italic; color: var(--accent); font-variation-settings: "opsz" 144, "SOFT" 100; }
 .typed { font-family: var(--font-type), var(--mono); }
-.press-stripe { height: 4px; background: repeating-linear-gradient(110deg, var(--ink) 0 22px, transparent 22px 44px, var(--accent) 44px 66px, transparent 66px 88px); }
+/* Masthead rule: one thick line over one thin line, like the top of a newspaper. */
+.press-stripe { height: 6px; background: linear-gradient(var(--ink) 0 3px, transparent 3px 5px, var(--ink) 5px 6px); }
