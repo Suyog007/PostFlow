@@ -221,3 +221,55 @@ h1, h2, h3 { text-wrap: balance; }
   .reveal, .lift, .cta-arrow, .step-panel { transition: none; }
   .hero-shot { transform: none; }
 }
+
+/* ---------- landing page: the news desk ----------
+   Navy ink, signal red, sky panels and a cream highlighter. The shared tokens are redefined inside
+   .desk so reused pieces (pricing, waitlist form, buttons) pick up the same palette. */
+.desk {
+  --d-ink: #16305e;
+  --d-red: #cf3a2a;
+  --d-sky: #eef4fd;
+  --d-sky-line: #d6e2f3;
+  --d-cream: #fdebdc;
+  --d-paper: #ffffff;
+  --d-muted: #55637a;
+  --bg: var(--d-paper);
+  --surface: #ffffff;
+  --raised: #f7f9fd;
+  --side: var(--d-sky);
+  --line: var(--d-sky-line);
+  --line-strong: #c3d1e6;
+  --ink: var(--d-ink);
+  --muted: var(--d-muted);
+  --subtle: #7b88a0;
+  --accent: var(--d-red);
+  --accent-soft: var(--d-cream);
+  --accent-ink: #ffffff;
+  background: var(--d-paper);
+  color: var(--d-ink);
+  font-family: var(--font-body), var(--font);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .desk {
+    --d-ink: #e8eef9; --d-red: #ff6d5c; --d-sky: #121b2e; --d-sky-line: #24324d; --d-cream: #3b2419; --d-paper: #0b1120; --d-muted: #a3b0c6;
+    --surface: #0f1729; --raised: #121b2e; --line-strong: #2f3f5e; --subtle: #8190aa; --accent-ink: #0b1120;
+  }
+}
+:root[data-theme="dark"] .desk {
+  --d-ink: #e8eef9; --d-red: #ff6d5c; --d-sky: #121b2e; --d-sky-line: #24324d; --d-cream: #3b2419; --d-paper: #0b1120; --d-muted: #a3b0c6;
+  --surface: #0f1729; --raised: #121b2e; --line-strong: #2f3f5e; --subtle: #8190aa; --accent-ink: #0b1120;
+}
+.desk .display { font-family: var(--font-display), var(--font); font-weight: 800; letter-spacing: -0.045em; line-height: 0.95; }
+.desk .typed { font-family: var(--font-type), var(--mono); }
+.desk .hl { background: var(--d-cream); color: var(--d-ink); padding: 0 .18em; border-radius: 3px; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.desk .red { color: var(--d-red); }
+/* Press stripe: slanted navy and red dashes, like the edge of a wire-service envelope. */
+.desk .press-stripe { height: 5px; background: repeating-linear-gradient(110deg, var(--d-ink) 0 34px, transparent 34px 70px, var(--d-red) 70px 104px, transparent 104px 140px); }
+.desk .btn-desk { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 48px; padding: 0 22px; border-radius: 8px; background: var(--d-red); color: #fff; font-weight: 700; font-size: 16px; box-shadow: 0 3px 0 color-mix(in srgb, var(--d-red) 55%, #000); transition: transform .12s, box-shadow .12s; }
+.desk .btn-desk:hover { transform: translateY(1px); box-shadow: 0 2px 0 color-mix(in srgb, var(--d-red) 55%, #000); }
+.desk .btn-outline { display: inline-flex; align-items: center; justify-content: center; height: 44px; padding: 0 18px; border-radius: 8px; border: 1.5px solid var(--line-strong); color: var(--d-ink); font-weight: 600; background: transparent; }
+.desk .btn-outline:hover { border-color: var(--d-ink); }
+.desk .card-lift { border: 1.5px solid var(--d-sky-line); border-radius: 10px; background: var(--raised); box-shadow: 0 4px 0 var(--d-sky-line); transition: transform .15s, box-shadow .15s; }
+.desk .card-lift:hover { transform: translateY(-2px); box-shadow: 0 6px 0 var(--d-sky-line); }
+.desk .stamp { display: inline-block; border: 3px double var(--d-red); color: var(--d-red); padding: 4px 12px; border-radius: 6px; transform: rotate(-8deg); font-family: var(--font-type), var(--mono); font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.desk :focus-visible { outline: 2px solid var(--d-red); outline-offset: 3px; }
