@@ -29,7 +29,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
         </div>
       </header>
       <main className="mx-auto max-w-[720px] space-y-6 px-4 py-10">
-        <h1 className="text-[24px] font-semibold tracking-tight">Account</h1>
+        <h1 className="display text-[34px]">Account</h1>
         {sp.ok && <p role="status" className="rounded-md bg-[var(--good-soft)] px-3 py-2 text-[13px] text-[var(--good)]">{sp.ok}</p>}
         {sp.error && <p role="alert" className="rounded-md bg-[var(--bad-soft)] px-3 py-2 text-[13px] text-[var(--bad)]">{sp.error}</p>}
 

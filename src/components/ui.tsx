@@ -80,8 +80,8 @@ export function PageHeader({ title, description, actions }: { title: string; des
   return (
     <div className="mb-5 flex flex-wrap items-end gap-3">
       <div className="min-w-0 flex-1">
-        <h1 className="text-[20px] font-semibold tracking-tight">{title}</h1>
-        {description && <p className="mt-0.5 max-w-2xl text-[13px] text-[var(--muted)]">{description}</p>}
+        <h1 className="display text-[30px] sm:text-[36px]">{title}</h1>
+        {description && <p className="mt-2 max-w-2xl text-[14px] text-[var(--muted)]">{description}</p>}
       </div>
       {actions}
     </div>
@@ -114,8 +114,8 @@ export function Switch({ name, label, hint, defaultChecked }: { name: string; la
 export function StatusBadge({ status, needsApproval }: { status: string; needsApproval?: boolean }) {
   if (needsApproval) return <span className="badge badge-warn">Needs your OK</span>;
   const map: Record<string, [string, string]> = {
-    scheduled: ["badge-accent", "Scheduled"],
-    publishing: ["badge-accent", "Publishing"],
+    scheduled: ["badge-info", "Scheduled"],
+    publishing: ["badge-info", "Publishing"],
     published: ["badge-good", "Posted"],
     draft: ["", "Draft"],
     cancelled: ["", "Removed"],

@@ -54,7 +54,7 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
       </header>
 
       <main className="mx-auto max-w-[960px] px-4 py-10">
-        <h1 className="text-[24px] font-semibold tracking-tight">Billing</h1>
+        <h1 className="display text-[34px]">Billing</h1>
         {sp.error && <p role="alert" className="mt-4 rounded-md bg-[var(--bad-soft)] px-3 py-2 text-[13px] text-[var(--bad)]">{sp.error}</p>}
         {sp.checkout === "cancelled" && <p className="mt-4 rounded-md bg-[var(--side)] px-3 py-2 text-[13px] text-[var(--muted)]">Checkout cancelled. Nothing was charged.</p>}
         {waitingForWebhook && <p role="status" className="mt-4 rounded-md bg-[var(--accent-soft)] px-3 py-2 text-[13px] text-[var(--accent)]">Payment received. Finishing setup, this page refreshes in a moment…</p>}

@@ -28,6 +28,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
 
   return (
     <div className="max-w-3xl space-y-8">
+      <h1 className="display text-[34px]">Settings</h1>
       <Flash ok={sp.ok ?? (sp.connected ? `Connected ${sp.connected}.` : undefined)} error={sp.error} />
       {/* On phones the bottom tab bar has no room for these. */}
       <nav className="flex gap-2 md:hidden">
@@ -37,7 +38,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       </nav>
 
       <section>
-        <h2 className="mb-2 text-lg font-semibold">Status</h2>
+        <h2 className="display mb-3 text-[24px]">Status</h2>
         <ul className="card divide-y divide-line text-sm">
           {checks.map((c) => (
             <li key={c.label} className="flex gap-3 p-3">
@@ -53,7 +54,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       </section>
 
       <section>
-        <h2 className="mb-2 text-lg font-semibold">Publishing mode</h2>
+        <h2 className="display mb-3 text-[24px]">Publishing mode</h2>
         <div className="card flex flex-wrap items-center gap-3 p-3 text-sm">
           <div className="min-w-0 flex-1">
             <div className="font-medium">{approvalOn ? "Approval required" : "Auto mode"}{!ent.features.autoMode && pro("Auto mode")}</div>
@@ -64,7 +65,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       </section>
 
       <section>
-        <h2 className="mb-2 text-lg font-semibold">Wording you asked for</h2>
+        <h2 className="display mb-3 text-[24px]">Wording you asked for</h2>
         {s.styleNotes.length ? (
           <ul className="card divide-y divide-line text-sm">
             {s.styleNotes.map((n, i) => (
@@ -80,7 +81,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       </section>
 
       <section id="accounts" className="scroll-mt-6">
-        <h2 className="mb-2 text-lg font-semibold">Accounts</h2>
+        <h2 className="display mb-3 text-[24px]">Accounts</h2>
         <div className="card divide-y divide-line text-sm">
           {(["linkedin", "x"] as const).map((p) => {
             const a = acct(p);
@@ -99,7 +100,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       </section>
 
       <section>
-        <h2 className="mb-2 text-lg font-semibold">Posting schedule</h2>
+        <h2 className="display mb-3 text-[24px]">Posting schedule</h2>
         <form action={saveSlotsAction} className="card space-y-2 p-4">
           <p className="text-sm text-muted">One slot per line, in {s.timezone}: <code>platform days time</code>. Autopilot fills these slots {s.horizonDays} day(s) ahead.</p>
           <textarea name="slots" rows={5} defaultValue={formatSlots(s.slots)} className="textarea font-mono text-sm" />
@@ -108,7 +109,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       </section>
 
       <section>
-        <h2 className="mb-2 text-lg font-semibold">Fast lane{!ent.features.fastLane && pro("The fast lane")}</h2>
+        <h2 className="display mb-3 text-[24px]">Fast lane{!ent.features.fastLane && pro("The fast lane")}</h2>
         <form action={saveFastLaneAction} className="card space-y-3 p-4 text-sm">
           <p className="text-muted">When a breaking story is a clear opportunity for builders, post about it soon instead of waiting for the next slot. You get the lead time below (and a Telegram Remove button) to veto it.</p>
           <label className="flex items-center gap-2"><input type="checkbox" name="fl_enabled" defaultChecked={s.fastLane.enabled && ent.features.fastLane} disabled={!ent.features.fastLane} /> Fast lane on</label>
@@ -128,7 +129,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       </section>
 
       <section id="profile" className="scroll-mt-6">
-        <h2 className="mb-2 text-lg font-semibold">You and your voice</h2>
+        <h2 className="display mb-3 text-[24px]">You and your voice</h2>
         <form action={saveProfileAction} className="card space-y-3 p-4 text-sm">
           <div className="grid gap-3 sm:grid-cols-2">
             <div><label className="label">Name</label><input name="name" defaultValue={s.profile.name} className="input" /></div>
@@ -172,7 +173,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       </section>
 
       <section id="telegram" className="scroll-mt-6">
-        <h2 className="mb-2 text-lg font-semibold">Telegram</h2>
+        <h2 className="display mb-3 text-[24px]">Telegram</h2>
         <div className="card space-y-3 p-4 text-sm">
           <p className="text-muted">Get every new post in Telegram with Approve and Remove buttons, and message the bot to add notes or ask for a post. Free.</p>
           {user.telegramChatId ? (
@@ -192,7 +193,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       </section>
 
       <section>
-        <h2 className="mb-2 text-lg font-semibold">News sources <span className="text-sm font-normal text-muted">· {sources.filter((x) => x.url !== "tips://manual").length} of {ent.quota.feeds}</span></h2>
+        <h2 className="display mb-3 text-[24px]">News sources <span className="text-sm font-normal text-muted">· {sources.filter((x) => x.url !== "tips://manual").length} of {ent.quota.feeds}</span></h2>
         <ul className="card divide-y divide-line text-sm">
           {sources.map((src) => (
             <li key={src.id} className="flex items-center gap-3 p-3">

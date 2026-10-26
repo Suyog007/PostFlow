@@ -19,7 +19,7 @@ export default async function CreatePage({ searchParams }: { searchParams: Promi
     <div className="max-w-3xl space-y-8">
       <Flash ok={sp.ok} error={sp.error} />
       <section>
-        <h1 className="mb-1 text-lg font-semibold">Create a post</h1>
+        <h1 className="display mb-2 text-[34px]">Create a post</h1>
         <p className="mb-4 text-sm text-muted">Give me an idea, a link, or a link with your angle. I write it for each platform, the reviewer checks it, and it goes on the calendar unless you ask for a draft.</p>
         <form action={createPostAction} className="card space-y-3 p-4 text-sm">
           <textarea name="text" rows={5} required placeholder={"An idea: Most teams add caching before they measure. Here is what I check first.\nA link (an article or an X post): https://x.com/jack/status/...\nA link with your angle: https://example.com/article  the pricing change matters more than the model"} className="textarea" />

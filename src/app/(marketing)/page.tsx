@@ -1,7 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { Bricolage_Grotesque, Courier_Prime, Inter } from "next/font/google";
 import { isLoggedIn } from "@/server/auth";
 import { signupsOpen } from "@/server/users";
 import { Logo } from "@/components/ui";
@@ -10,12 +9,6 @@ import { WaitlistForm } from "@/components/landing/waitlist-form";
 import { LandingMotion } from "@/components/landing/motion";
 import { DeskNav, DeskTabs, HeroDemo } from "@/components/landing/desk";
 import { TRIAL_DAYS } from "@/lib/pricing";
-
-// The landing page has its own type: a tight, characterful display face, a clean body face and a
-// typewriter face for the small notes. Downloaded at build time and served from this site.
-const display = Bricolage_Grotesque({ subsets: ["latin"], weight: ["700", "800"], variable: "--font-display", display: "swap" });
-const body = Inter({ subsets: ["latin"], variable: "--font-body", display: "swap" });
-const typed = Courier_Prime({ subsets: ["latin"], weight: ["400", "700"], variable: "--font-type", display: "swap" });
 
 const TITLE = "PostFlow · The news breaks. Your post is ready.";
 const DESCRIPTION =
@@ -95,7 +88,7 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
   const cta = open ? { href: "/signup?plan=pro&interval=year", label: `Start my ${TRIAL_DAYS}-day trial` } : { href: "#early-access", label: "Get early access" };
 
   return (
-    <div className={`desk ${display.variable} ${body.variable} ${typed.variable} min-h-screen text-[16px]`}>
+    <div className="desk min-h-screen text-[16px]">
       <a href="#main" className="skip-link">Skip to content</a>
       <script
         type="application/ld+json"

@@ -17,7 +17,7 @@ export default async function NotesPage({ searchParams }: { searchParams: Promis
   return (
     <div className="max-w-3xl">
       <Flash ok={sp.ok} error={sp.error} />
-      <h1 className="mb-1 text-lg font-semibold">Notes</h1>
+      <h1 className="display mb-2 text-[34px]">Notes</h1>
       <p className="mb-4 text-sm text-muted">
         This is how your real work becomes posts. Jot what you built, learned or noticed, in rough words. The writer may only claim what is in your note, so details (numbers, tools, what went wrong) make better posts.
         You can also message these to your Telegram bot.

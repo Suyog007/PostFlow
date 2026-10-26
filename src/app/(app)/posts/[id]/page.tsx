@@ -69,7 +69,7 @@ export default async function PostPage({ params, searchParams }: { params: Promi
 
       <div className="mb-4 flex flex-wrap items-center gap-2.5">
         <PlatformGlyph platform={p.platform} size={22} />
-        <h1 className="text-[18px] font-semibold tracking-tight">{platformName} post</h1>
+        <h1 className="display text-[28px]">{platformName} post</h1>
         <StatusBadge status={p.status} needsApproval={needsApproval} />
         {p.fast && <span className="badge badge-warn"><Icon name="bolt" size={11} />Fast lane</span>}
         {r.alternative && <span className="badge">2 versions</span>}

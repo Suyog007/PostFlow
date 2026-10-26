@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { body, display, typed } from "./fonts";
 
 // Netlify sets URL to the site's main address; APP_URL is the app's own setting.
 const SITE_URL = process.env.APP_URL || process.env.URL || "http://localhost:3000";
@@ -19,7 +20,7 @@ const THEME_SCRIPT = `try{var t=localStorage.getItem("postflow-theme");if(t==="l
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     // The theme script sets data-theme before the first paint, so a chosen theme never flashes the other one.
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning className={`${display.variable} ${body.variable} ${typed.variable}`}>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
       </head>

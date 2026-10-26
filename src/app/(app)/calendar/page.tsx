@@ -216,7 +216,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
             return (
               <div key={d.toISODate()} className="border-l border-[var(--line)] px-2 py-2 text-center">
                 <div className="text-[11px] font-medium uppercase tracking-wide text-[var(--subtle)]">{d.toFormat("ccc")}</div>
-                <div className={`mx-auto mt-0.5 flex h-7 w-7 items-center justify-center rounded-full text-[14px] font-semibold tnum ${isToday ? "bg-[var(--ink)] text-[var(--bg)]" : ""}`}>{d.day}</div>
+                <div className={`mx-auto mt-0.5 flex h-7 w-7 items-center justify-center rounded-full text-[14px] font-semibold tnum ${isToday ? "bg-[var(--accent)] text-[var(--accent-ink)]" : ""}`}>{d.day}</div>
               </div>
             );
           })}
