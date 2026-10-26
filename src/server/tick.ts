@@ -2,7 +2,7 @@ import { and, desc, eq, gt, inArray, isNull } from "drizzle-orm";
 import { db, schema, sqlClient } from "./db/client";
 import { collectFeeds, seedSourcesIfEmpty } from "./collect";
 import { analyzeBatch } from "./analyze";
-import { fillCalendar, fillNowDays, rejectAndReplace, repeatedQueuedPosts, rewriteFresh, weakQueuedPosts, type FillResult } from "./generate";
+import { fillCalendar, fillNowDays, extraQueuedLessons, rejectAndReplace, repeatedQueuedPosts, rewriteFresh, weakQueuedPosts, type FillResult } from "./generate";
 import { env } from "./env";
 import { formatLocal } from "./slots";
 import { processRequests } from "./requests";
@@ -220,7 +220,9 @@ export async function refreshQueuedForUser(userId: string, opts: { budgetMs?: nu
         let swapped = 0;
         // The same story told twice (on X and LinkedIn, or from two articles) is swapped for a different story first.
         // So is a story that no longer clears the bar (the scorer is stricter about routine releases now).
-        const repeats = new Set([...(await repeatedQueuedPosts()), ...(await weakQueuedPosts(await getSettings()))]);
+        // And written lessons beyond one a day give their slot back to news.
+        const s = await getSettings();
+        const repeats = new Set([...(await repeatedQueuedPosts()), ...(await weakQueuedPosts(s)), ...(await extraQueuedLessons(s))]);
         for (const q of queued) {
           if (Date.now() > deadline) break;
           if (repeats.has(q.id)) {
@@ -240,7 +242,7 @@ export async function refreshQueuedForUser(userId: string, opts: { budgetMs?: nu
             log.warn("rewrite_failed", { postId: q.id, error: (err as Error).message });
           }
         }
-        const summary = `Rewrote ${rewritten} queued post${rewritten === 1 ? "" : "s"} in the new style${kept ? `, and kept ${kept} where the new draft was not better` : ""}.${repeats.size ? ` ${repeats.size} repeated a story already told or was not interesting enough: ${swapped} swapped for a different story${repeats.size - swapped ? `, ${repeats.size - swapped} removed (nothing new was strong enough)` : ""}.` : ""}`;
+        const summary = `Rewrote ${rewritten} queued post${rewritten === 1 ? "" : "s"} in the new style${kept ? `, and kept ${kept} where the new draft was not better` : ""}.${repeats.size ? ` ${repeats.size} repeated a story, was not interesting enough or was one lesson too many for the day: ${swapped} swapped for a different story${repeats.size - swapped ? `, ${repeats.size - swapped} removed (nothing new was strong enough)` : ""}.` : ""}`;
         await addEvent("refresh_done", summary);
         await notifyText(`✅ ${summary}\n\nSend /queue to see them.`).catch(warnOnError("notify_failed", { what: "refresh done" }));
         return { rewritten, kept };

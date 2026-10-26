@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DateTime } from "luxon";
 import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lte, notInArray, sql } from "drizzle-orm";
 import { db, schema } from "./db/client";
 import { uid } from "./context";
@@ -206,14 +207,27 @@ async function pickEvergreenTopic(s: Settings, platform: Platform): Promise<Mate
   const recent = await db()
     .select({ topic: schema.posts.topic, text: schema.posts.text })
     .from(schema.posts)
-    .where(and(await mine(schema.posts), eq(schema.posts.platform, platform), eq(schema.posts.pillar, "learning")))
+    .where(and(await mine(schema.posts), eq(schema.posts.pillar, "learning")))
     .orderBy(desc(schema.posts.createdAt))
     .limit(25);
+  // What people are talking about this week, so the lesson explains the idea behind a real story instead of a generic tutorial.
+  const week = await db()
+    .select({ title: schema.items.title })
+    .from(schema.items)
+    .where(and(await mine(schema.items), gte(schema.items.relevance, 7), gte(schema.items.publishedAt, new Date(Date.now() - 7 * 86_400_000))))
+    .orderBy(desc(schema.items.relevance), desc(schema.items.publishedAt))
+    .limit(15);
   const res = await runTask({
     task: "pick_topic",
     role: "writer",
-    system: `Pick ONE specific, genuinely useful topic for a short lesson that teaches the owner's audience one thing in plain words. It must sit inside the owner's expertise, be easy for a beginner to follow, and be something a working developer or founder can use (a technique, a mental model, a common mistake, how a tool or concept works). Prefer "what is X and when do you need it" and "the mistake people make with X" over deep internals. Not a news item. Not a personal story.\n${profileBlock(s)}\nDo not repeat or closely overlap any recent topic.`,
-    user: `Recent topics:\n${recent.map((r) => `- ${r.topic ?? r.text.slice(0, 80)}`).join("\n") || "(none)"}`,
+    system: `Pick ONE topic for a short lesson that teaches the owner's audience one thing in plain words.
+
+Best: the idea BEHIND one of this week's stories, so the lesson feels timely and people want it now. A supply-chain attack on a popular package → "what a supply-chain attack is and how one bad dependency reaches your app"; a certificate authority caught issuing bad certificates → "what a certificate authority actually vouches for"; a decompression bug in a common library → "what a decompression bomb is". Name the story in the angle so the writer can mention it in one line.
+Otherwise: a common, costly mistake or a concept many developers half-understand. Never a generic "how to use <tool> for <task>" tutorial (no "Using Next.js middleware for auth", "Deploying X on Netlify", "Managing rate limits in a SaaS"). Those read like documentation, not a post.
+It must sit inside the owner's expertise and be easy for a beginner to follow. Not a personal story.
+${profileBlock(s)}
+Do not repeat or closely overlap any recent topic.`,
+    user: `This week's strongest stories:\n${week.map((w) => `- ${w.title}`).join("\n") || "(none)"}\n\nRecent lesson topics (do not repeat):\n${recent.map((r) => `- ${r.topic ?? r.text.slice(0, 80)}`).join("\n") || "(none)"}`,
     output: topicOut,
     maxTokens: 300,
     temperature: 0.9,
@@ -260,7 +274,8 @@ async function pillarOrder(s: Settings, now: Date): Promise<Pillar[]> {
   const rows = await db()
     .select({ pillar: schema.posts.pillar, n: sql<number>`count(*)` })
     .from(schema.posts)
-    .where(and(await mine(schema.posts), gte(schema.posts.scheduledAt, new Date(now.getTime() - 14 * 86_400_000)), notInArray(schema.posts.status, ["rejected", "cancelled"])))
+    // Only posts that went out or are queued: swapped-out and rejected drafts do not count toward the mix.
+    .where(and(await mine(schema.posts), gte(schema.posts.scheduledAt, new Date(now.getTime() - 14 * 86_400_000)), inArray(schema.posts.status, ["scheduled", "publishing", "published", "unconfirmed"])))
     .groupBy(schema.posts.pillar);
   const counts = new Map(rows.map((r) => [r.pillar, Number(r.n)]));
   const total = [...counts.values()].reduce((a, b) => a + b, 0) || 1;
@@ -307,13 +322,61 @@ export async function chooseMaterial(platform: Platform, slotAt: Date, s: Settin
   const hit = await pickVerified(urgent);
   if (hit) return itemMaterial(hit.it, hit.v);
   const order = await pillarOrder(await effectivePillars(s, platform), now);
+  // News comes before a lesson written from scratch: a written lesson only takes a slot when there is no
+  // strong news for it, and at most one a day across both platforms. Your own learning notes are not held back.
+  let lessonWanted = false;
   for (const p of order) {
+    if (p === "learning") {
+      const n = await pickNote(platform, "learning");
+      if (n) return noteMaterial(n);
+      lessonWanted = true;
+      continue;
+    }
     const m = await pickByPillar(platform, p, s, now, slotAt);
     if (m) return m;
   }
   // No learning share, but "fill empty slots" is on: a lesson is better than an empty slot.
-  if (s.fillerPosts && !order.includes("learning")) return pickEvergreenTopic(s, platform);
+  if ((lessonWanted || s.fillerPosts) && !(await lessonCapReached(slotAt, s))) return pickEvergreenTopic(s, platform);
   return null;
+}
+
+/** At most this many written-from-scratch lessons a day, across LinkedIn and X together. */
+export const MAX_LESSONS_PER_DAY = 1;
+
+async function lessonCapReached(at: Date, s: Settings): Promise<boolean> {
+  const day = DateTime.fromJSDate(at, { zone: s.timezone });
+  const rows = await db()
+    .select({ n: sql<number>`count(*)` })
+    .from(schema.posts)
+    .where(
+      and(
+        await mine(schema.posts),
+        eq(schema.posts.pillar, "learning"),
+        isNull(schema.posts.noteId),
+        inArray(schema.posts.status, ["scheduled", "publishing", "published", "unconfirmed"]),
+        gte(schema.posts.scheduledAt, day.startOf("day").toJSDate()),
+        lte(schema.posts.scheduledAt, day.endOf("day").toJSDate()),
+      ),
+    );
+  return Number(rows[0].n) >= MAX_LESSONS_PER_DAY;
+}
+
+/** Queued written lessons beyond one a day (the earliest each day stays). Approved or edited ones are never listed. */
+export async function extraQueuedLessons(s: Settings): Promise<string[]> {
+  const rows = await db()
+    .select({ id: schema.posts.id, at: schema.posts.scheduledAt, approvedAt: schema.posts.approvedAt, userEdited: schema.posts.userEdited })
+    .from(schema.posts)
+    .where(and(await mine(schema.posts), eq(schema.posts.status, "scheduled"), eq(schema.posts.pillar, "learning"), isNull(schema.posts.noteId)))
+    .orderBy(asc(schema.posts.scheduledAt));
+  const kept = new Map<string, number>();
+  const extra: string[] = [];
+  for (const r of rows) {
+    const day = DateTime.fromJSDate(r.at, { zone: s.timezone }).toISODate()!;
+    const n = kept.get(day) ?? 0;
+    if (n >= MAX_LESSONS_PER_DAY && !r.approvedAt && !r.userEdited) extra.push(r.id);
+    else kept.set(day, n + 1);
+  }
+  return extra;
 }
 
 // ---------------------------------------------------------------------------
