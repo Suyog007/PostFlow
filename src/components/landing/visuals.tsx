@@ -135,3 +135,59 @@ export function RejectedCard() {
     </div>
   );
 }
+
+/**
+ * What a post looks like with its picture. The illustration is drawn here in the same calm, clay-like
+ * house style the real pictures use (one object, one accent colour, no words in the image).
+ */
+export function PicturePostDemo() {
+  return (
+    <figure className="overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--surface)] shadow-[0_1px_0_var(--line),0_24px_48px_-24px_rgba(16,24,40,.25)]">
+      <div className="flex items-center gap-3 p-4">
+        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--accent-soft)] text-[14px] font-semibold text-[var(--accent)]" aria-hidden="true">YN</span>
+        <div className="min-w-0">
+          <p className="text-[14px] font-semibold">Your Name</p>
+          <p className="truncate text-[12px] text-[var(--subtle)]">Engineer building SaaS products · now</p>
+        </div>
+        <span className="ml-auto"><PlatformGlyph platform="linkedin" size={18} /></span>
+      </div>
+      <p className="px-4 pb-3 text-[14px] leading-relaxed">
+        A certificate authority signed certificates with keys an attacker could crack in minutes.
+        <br />
+        <br />
+        eMudhra, a company browsers trusted to vouch for websites, is leaving the business after it happened, per The Register. If your site uses one of its certificates, replace it this week.
+      </p>
+      <svg viewBox="0 0 640 360" role="img" aria-label="Illustration: a huge round vault door held shut by one small orange paper clip" className="block h-auto w-full">
+        <defs>
+          <radialGradient id="pp-bg" cx="50%" cy="40%" r="75%">
+            <stop offset="0%" stopColor="#dfe7ea" />
+            <stop offset="100%" stopColor="#b9c7cd" />
+          </radialGradient>
+          <radialGradient id="pp-door" cx="40%" cy="35%" r="70%">
+            <stop offset="0%" stopColor="#f3f5f6" />
+            <stop offset="100%" stopColor="#a9b5bb" />
+          </radialGradient>
+          <filter id="pp-soft" x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="0" dy="14" stdDeviation="14" floodColor="#33434b" floodOpacity=".28" />
+          </filter>
+        </defs>
+        <rect width="640" height="360" fill="url(#pp-bg)" />
+        <ellipse cx="320" cy="318" rx="170" ry="16" fill="#5b6b72" opacity=".18" />
+        <g filter="url(#pp-soft)">
+          <circle cx="320" cy="178" r="128" fill="url(#pp-door)" />
+          <circle cx="320" cy="178" r="104" fill="none" stroke="#9aa8ae" strokeWidth="6" opacity=".7" />
+          <circle cx="320" cy="178" r="30" fill="#dfe5e8" stroke="#9aa8ae" strokeWidth="5" />
+          {[0, 60, 120, 180, 240, 300].map((a) => (
+            <rect key={a} x="316" y="96" width="8" height="52" rx="4" fill="#9aa8ae" transform={`rotate(${a} 320 178)`} />
+          ))}
+        </g>
+        {/* The door's seam on the right, and the one paper clip holding it shut. */}
+        <path d="M446 120 v116" stroke="#8e9ca3" strokeWidth="4" strokeLinecap="round" opacity=".8" />
+        <g transform="translate(428 158) rotate(-8)">
+          <path d="M8 0 h40 a14 14 0 0 1 0 28 h-36 a9 9 0 0 1 0 -18 h30" fill="none" stroke="#e8743b" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" />
+        </g>
+      </svg>
+      <figcaption className="px-4 py-3 text-[12px] text-[var(--subtle)]">Every post gets a picture drawn for its point. No stock photos, no words in the image.</figcaption>
+    </figure>
+  );
+}

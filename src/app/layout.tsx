@@ -13,9 +13,16 @@ export const metadata: Metadata = {
 };
 export const viewport: Viewport = { width: "device-width", initialScale: 1 };
 
+/** Light, dark or the device's setting (no attribute), as picked with the theme toggle. */
+const THEME_SCRIPT = `try{var t=localStorage.getItem("postflow-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}`;
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    // The theme script sets data-theme before the first paint, so a chosen theme never flashes the other one.
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+      </head>
       <body className="min-h-screen">{children}</body>
     </html>
   );

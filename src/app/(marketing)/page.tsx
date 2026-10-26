@@ -6,26 +6,47 @@ import { signupsOpen } from "@/server/users";
 import { Icon, Logo, PlatformGlyph } from "@/components/ui";
 import { Pricing } from "@/components/landing/pricing";
 import { WaitlistForm } from "@/components/landing/waitlist-form";
-import { FlowDiagram, NewsCard, RejectedCard, Shot } from "@/components/landing/visuals";
+import { FlowDiagram, NewsCard, PicturePostDemo, RejectedCard, Shot } from "@/components/landing/visuals";
 import { LandingMotion, LandingNav } from "@/components/landing/motion";
 import { HeroDemo } from "@/components/landing/hero-demo";
 import { ScrollSteps } from "@/components/landing/scroll-steps";
 import { TelegramLive } from "@/components/landing/telegram-live";
 import { TRIAL_DAYS } from "@/lib/pricing";
 
+const TITLE = "PostFlow · Stay visible on LinkedIn and X without writing every post";
+const DESCRIPTION =
+  "PostFlow finds the news in your field worth talking about, writes a clear post with a picture for LinkedIn and X, checks every fact, and sends it to Telegram for your one-tap OK.";
+
 export const metadata: Metadata = {
-  title: "PostFlow · LinkedIn and X posts from your notes, checked before they go out",
-  description:
-    "PostFlow keeps your LinkedIn and X calendar filled with posts written from your own notes and the news in your field. A second AI checks every draft for facts and filler, and nothing posts until you approve it.",
+  title: TITLE,
+  description: DESCRIPTION,
   robots: { index: true, follow: true },
+  alternates: { canonical: "/" },
   openGraph: {
+    type: "website",
+    url: "/",
+    siteName: "PostFlow",
     title: "PostFlow",
-    description: "LinkedIn and X posts written from your notes, checked before they go out.",
-    images: [{ url: "/landing/calendar-light.png", width: 2560, height: 1600 }],
+    description: "News worth sharing, written clearly, checked, and posted with a picture. You approve from Telegram.",
+    images: [{ url: "/landing/calendar-light.png", width: 2560, height: 1600, alt: "The PostFlow calendar with a week of LinkedIn and X posts" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "PostFlow",
+    description: "News worth sharing, written clearly, checked, and posted with a picture. You approve from Telegram.",
+    images: ["/landing/calendar-light.png"],
   },
 };
 
-const FAQ: { q: string; a: ReactNode }[] = [
+const FAQ: { q: string; a: string }[] = [
+  {
+    q: "Where does the news come from?",
+    a: "Tech news sites, release feeds and Hacker News in your field, plus anything you send it. Each story is scored for whether developers and founders will care. Routine version bumps and small patches are skipped. A story is only posted once other publishers confirm it, and each story is posted once, not once per platform.",
+  },
+  {
+    q: "Where do the pictures come from?",
+    a: "Each post gets a picture drawn for its point by an image model, in one calm, consistent style: simple objects, one accent colour, no words in the image. It is not a stock photo and never a news site's photo, so there is nothing to credit. Don't like it? Tap \"New picture\" or send the post without one.",
+  },
   {
     q: "Will it post something I haven't seen?",
     a: "Not unless you choose that. New accounts start in approval mode: posts are written and placed on your calendar, but nothing is published until you approve it in the app or with one tap in Telegram. On Pro you can switch to auto mode later, where reviewed posts go out on schedule unless you remove them.",
@@ -133,10 +154,21 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
 
   return (
     <div className="bg-[var(--bg)] text-[15px]">
+      <a href="#main" className="skip-link">Skip to content</a>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "FAQPage",
+            mainEntity: FAQ.map((f) => ({ "@type": "Question", name: f.q, acceptedAnswer: { "@type": "Answer", text: f.a } })),
+          }).replace(/</g, "\\u003c"),
+        }}
+      />
       <LandingMotion />
       <LandingNav loggedIn={loggedIn} open={open} primary={primary} />
 
-      <main>
+      <main id="main" tabIndex={-1} className="outline-none">
         {deleted && (
           <p role="status" className="mx-auto mt-4 max-w-[1120px] rounded-md bg-[var(--good-soft)] px-4 py-2 text-[13px] text-[var(--good)]">Your account and its data were deleted, and your subscription was cancelled.</p>
         )}
@@ -146,13 +178,13 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
           <div className="relative mx-auto max-w-[1120px]">
             <div className="mx-auto max-w-[900px] text-center">
               <p className="rise mb-4 inline-flex items-center gap-2 rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-1 text-[13px] text-[var(--muted)]" style={{ "--d": "0ms" } as React.CSSProperties}>
-                <span className="h-1.5 w-1.5 rounded-full bg-[var(--good)]" /> For founders, engineers and consultants
+                <span className="h-1.5 w-1.5 rounded-full bg-[var(--good)]" /> For developers, founders and consultants
               </p>
               <h1 className="rise text-[38px] font-semibold leading-[1.08] tracking-[-0.02em] sm:text-[52px]" style={{ "--d": "90ms" } as React.CSSProperties}>
-                A week of LinkedIn and X posts, written from your notes and checked before they go out.
+                Stay visible on LinkedIn and X without writing every post.
               </h1>
               <p className="rise mx-auto mt-5 max-w-[660px] text-[16px] leading-relaxed text-[var(--muted)] sm:text-[18px]" style={{ "--d": "190ms" } as React.CSSProperties}>
-                PostFlow keeps your calendar filled a few days ahead with posts about your work, the news in your field and what you have learned. A second AI reviews every draft for facts and filler. Nothing goes out until you approve it.
+                PostFlow finds the news in your field worth talking about, writes a clear post with a picture for each one, and checks every fact. Ten minutes before it goes out, Telegram asks for your OK.
               </p>
               <div className="rise mt-7 flex flex-col justify-center gap-3 sm:flex-row" style={{ "--d": "280ms" } as React.CSSProperties}>
                 <a href={primary.href} className="btn btn-primary h-11 px-5 text-[15px]">{primary.label}<Icon name="right" size={15} className="cta-arrow" /></a>
@@ -169,6 +201,7 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
               <span className="flex items-center gap-2"><PlatformGlyph platform="linkedin" size={18} /> Publishes to LinkedIn</span>
               <span className="flex items-center gap-2"><PlatformGlyph platform="x" size={18} /> Publishes to X</span>
               <span className="flex items-center gap-2"><Icon name="send" size={17} /> Approve from Telegram</span>
+              <span className="flex items-center gap-2"><Icon name="draft" size={17} /> A picture with every post</span>
               <span className="flex items-center gap-2"><Icon name="clock" size={17} /> Runs in your timezone</span>
             </div>
           </div>
@@ -178,7 +211,7 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
         <section className="border-y border-[var(--line)] bg-[var(--surface)] px-4 py-16">
           <div className="mx-auto grid max-w-[1120px] gap-8 md:grid-cols-3">
             {[
-              { t: "You do work worth talking about.", b: "You ship, fix, learn and decide things every week. Almost none of it turns into a post, because writing one takes an evening." },
+              { t: "You know what's happening in your field.", b: "You read about the big bug, the price cut, the new API before most people do. Almost none of it turns into a post, because writing one takes an evening." },
               { t: "Schedulers still leave a blank box.", b: "A queue is only useful once you have something to put in it. The hard part was never pressing publish." },
               { t: "AI writers fill the box with filler.", b: "Generic hooks, invented stories and confident claims nobody checked. That costs more trust than posting nothing." },
             ].map((x, i) => (
@@ -201,6 +234,36 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
           <div className="mt-16 sm:mt-24">
             <Reveal>
               <FlowDiagram />
+            </Reveal>
+          </div>
+        </Section>
+
+        {/* ---------- features ---------- */}
+        <Section
+          id="features"
+          title="What PostFlow does for you every week."
+          intro="Built around one idea: a post is only worth sending if your audience gets something from it."
+          className="border-t border-[var(--line)]"
+        >
+          <div className="grid gap-10 lg:grid-cols-[1.1fr_1fr] lg:items-center lg:gap-16">
+            <div className="grid gap-px overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--line)] sm:grid-cols-2">
+              {[
+                { i: "chart" as const, t: "Picks the news worth sharing", b: "Stories are scored for whether developers and founders will care. Routine version bumps are skipped, and a story only goes out once other publishers confirm it." },
+                { i: "link" as const, t: "Digs deeper on any link", b: "Send a link, even an X post. PostFlow reads it, the page it points to and other coverage, then tells you plainly if it isn't worth a post." },
+                { i: "draft" as const, t: "A picture for every post", b: "Each post gets an image drawn for its point, in one calm style. No stock photos, no publisher's photos, no words in the image." },
+                { i: "notes" as const, t: "Lessons that explain the news", b: "At most one a day: the idea behind this week's story, in plain words, like what a supply-chain attack actually is." },
+                { i: "repost" as const, t: "One story, one post", b: "The same story never shows up twice, across LinkedIn and X, even when ten outlets cover it." },
+                { i: "check" as const, t: "Clear to someone new", b: "Acronyms are spelled out and products are named for what they are. Drafts a newcomer would have to read twice are rewritten." },
+              ].map((g, i) => (
+                <div key={g.t} className="reveal bg-[var(--surface)] p-6" style={{ "--d": `${(i % 2) * 90}ms` } as React.CSSProperties}>
+                  <Icon name={g.i} size={20} className="text-[var(--accent)]" />
+                  <h3 className="mt-3 text-[16px] font-semibold">{g.t}</h3>
+                  <p className="mt-1.5 text-[14px] leading-relaxed text-[var(--muted)]">{g.b}</p>
+                </div>
+              ))}
+            </div>
+            <Reveal>
+              <PicturePostDemo />
             </Reveal>
           </div>
         </Section>
@@ -279,8 +342,8 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
             <Feature
               flip
               title="Run it from Telegram."
-              body="About ten minutes before each post goes out, the bot sends you the full text with buttons. Approve it on the bus, or send a quick message about what you shipped and it becomes material for an upcoming post."
-              points={["Approve, remove, reject or post early with one tap", "Any message becomes a note", "/queue shows the next days, /pause stops everything instantly"]}
+              body="About ten minutes before each post goes out, the bot sends you the full text and its picture, with buttons. Approve it on the bus, or send a link or a quick note and it becomes a post."
+              points={["Approve, remove, find another story or post early with one tap", "New wording or a new picture whenever you want one", "/today shows today's posts with their pictures, /pause stops everything"]}
               visual={<TelegramLive />}
             />
             <Feature
@@ -302,7 +365,7 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
           <div className="grid gap-px overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--line)] sm:grid-cols-2 lg:grid-cols-3">
             {[
               { i: "notes" as const, t: "No invented experience", b: "First-person stories only come from your notes. Evergreen posts stay inside the expertise you listed." },
-              { i: "repost" as const, t: "No repeats", b: "Near-duplicates of your recent posts are caught before they are scheduled." },
+              { i: "repost" as const, t: "No repeats", b: "Each story is told once across LinkedIn and X, and near-duplicates of your recent posts are caught before they are scheduled." },
               { i: "check" as const, t: "No double posting", b: "If a platform does not confirm a post, it is marked for you to check instead of being sent again." },
               { i: "pause" as const, t: "One switch to stop", b: "Pause everything from the app or Telegram. Removed posts are never refilled behind your back." },
               { i: "shield" as const, t: "Your accounts stay yours", b: "Official sign-in only. Access tokens are encrypted at rest, and you can disconnect at any time." },
@@ -381,7 +444,7 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
             <span className="font-semibold">PostFlow</span>
           </div>
           <nav className="flex flex-wrap gap-x-6 gap-y-2">
-            {[["#how", "How it works"], ["#review", "Reviewer"], ["#pricing", "Pricing"], ["#faq", "FAQ"]].map(([href, label]) => (
+            {[["#how", "How it works"], ["#features", "Features"], ["#review", "Reviewer"], ["#pricing", "Pricing"], ["#faq", "FAQ"]].map(([href, label]) => (
               <a key={href} href={href} className="hover:text-[var(--ink)]">{label}</a>
             ))}
             <Link href="/login" className="hover:text-[var(--ink)]">Sign in</Link>

@@ -26,8 +26,9 @@
   --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
   color-scheme: light;
 }
+/* Dark: follows the device unless a theme was picked with the toggle (data-theme on <html>). */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #0c0e12;
     --side: #11141a;
     --surface: #14181f;
@@ -50,6 +51,29 @@
     --x: #e8ebf0;
     color-scheme: dark;
   }
+}
+:root[data-theme="dark"] {
+    --bg: #0c0e12;
+    --side: #11141a;
+    --surface: #14181f;
+    --raised: #181d25;
+    --line: #232933;
+    --line-strong: #323a47;
+    --ink: #e8ebf0;
+    --muted: #9aa4b2;
+    --subtle: #6f7a8a;
+    --accent: #6f9bff;
+    --accent-ink: #0a1020;
+    --accent-soft: #172344;
+    --good: #4cc27c;
+    --good-soft: #0f2a1b;
+    --warn: #e5a24a;
+    --warn-soft: #2e2010;
+    --bad: #ff8b80;
+    --bad-soft: #321512;
+    --li: #5eaaf0;
+    --x: #e8ebf0;
+    color-scheme: dark;
 }
 
 @theme inline {
@@ -138,9 +162,15 @@ h1, h2, h3 { text-wrap: balance; }
 /* ---- landing page ---- */
 .only-dark { display: none; }
 @media (prefers-color-scheme: dark) {
-  .only-light { display: none; }
-  .only-dark { display: block; }
+  :root:not([data-theme="light"]) .only-light { display: none; }
+  :root:not([data-theme="light"]) .only-dark { display: block; }
 }
+:root[data-theme="dark"] .only-light { display: none; }
+:root[data-theme="dark"] .only-dark { display: block; }
+
+/* Skip link: hidden until focused with the keyboard. */
+.skip-link { position: absolute; left: 12px; top: -48px; z-index: 100; padding: 8px 14px; border-radius: 8px; background: var(--ink); color: var(--bg); font-size: 14px; transition: top .15s; }
+.skip-link:focus { top: 12px; }
 @media (prefers-reduced-motion: no-preference) {
   html:has(#early-access) { scroll-behavior: smooth; }
 }
