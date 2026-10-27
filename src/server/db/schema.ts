@@ -234,6 +234,24 @@ export const llmCalls = pgTable("llm_calls", {
   status: text("status").notNull(),
   error: text("error"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("llm_calls_at_idx").on(t.createdAt), index("llm_calls_user_at_idx").on(t.userId, t.createdAt)]);
+
+/** Attempt counters for sign-in, sign-up and email requests. Shared by every server instance. */
+export const rateLimits = pgTable("rate_limits", {
+  key: text("key").primaryKey(),
+  count: integer("count").notNull().default(0),
+  resetAt: timestamp("reset_at", { withTimezone: true }).notNull(),
+});
+
+/**
+ * Leases for work that must not run twice at once (the scheduler pass, one account's writer).
+ * A lease expires on its own, so a killed process never blocks the next one for long.
+ * Works through connection poolers, unlike session advisory locks.
+ */
+export const leases = pgTable("leases", {
+  name: text("name").primaryKey(),
+  holder: text("holder").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
 });
 
 

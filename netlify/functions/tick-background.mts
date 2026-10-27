@@ -1,11 +1,13 @@
 // Netlify background function: runs one scheduler pass (publish, collect, write, review).
 // Background functions may run for up to 15 minutes, which a normal request (~30 s) cannot.
+import { timingSafeEqual } from "node:crypto";
 import { fillNowForUser, refreshQueuedForUser, tick } from "../../src/server/tick";
 
 export default async (req: Request) => {
   const secret = process.env.CRON_SECRET;
-  const got = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
-  if (!secret || got !== secret) {
+  const got = Buffer.from(req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "");
+  const want = Buffer.from(secret ?? "");
+  if (!secret || got.length !== want.length || !timingSafeEqual(got, want)) {
     console.warn("tick-background: unauthorized call ignored");
     return;
   }

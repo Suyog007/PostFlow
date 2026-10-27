@@ -161,6 +161,14 @@ export async function consumeToken(raw: string, purpose: Purpose): Promise<UserR
   return row ? ((await findUser(row.userId)) ?? null) : null;
 }
 
+/** The user a valid, unused token belongs to, without using it up (to show a confirm page). */
+export async function peekTokenUser(raw: string, purpose: Purpose): Promise<UserRow | null> {
+  if (!/^[A-Za-z0-9_-]{20,100}$/.test(raw)) return null;
+  const row = await db().query.emailTokens.findFirst({ where: and(eq(schema.emailTokens.tokenHash, sha256(raw)), eq(schema.emailTokens.purpose, purpose)) });
+  if (!row || row.usedAt || row.expiresAt <= new Date()) return null;
+  return (await findUser(row.userId)) ?? null;
+}
+
 /** Checks a reset token without using it (to show the form). */
 export async function peekToken(raw: string, purpose: Purpose): Promise<boolean> {
   if (!/^[A-Za-z0-9_-]{20,100}$/.test(raw)) return false;
@@ -176,7 +184,7 @@ export async function sendVerificationEmail(user: UserRow) {
     to: user.email,
     subject: `Confirm your email for ${env().COMPANY_NAME}`,
     text: `Hi${user.name ? ` ${user.name}` : ""},\n\nConfirm your email address to finish setting up your account. The link works for 48 hours.`,
-    action: { label: "Confirm email", url: `${base()}/api/auth/verify?token=${token}` },
+    action: { label: "Confirm email", url: `${base()}/confirm-email?token=${token}` },
   });
 }
 
@@ -193,9 +201,31 @@ export async function sendPasswordReset(email: string) {
   });
 }
 
-export async function markVerified(userId: string) {
-  const [u] = await db().update(schema.users).set({ emailVerifiedAt: new Date(), updatedAt: new Date() }).where(eq(schema.users.id, userId)).returning();
+/**
+ * Marks the email confirmed and ends every existing session, including any session started at sign-up
+ * by someone who typed this address without owning it.
+ * With `clearPassword`, the password set at sign-up is removed too: the person who proved the inbox did
+ * not prove they chose that password, so they pick a new one (see confirm-email).
+ */
+export async function markVerified(userId: string, opts: { clearPassword?: boolean } = {}) {
+  const user = await findUser(userId);
+  if (!user) throw new AuthError("Account not found.");
+  const [u] = await db()
+    .update(schema.users)
+    .set({
+      emailVerifiedAt: user.emailVerifiedAt ?? new Date(),
+      sessionVersion: user.sessionVersion + 1,
+      ...(opts.clearPassword ? { passwordHash: null } : {}),
+      updatedAt: new Date(),
+    })
+    .where(eq(schema.users.id, userId))
+    .returning();
   return syncOwnerFlag(u);
+}
+
+/** A one-hour link to choose a password, for someone who just proved they own the inbox. */
+export async function issueResetToken(userId: string) {
+  return issueToken(userId, "reset");
 }
 
 /** New password; every other session is signed out. Proving the inbox also verifies the email. */

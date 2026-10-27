@@ -7,6 +7,7 @@ import { env } from "./env";
 import { setRequestUserResolver } from "./context";
 import { entitlementOf } from "./billing/plans";
 import { findUser, type UserRow } from "./users";
+import { hit } from "./rate-limit";
 
 const COOKIE = "pf_session";
 const MAX_AGE = 60 * 60 * 24 * 30;
@@ -22,18 +23,21 @@ export function authConfigured() {
   return Boolean(s && s.length >= 32);
 }
 
-// Best-effort limiter (per server instance). Passwords are hashed with scrypt, so guessing stays slow anyway.
-const attempts = new Map<string, { n: number; reset: number }>();
+/**
+ * The client's address. Netlify sets x-nf-client-connection-ip itself; x-forwarded-for can be
+ * prepended to by the client, so only its last hop (added by the proxy) is used as a fallback.
+ */
+export async function clientIp(): Promise<string> {
+  const h = await headers();
+  const nf = h.get("x-nf-client-connection-ip")?.trim();
+  if (nf) return nf;
+  const xff = h.get("x-forwarded-for")?.split(",").map((x) => x.trim()).filter(Boolean);
+  return xff?.at(-1) || h.get("x-real-ip")?.trim() || "local";
+}
+
+/** Counts an attempt from this address for `scope`; true once it is over `max` in the window. */
 export async function rateLimited(scope: string, max = 8, windowMs = 15 * 60_000): Promise<boolean> {
-  const ip = (await headers()).get("x-forwarded-for")?.split(",")[0]?.trim() || "local";
-  const key = `${scope}:${ip}`;
-  const now = Date.now();
-  const a = attempts.get(key);
-  if (!a || a.reset < now) {
-    attempts.set(key, { n: 1, reset: now + windowMs });
-    return false;
-  }
-  return ++a.n > max;
+  return hit(`${scope}:ip:${await clientIp()}`, max, windowMs);
 }
 
 export async function startSession(user: Pick<UserRow, "id" | "sessionVersion">) {

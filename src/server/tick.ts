@@ -1,6 +1,8 @@
 import { needsWelcome } from "./welcome";
-import { and, desc, eq, gt, inArray, isNull } from "drizzle-orm";
-import { db, schema, sqlClient } from "./db/client";
+import { and, desc, eq, gt, inArray, isNull, lt } from "drizzle-orm";
+import { db, schema } from "./db/client";
+import { acquireLease, withLease } from "./lease";
+import { pruneRateLimits } from "./rate-limit";
 import { collectFeeds, seedSourcesIfEmpty } from "./collect";
 import { analyzeBatch } from "./analyze";
 import { fillCalendar, fillNowDays, extraQueuedLessons, rejectAndReplace, repeatedQueuedPosts, rewriteFresh, weakQueuedPosts, type FillResult } from "./generate";
@@ -32,8 +34,9 @@ export interface TickResult {
   errors: string[];
 }
 
-const LOCK_KEY = 874_201;
-const USER_LOCK_KEY = 874_202;
+const TICK_LEASE = "tick";
+/** Model calls can overrun a budget (one call may take minutes), so leases outlive budgets by this much. */
+const LEASE_MARGIN_MS = 5 * 60_000;
 /** One user's writing pipeline may use at most this much of a pass, so nobody waits behind a slow account. */
 const PER_USER_BUDGET_MS = 90_000;
 
@@ -114,31 +117,15 @@ export async function runForUser(userId: string, opts: { budgetMs?: number } = {
   const out = empty();
   const deadline = Date.now() + (opts.budgetMs ?? PER_USER_BUDGET_MS);
   await withUser(userId, () => publishPhase(out));
-  await withUserLock(userId, () => withUser(userId, () => pipelinePhase(out, deadline)));
+  await withUserLock(userId, () => withUser(userId, () => pipelinePhase(out, deadline)), 0, opts.budgetMs ?? PER_USER_BUDGET_MS);
   await db().update(schema.users).set({ lastPipelineAt: new Date() }).where(eq(schema.users.id, userId));
   out.users = out.served = 1;
   return out;
 }
 
-/** Holds a per-account lock while `fn` runs, so "Fill now" and the scheduler never write the same slot twice. */
-async function withUserLock<T>(userId: string, fn: () => Promise<T>, waitMs = 0): Promise<T | null> {
-  const conn = await sqlClient().reserve();
-  try {
-    const until = Date.now() + waitMs;
-    for (;;) {
-      const [{ locked }] = (await conn`select pg_try_advisory_lock(${USER_LOCK_KEY}, hashtext(${userId})) as locked`) as unknown as { locked: boolean }[];
-      if (locked) break;
-      if (Date.now() >= until) return null;
-      await new Promise((r) => setTimeout(r, 3_000));
-    }
-    try {
-      return await fn();
-    } finally {
-      await conn`select pg_advisory_unlock(${USER_LOCK_KEY}, hashtext(${userId}))`.catch(warnOnError("user_unlock_failed", { userId }));
-    }
-  } finally {
-    conn.release();
-  }
+/** Holds this account's writer lease while `fn` runs, so "Fill now" and the scheduler never write the same slot twice. */
+async function withUserLock<T>(userId: string, fn: () => Promise<T>, waitMs = 0, budgetMs = PER_USER_BUDGET_MS): Promise<T | null> {
+  return withLease(`user:${userId}`, budgetMs + LEASE_MARGIN_MS, fn, waitMs);
 }
 
 /**
@@ -184,6 +171,7 @@ export async function fillNowForUser(userId: string, opts: { budgetMs?: number }
         return f;
       }),
     3 * 60_000,
+    opts.budgetMs ?? 10 * 60_000,
   );
 }
 
@@ -254,6 +242,7 @@ export async function refreshQueuedForUser(userId: string, opts: { budgetMs?: nu
         return { rewritten, kept };
       }),
     3 * 60_000,
+    opts.budgetMs ?? 10 * 60_000,
   );
 }
 
@@ -298,38 +287,73 @@ async function startBackgroundJob(userId: string, job: "fill" | "refresh"): Prom
  */
 export async function tick(opts: { budgetMs?: number } = {}): Promise<TickResult> {
   const started = Date.now();
-  const deadline = started + (opts.budgetMs ?? 200_000);
+  const budget = opts.budgetMs ?? 200_000;
+  const deadline = started + budget;
   const out = empty();
 
-  // A session-level advisory lock keeps overlapping ticks from double-working.
-  const conn = await sqlClient().reserve(); // lock and unlock must share one connection
-  const [{ locked }] = (await conn`select pg_try_advisory_lock(${LOCK_KEY}) as locked`) as unknown as { locked: boolean }[];
-  if (!locked) {
-    conn.release();
-    return { ...out, skipped: "another tick is running" };
+  await recordHeartbeat().catch(warnOnError("heartbeat_failed"));
+  const users = await entitledUsers();
+  out.users = users.length;
+
+  // Publishing runs on every pass, even while another pass is still writing: claims are row-locked
+  // (for update skip locked), so overlapping passes never post the same thing twice.
+  for (const u of users) {
+    await withUser(u.id, () => publishPhase(out)).catch((err) => out.errors.push(`publish(${u.id}): ${(err as Error).message}`));
   }
-  try {
-    await recordHeartbeat().catch(warnOnError("heartbeat_failed"));
-    const users = await entitledUsers();
-    out.users = users.length;
 
-    for (const u of users) {
-      await withUser(u.id, () => publishPhase(out)).catch((err) => out.errors.push(`publish(${u.id}): ${(err as Error).message}`));
-    }
-
+  // Writing is the slow part; one pass at a time does it.
+  const ran = await withLease(TICK_LEASE, budget + LEASE_MARGIN_MS, async () => {
     const queue = [...users].sort((a, b) => (a.lastPipelineAt?.getTime() ?? 0) - (b.lastPipelineAt?.getTime() ?? 0));
     for (const u of queue) {
       // Leave room to finish cleanly.
       if (Date.now() > deadline - 15_000) break;
       const userDeadline = Math.min(deadline, Date.now() + PER_USER_BUDGET_MS);
-      // Skipped while "Fill now" is working on this account.
-      await withUserLock(u.id, () => withUser(u.id, () => pipelinePhase(out, userDeadline))).catch((err) => out.errors.push(`pipeline(${u.id}): ${(err as Error).message}`));
+      // Skipped while "Fill now" is working on this account (and then not marked as served).
+      const done = await withUserLock(u.id, async () => {
+        await withUser(u.id, () => pipelinePhase(out, userDeadline));
+        return true;
+      }).catch((err) => {
+        out.errors.push(`pipeline(${u.id}): ${(err as Error).message}`);
+        return true;
+      });
+      if (!done) continue;
       await db().update(schema.users).set({ lastPipelineAt: new Date() }).where(eq(schema.users.id, u.id));
       out.served++;
     }
-    return out;
-  } finally {
-    await conn`select pg_advisory_unlock(${LOCK_KEY})`.catch(warnOnError("tick_unlock_failed"));
-    conn.release();
+    await dailyCleanup().catch(warnOnError("cleanup_failed"));
+    return true;
+  });
+  if (!ran) out.skipped = "another tick is writing";
+  if (out.errors.length) await alertOwners(out).catch(warnOnError("alert_failed"));
+  return out;
+}
+
+const DAY = 86_400_000;
+
+/**
+ * Once a day: drops rows nothing reads any more, so tables do not grow forever.
+ * The lease is not released, so this runs at most once per 24 hours whichever pass gets there first.
+ */
+async function dailyCleanup() {
+  if (!(await acquireLease("cleanup:daily", DAY))) return;
+  const now = Date.now();
+  await db().delete(schema.events).where(lt(schema.events.at, new Date(now - 90 * DAY)));
+  await db().delete(schema.llmCalls).where(lt(schema.llmCalls.createdAt, new Date(now - 180 * DAY)));
+  await db().delete(schema.emailTokens).where(lt(schema.emailTokens.expiresAt, new Date(now - 7 * DAY)));
+  await db().delete(schema.oauthStates).where(lt(schema.oauthStates.expiresAt, new Date(now)));
+  await db().delete(schema.leases).where(lt(schema.leases.expiresAt, new Date(now)));
+  await pruneRateLimits();
+  log.info("daily_cleanup_done", {});
+}
+
+/** Tells the owners on Telegram when a pass had errors. At most once an hour, so a persistent fault does not flood. */
+async function alertOwners(out: TickResult) {
+  log.error("tick_errors", { errors: out.errors.slice(0, 10) });
+  if (!(await acquireLease("alert:tick-errors", 60 * 60_000))) return;
+  const owners = await db().select().from(schema.users).where(eq(schema.users.isOwner, true));
+  const text = `⚠️ Scheduler pass had ${out.errors.length} error${out.errors.length === 1 ? "" : "s"} (users ${out.users}, served ${out.served}, published ${out.published}):\n\n${out.errors.slice(0, 5).map((e) => `• ${e.slice(0, 300)}`).join("\n")}\n\nMore in the function logs. Next alert in an hour at the earliest.`;
+  for (const o of owners) {
+    if (!env().OWNER_EMAILS.includes(o.email)) continue;
+    await withUser(o.id, () => notifyText(text)).catch(warnOnError("alert_send_failed"));
   }
 }

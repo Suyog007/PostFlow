@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useActionState, useEffect, useState } from "react";
-import { forgotPasswordAction, loginAction, resendVerificationAction, resetPasswordAction, signupAction, type FormState } from "@/app/auth-actions";
+import { confirmEmailAction, confirmEmailNewPasswordAction, forgotPasswordAction, loginAction, resendVerificationAction, resetPasswordAction, signupAction, type FormState } from "@/app/auth-actions";
 
 function Status({ state }: { state: FormState }) {
   if (state?.error) return <p role="alert" className="text-[13px] text-[var(--bad)]">{state.error}</p>;
@@ -132,5 +132,34 @@ export function ResendForm() {
       <Status state={state} />
       <button className="btn h-10 w-full text-[14px]" disabled={pending}>{pending ? "Sending…" : "Send the link again"}</button>
     </form>
+  );
+}
+
+/** On the confirm-email page. Without the sign-up session, the sign-up password is asked for. */
+export function ConfirmEmailForm({ token, needsPassword }: { token: string; needsPassword: boolean }) {
+  const [state, action, pending] = useActionState(confirmEmailAction, null);
+  const [resetState, resetAction, resetPending] = useActionState(confirmEmailNewPasswordAction, null);
+  return (
+    <div className="space-y-5">
+      <form action={action} className="space-y-3">
+        <input type="hidden" name="token" value={token} />
+        {needsPassword && (
+          <div>
+            <label htmlFor="password" className="label">The password you chose when signing up</label>
+            <input id="password" name="password" type="password" required autoComplete="current-password" className="input h-10" />
+          </div>
+        )}
+        <Status state={state} />
+        <button className="btn btn-primary h-10 w-full text-[14px]" disabled={pending}>{pending ? "Confirming…" : "Confirm my email"}</button>
+      </form>
+      {needsPassword && (
+        <form action={resetAction} className="space-y-2 border-t border-[var(--line)] pt-4">
+          <input type="hidden" name="token" value={token} />
+          <p className="text-[13px] text-[var(--muted)]">Forgot that password, or did not create this account yourself? Confirm the email and choose a new password instead. Anyone who used the old one is signed out.</p>
+          <Status state={resetState} />
+          <button className="btn h-10 w-full text-[14px]" disabled={resetPending}>{resetPending ? "Confirming…" : "Confirm and choose a new password"}</button>
+        </form>
+      )}
+    </div>
   );
 }

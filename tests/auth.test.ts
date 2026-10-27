@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { db, schema } from "../src/server/db/client";
 import { resetEnvCache } from "../src/server/env";
 import { outbox } from "../src/server/email";
-import { AuthError, checkPassword, consumeToken, createUser, LEGACY_OWNER_ID, markVerified, sendPasswordReset, sendVerificationEmail, setPassword, userFromGoogle } from "../src/server/users";
+import { AuthError, checkPassword, consumeToken, createUser, LEGACY_OWNER_ID, markVerified, peekTokenUser, sendPasswordReset, sendVerificationEmail, setPassword, userFromGoogle } from "../src/server/users";
 import { safeNext } from "../src/server/google";
 import { resetDb } from "./helpers";
 
@@ -52,6 +52,32 @@ describe("accounts and sign-in", () => {
     expect(await consumeToken(token, "verify")).toBeNull();
     expect(await consumeToken(token, "reset")).toBeNull();
     expect((await markVerified(u.id)).emailVerifiedAt).not.toBeNull();
+  });
+
+  it("someone who signs up with another person's email cannot keep access after the owner confirms it", async () => {
+    // The attacker signs up with the victim's address and a password they know.
+    const u = await createUser({ email: "victim@example.com", password: "attacker knows this", verified: false });
+    await sendVerificationEmail(u);
+    const token = tokenFrom(outbox[0].action!.url);
+    expect(outbox[0].action!.url).toContain("/confirm-email?token=");
+    // Opening the link (or a mail scanner opening it) changes nothing.
+    expect((await peekTokenUser(token, "verify"))?.id).toBe(u.id);
+    expect((await peekTokenUser(token, "verify"))?.id).toBe(u.id);
+    // The victim does not know the password, so confirms and picks a new one.
+    expect((await consumeToken(token, "verify"))?.id).toBe(u.id);
+    const after = await markVerified(u.id, { clearPassword: true });
+    expect(after.emailVerifiedAt).not.toBeNull();
+    expect(after.passwordHash).toBeNull();
+    expect(after.sessionVersion).toBe(u.sessionVersion + 1); // the attacker's sign-up session is dead
+    await expect(checkPassword("victim@example.com", "attacker knows this")).rejects.toThrow(AuthError);
+    expect(await peekTokenUser(token, "verify")).toBeNull();
+  });
+
+  it("confirming keeps the password but still ends older sessions", async () => {
+    const u = await createUser({ email: "k@example.com", password: "long enough pass", verified: false });
+    const after = await markVerified(u.id);
+    expect(after.passwordHash).toBe(u.passwordHash);
+    expect(after.sessionVersion).toBe(u.sessionVersion + 1);
   });
 
   it("password reset: no hint for unknown emails; new password signs out other sessions", async () => {

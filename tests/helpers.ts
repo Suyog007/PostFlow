@@ -29,7 +29,7 @@ export async function addUser(over: Partial<typeof schema.users.$inferInsert> = 
 
 /** Empties the database and signs in as a fresh Pro user whose Telegram chat is 42. */
 export async function resetDb() {
-  await db().execute(sql`truncate users, email_tokens, posts, items, notes, sources, events, llm_calls, settings, platform_accounts, oauth_states, requests, waitlist restart identity cascade`);
+  await db().execute(sql`truncate users, email_tokens, posts, items, notes, sources, events, llm_calls, settings, platform_accounts, oauth_states, requests, waitlist, leases, rate_limits restart identity cascade`);
   const u = await addUser({ email: "owner-of-tests@example.com", telegramChatId: "42" });
   current = u.id;
   setRequestUserResolver(async () => current);

@@ -6,11 +6,12 @@ import { peekToken } from "@/server/users";
 
 export const metadata: Metadata = { title: "Choose a new password · PostFlow" };
 
-export default async function ResetPage({ searchParams }: { searchParams: Promise<{ token?: string }> }) {
-  const token = (await searchParams).token ?? "";
+export default async function ResetPage({ searchParams }: { searchParams: Promise<{ token?: string; confirmed?: string }> }) {
+  const sp = await searchParams;
+  const token = sp.token ?? "";
   const valid = await peekToken(token, "reset");
   return (
-    <AuthShell title="Choose a new password" footer={<Link href="/login" className="underline">Back to sign in</Link>}>
+    <AuthShell title="Choose a new password" subtitle={sp.confirmed ? "Your email is confirmed. Choose the password you will sign in with." : undefined} footer={<Link href="/login" className="underline">Back to sign in</Link>}>
       {valid ? (
         <ResetForm token={token} />
       ) : (
