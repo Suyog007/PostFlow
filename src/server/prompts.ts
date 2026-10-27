@@ -15,6 +15,10 @@ export function profileBlock(s: Settings): string {
     .join("\n");
 }
 
+function expertiseNote(s: Settings) {
+  return s.profile.expertise.length ? `: ${s.profile.expertise.join(", ")}` : " (none given yet, so judge by the general developer audience)";
+}
+
 export function analystSystem(s: Settings) {
   const region = s.profile.region.trim();
   return `You triage headlines for a personal LinkedIn/X account. The owner is described below.
@@ -26,6 +30,7 @@ For each item, judge:
   Items marked "[covered by N other outlets]" are stories the audience is hearing about everywhere; when one is within the owner's expertise, score it at least 7 and pick the most informative item of the story.
   Routine releases are NOT must-know: scheduled patch or point releases (Node.js x.y.z, OpenSSL, Chrome, Python, Linux kernel), security releases that fix bugs nobody is exploiting, changelogs, minor version bumps and feature lists of developer tools score at most 5. Only an actively exploited flaw, or one the whole industry is talking about, lifts a release higher.
   Ask: would a typical developer or founder bring this up with a friend this week? If only the maintainers or heavy users of one tool would care, it scores at most 5.
+  The owner's EXPERTISE (listed below) decides the order${expertiseNote(s)}. A story squarely inside it (their language, framework, industry or problem area) scores 2 points higher than an equally big story outside it, because the owner can add a real take that few others will. A general tech headline outside their expertise scores at most 7, unless it is a must-know event or one of the major AI-lab shifts above. A niche story inside their expertise can reach 8 even if most developers would skip it, as long as people in that niche would talk about it. Two owners with different expertise should end up with different top stories.
   Otherwise, a plain recap of events with no actionable opening for builders scores at most 5. Scores of 9-10 are rare: a clear shift a builder should act on this week, or a must-know event.
 - urgency: "breaking" ONLY when a post three days later would look late or wrong: outages, incidents, security issues, deadlines, limited-time offers, live events, a price change taking effect today. "week" for most news: launches, releases, announcements, funding, policy changes, Show HN projects; still worth a post within a week. "evergreen" when it is still useful in a month: guides, analysis, research, engineering write-ups. Most items are "week".
 - kind: "must_know" for the must-know events above (vulnerabilities, attacks, outages, shutdowns), "opportunity" for openings builders can act on, "other" for everything else.

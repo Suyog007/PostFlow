@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+import { needsWelcome } from "@/server/welcome";
 import Link from "next/link";
 import { DateTime } from "luxon";
 import { and, count, desc, eq, gte, inArray, lt } from "drizzle-orm";
@@ -78,6 +80,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const sp = await searchParams;
   const user = await requireActiveUser();
   const s = await getSettings();
+  if (needsWelcome(s)) redirect("/welcome");
   const approvalOn = approvalGate(s, entitlementOf(user).features.autoMode).blocks;
   const needsOk = (p: Post) => approvalOn && p.status === "scheduled" && !p.approvedAt;
   const mine = eq(schema.posts.userId, user.id);
