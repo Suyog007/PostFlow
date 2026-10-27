@@ -9,7 +9,7 @@ export function AuthShell({ title, subtitle, children, footer }: { title: string
       <div className="w-full max-w-[380px]">
         <Link href="/" className="mb-6 flex items-center gap-2.5">
           <Logo size={28} />
-          <span className="text-[18px] font-semibold tracking-tight">PostFlow</span>
+          <span className="display text-[24px]">PostFlow</span>
         </Link>
         <div className="panel p-6">
           <h1 className="text-[18px] font-semibold tracking-tight">{title}</h1>

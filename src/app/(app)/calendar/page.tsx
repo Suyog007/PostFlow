@@ -30,78 +30,48 @@ function Thumb({ src, size }: { src: string; size: number }) {
   );
 }
 
-// fixmyslop-ignore[ui/off-scale-values] the app uses one fixed dense type scale (11/12/13/14/15px) on every screen by design; snapping to Tailwind steps would change the whole interface
-function OpenSlotBox({ e, tz, top, left, width }: { e: OpenSlot; tz: string; top: number; left: number; width: number }) {
-  return (
-    <div
-      className="absolute rounded-md border border-dashed border-[var(--line-strong)] px-1.5 py-1 text-[11px] text-[var(--subtle)]"
-      style={{ top, left: `calc(${left}% + 2px)`, width: `calc(${width}% - 4px)`, height: EVENT_MIN_PX }}
-      title="Open slot: no story that will still be fresh by then yet. Autopilot fills it as new stories come in."
-    >
-      <div className="flex items-center gap-1"><PlatformGlyph platform={e.platform} size={12} /><span className="mono">{DateTime.fromJSDate(e.scheduledAt, { zone: tz }).toFormat("HH:mm")}</span></div>
-      <div className="line-clamp-2">Open, waiting for news</div>
-    </div>
-  );
+/** One short status per card, the same on phones and desktop. */
+function CardBadge({ p, needsOk }: { p: Post; needsOk: boolean }) {
+  if (needsOk) return <span className="badge badge-warn">Needs OK</span>;
+  if (p.status === "published") return <span className="badge badge-good">Posted</span>;
+  if (p.status === "scheduled") return p.approvedAt ? <span className="badge badge-good">Approved</span> : <span className="badge badge-info">Scheduled</span>;
+  return <StatusBadge status={p.status} />;
 }
 
-const HOUR_PX = 64;
-const EVENT_MIN_PX = 54;
-
-function Event({ p, tz, top, left, width, narrow, needsOk, thumb }: { p: Post; tz: string; top: number; left: number; width: number; narrow: boolean; needsOk: boolean; thumb?: string }) {
-  const t = DateTime.fromJSDate(p.scheduledAt, { zone: tz }).toFormat("HH:mm");
+/** A post in a day column: time, platform, status, the first lines and its picture. Full width, never squeezed. */
+function DayCard({ p, tz, needsOk, thumb }: { p: Post; tz: string; needsOk: boolean; thumb?: string }) {
   const dead = p.status === "cancelled" || p.status === "expired";
   return (
     <Link
       href={`/posts/${p.id}`}
-      className={`cal-event ${dead ? "opacity-55" : ""}`}
-      style={{ top, left: `calc(${left}% + 2px)`, width: `calc(${width}% - 4px)`, height: EVENT_MIN_PX, borderLeftColor: platformTone(p.platform), background: platformWash(p.platform) }}
       title={p.text}
+      className={`block rounded-[6px] border border-[var(--line)] border-l-[3px] p-2 transition-colors hover:border-[var(--line-strong)] ${dead ? "opacity-55" : ""}`}
+      style={{ borderLeftColor: platformTone(p.platform), background: platformWash(p.platform) }}
     >
-      <div className="flex items-center gap-1 text-[11px] text-[var(--muted)]">
+      <div className="flex items-center gap-1.5 text-[11px] text-[var(--muted)]">
         <PlatformGlyph platform={p.platform} size={12} />
-        <span className="mono">{t}</span>
+        <span className="mono">{DateTime.fromJSDate(p.scheduledAt, { zone: tz }).toFormat("HH:mm")}</span>
         {p.fast && <Icon name="bolt" size={11} className="text-[var(--warn)]" />}
-        {p.status === "published" && <Icon name="check" size={12} className="ml-auto text-[var(--good)]" />}
-        {needsOk && <span className="ml-auto rounded bg-[var(--warn-soft)] px-1 text-[10px] font-medium text-[var(--warn)]" title="Needs your approval">Needs OK</span>}
-        {(p.status === "failed" || p.status === "unconfirmed") && <Icon name="alert" size={12} className="ml-auto text-[var(--bad)]" />}
+        <span className="ml-auto"><CardBadge p={p} needsOk={needsOk} /></span>
       </div>
-      {!narrow && (
-        <div className="flex gap-1.5">
-          <div className={`line-clamp-2 min-w-0 flex-1 break-words text-[12px] ${p.status === "cancelled" ? "line-through" : ""}`}>{p.text}</div>
-          {thumb && <Thumb src={thumb} size={30} />}
-        </div>
+      <div className="mt-1.5 flex gap-2">
+        <p className={`line-clamp-4 min-w-0 flex-1 break-words text-[12.5px] leading-snug ${p.status === "cancelled" ? "line-through" : ""}`}>{p.text}</p>
+      </div>
+      {thumb && (
+        // eslint-disable-next-line @next/next/no-img-element -- a signed, already-made picture; next/image would re-encode it
+        <img src={thumb} alt="" aria-hidden="true" loading="lazy" className="mt-2 aspect-[16/9] w-full rounded-[4px] border border-[var(--line)] object-cover" />
       )}
     </Link>
   );
 }
 
-/** Greedy lane assignment so posts at the same time sit side by side. */
-function layoutDay<T extends { scheduledAt: Date }>(posts: T[], tz: string, startHour: number) {
-  const items = posts
-    .map((p) => {
-      const d = DateTime.fromJSDate(p.scheduledAt, { zone: tz });
-      const minutes = d.hour * 60 + d.minute - startHour * 60;
-      return { p, top: (minutes / 60) * HOUR_PX, lane: 0, lanes: 1, bottom: (minutes / 60) * HOUR_PX + EVENT_MIN_PX };
-    })
-    .sort((a, b) => a.top - b.top);
-  let cluster: typeof items = [];
-  let clusterEnd = -Infinity;
-  const flush = () => {
-    const lanes = Math.max(1, ...cluster.map((c) => c.lane + 1));
-    cluster.forEach((c) => (c.lanes = lanes));
-    cluster = [];
-  };
-  for (const it of items) {
-    if (it.top >= clusterEnd) flush();
-    const used = new Set(cluster.filter((c) => c.bottom > it.top).map((c) => c.lane));
-    let lane = 0;
-    while (used.has(lane)) lane++;
-    it.lane = lane;
-    cluster.push(it);
-    clusterEnd = Math.max(clusterEnd, it.bottom);
-  }
-  flush();
-  return items;
+function OpenCard({ e, tz }: { e: OpenSlot; tz: string }) {
+  return (
+    <div className="rounded-[6px] border border-dashed border-[var(--line-strong)] p-2 text-[11px] text-[var(--subtle)]" title="Open slot: no story that will still be fresh by then yet. Autopilot fills it as new stories come in.">
+      <div className="flex items-center gap-1.5"><PlatformGlyph platform={e.platform} size={12} /><span className="mono">{DateTime.fromJSDate(e.scheduledAt, { zone: tz }).toFormat("HH:mm")}</span></div>
+      <p className="mt-1">Open, waiting for news</p>
+    </div>
+  );
 }
 
 export default async function CalendarPage({ searchParams }: { searchParams: Promise<{ w?: string; ok?: string; error?: string; welcome?: string }> }) {
@@ -144,12 +114,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const filling = lastFill?.kind === "fill" && Date.now() - lastFill.at.getTime() < 15 * 60_000;
 
   const today = DateTime.now().setZone(tz);
-  const hours = [...week.map((p) => DateTime.fromJSDate(p.scheduledAt, { zone: tz }).hour), ...s.slots.map((sl) => Number(sl.time.slice(0, 2)))];
-  const startHour = Math.min(7, ...hours);
-  const endHour = Math.max(22, ...hours.map((h) => h + 1));
-  const gridHeight = (endHour - startHour + 1) * HOUR_PX;
   const days = Array.from({ length: 7 }, (_, i) => weekStart.plus({ days: i }));
-  const nowTop = ((today.hour * 60 + today.minute - startHour * 60) / 60) * HOUR_PX;
   const active = await activePlatforms(user.id);
   const scheduledCount = week.filter((p) => p.status === "scheduled").length;
   // Open slots in the "Fill now" window, so an empty day reads as "waiting for news", not "broken".
@@ -200,18 +165,18 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       )}
 
       <PageHeader
-        title={`${weekStart.toFormat("d LLL")} – ${weekEnd.minus({ days: 1 }).toFormat("d LLL yyyy")}`}
+        title={`${offset === 0 ? "This week" : offset === 1 ? "Next week" : offset === -1 ? "Last week" : "Week"} · ${weekStart.toFormat("d LLL")} – ${weekEnd.minus({ days: 1 }).toFormat("d LLL")}`}
         description={
           upcoming[0] ? (
-            <>Next up: <span className="inline-block align-[-1px]"><PlatformGlyph platform={upcoming[0].platform} size={12} /></span> {DateTime.fromJSDate(upcoming[0].scheduledAt, { zone: tz }).toFormat("ccc HH:mm")}. {scheduledCount} scheduled and {postedCount} posted in these 7 days. Everything scheduled goes out unless you remove it.</>
+            <>Next up: <span className="inline-block align-[-1px]"><PlatformGlyph platform={upcoming[0].platform} size={12} /></span> {DateTime.fromJSDate(upcoming[0].scheduledAt, { zone: tz }).toFormat("ccc HH:mm")}. {scheduledCount} scheduled and {postedCount} posted in these 7 days. {approvalOn ? "Posts go out only once you approve them; the rest are skipped." : "Everything scheduled goes out unless you remove it."}</>
           ) : (
             <>Nothing scheduled yet. Autopilot fills open slots up to {s.horizonDays} days ahead.</>
           )
         }
         actions={
-          <div className="flex items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
             <Link href={`/calendar?w=${offset - 1}`} className="btn btn-sm" aria-label="Previous week"><Icon name="left" size={14} /></Link>
-            <Link href="/calendar" className="btn btn-sm">Today</Link>
+            <Link href="/calendar" className="btn btn-sm" aria-current={offset === 0 ? "page" : undefined}>This week</Link>
             <Link href={`/calendar?w=${offset + 1}`} className="btn btn-sm" aria-label="Next week"><Icon name="right" size={14} /></Link>
             <form action={refreshQueuedAction} className="ml-1">
               <button className="btn btn-sm" title="Write every queued post you have not approved again, in the latest style"><Icon name="repost" size={14} />Rewrite queued</button>
@@ -229,50 +194,23 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
         }
       />
 
-      {/* Desktop: time grid */}
-      <div className="panel hidden overflow-hidden md:block">
-        <div className="cal-grid border-b border-[var(--line)] bg-[var(--raised)]">
-          <div />
-          {days.map((d) => {
-            const isToday = d.hasSame(today, "day");
-            return (
-              <div key={d.toISODate()} className="border-l border-[var(--line)] px-2 py-2 text-center">
-                <div className="text-[11px] font-medium uppercase tracking-wide text-[var(--subtle)]">{d.toFormat("ccc")}</div>
-                <div className={`mx-auto mt-0.5 flex h-7 w-7 items-center justify-center rounded-full text-[14px] font-semibold tnum ${isToday ? "bg-[var(--mark)] text-[var(--mark-ink)]" : ""}`}>{d.day}</div>
+      {/* Desktop: one column per day, posts in time order. */}
+      <div className="panel hidden overflow-hidden md:grid md:grid-cols-7">
+        {days.map((d, i) => {
+          const isToday = d.hasSame(today, "day");
+          const dayPosts = entries.filter((p) => DateTime.fromJSDate(p.scheduledAt, { zone: tz }).hasSame(d, "day"));
+          return (
+            <section key={d.toISODate()} aria-label={d.toFormat("cccc d LLL")} className={`flex min-h-[420px] min-w-0 flex-col ${i ? "border-l border-[var(--line)]" : ""} ${isToday ? "bg-[var(--mark-soft)]/40" : ""}`}>
+              <header className="flex items-baseline justify-between gap-1 border-b border-[var(--line)] px-2.5 py-2">
+                <span className={`text-[11px] font-semibold uppercase tracking-wide ${isToday ? "text-[var(--ink)]" : "text-[var(--subtle)]"}`}>{isToday ? "Today" : d.toFormat("ccc")}</span>
+                <span className={`flex h-7 min-w-7 items-center justify-center rounded-full px-1 text-[14px] font-semibold tnum ${isToday ? "bg-[var(--mark)] text-[var(--mark-ink)]" : ""}`}>{d.day}</span>
+              </header>
+              <div className="flex flex-1 flex-col gap-2 p-2">
+                {dayPosts.length ? dayPosts.map((p) => (isOpen(p) ? <OpenCard key={p.id} e={p} tz={tz} /> : <DayCard key={p.id} p={p} tz={tz} needsOk={needsOk(p)} thumb={thumbFor(p)} />)) : <p className="px-1 pt-1 text-[12px] text-[var(--subtle)]">Nothing planned</p>}
               </div>
-            );
-          })}
-        </div>
-        <div className="cal-grid" style={{ height: gridHeight }}>
-          <div className="relative">
-            {Array.from({ length: endHour - startHour + 1 }, (_, i) => (
-              <div key={i} className="cal-hour -mt-px pr-2 text-right text-[11px] text-[var(--subtle)] mono" style={{ borderTop: "none", paddingTop: 0, transform: "translateY(-7px)" }}>
-                {i === 0 ? "" : `${String(startHour + i).padStart(2, "0")}:00`}
-              </div>
-            ))}
-          </div>
-          {days.map((d) => {
-            const dayPosts = entries.filter((p) => DateTime.fromJSDate(p.scheduledAt, { zone: tz }).hasSame(d, "day"));
-            return (
-              <div key={d.toISODate()} className="cal-col" style={{ height: gridHeight }}>
-                {Array.from({ length: endHour - startHour + 1 }, (_, i) => <div key={i} className="cal-hour" />)}
-                {layoutDay(dayPosts, tz, startHour).map((it) =>
-                  isOpen(it.p) ? (
-                    <OpenSlotBox key={it.p.id} e={it.p} tz={tz} top={it.top} left={(it.lane / it.lanes) * 100} width={100 / it.lanes} />
-                  ) : (
-                    <Event key={it.p.id} p={it.p} tz={tz} top={it.top} left={(it.lane / it.lanes) * 100} width={100 / it.lanes} narrow={it.lanes > 2} needsOk={needsOk(it.p)} thumb={thumbFor(it.p)} />
-                  ),
-                )}
-                {d.hasSame(today, "day") && nowTop > 0 && nowTop < gridHeight && (
-                  <div className="pointer-events-none absolute inset-x-0 z-10 flex items-center" style={{ top: nowTop }}>
-                    <span className="-ml-1 h-2 w-2 rounded-full bg-[var(--bad)]" />
-                    <span className="h-px flex-1 bg-[var(--bad)]" />
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+            </section>
+          );
+        })}
       </div>
 
       {/* Mobile: agenda */}
@@ -293,7 +231,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                     <Link key={p.id} href={`/posts/${p.id}`} className="flex gap-3 border-l-[3px] px-3 py-2.5" style={{ borderLeftColor: platformTone(p.platform), background: platformWash(p.platform) }}>
                       <div className="w-11 flex-none pt-0.5 text-[12px] text-[var(--muted)] mono">{DateTime.fromJSDate(p.scheduledAt, { zone: tz }).toFormat("HH:mm")}</div>
                       <div className="min-w-0 flex-1">
-                        <div className="mb-0.5 flex items-center gap-1.5"><PlatformGlyph platform={p.platform} size={13} />{p.fast && <Icon name="bolt" size={12} className="text-[var(--warn)]" />}<StatusBadge status={p.status} needsApproval={needsOk(p)} /></div>
+                        <div className="mb-0.5 flex items-center gap-1.5"><PlatformGlyph platform={p.platform} size={13} />{p.fast && <Icon name="bolt" size={12} className="text-[var(--warn)]" />}<CardBadge p={p} needsOk={needsOk(p)} /></div>
                         <p className="line-clamp-2 break-words text-[13px]">{p.text}</p>
                       </div>
                       {thumbFor(p) && <Thumb src={thumbFor(p)!} size={52} />}

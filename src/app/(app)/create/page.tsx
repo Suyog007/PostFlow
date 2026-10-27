@@ -34,7 +34,7 @@ export default async function CreatePage({ searchParams }: { searchParams: Promi
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
             <label className="flex items-center gap-2"><input type="checkbox" name="p_linkedin" defaultChecked /> LinkedIn</label>
             <label className="flex items-center gap-2"><input type="checkbox" name="p_x" defaultChecked /> X</label>
-            <select name="mode" className="input w-auto" defaultValue="schedule">
+            <select name="mode" aria-label="When it goes out" className="input w-auto" defaultValue="schedule">
               <option value="schedule">Put on the calendar (next free slot)</option>
               <option value="soon">Post in about 20 minutes</option>
               <option value="draft">Draft only, I will decide</option>

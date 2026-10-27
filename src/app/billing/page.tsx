@@ -43,7 +43,7 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
         <div className="mx-auto flex h-14 max-w-[960px] items-center gap-4 px-4">
           <Link href={ent.active ? "/calendar" : "/"} className="flex items-center gap-2">
             <Logo size={22} />
-            <span className="font-semibold">PostFlow</span>
+            <span className="display text-[20px]">PostFlow</span>
           </Link>
           <nav className="ml-auto flex items-center gap-1 text-[13px]">
             {ent.active && <Link href="/calendar" className="btn btn-ghost btn-sm">Open app</Link>}
@@ -62,7 +62,7 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
         {ent.plan === "owner" ? (
           <div className="panel mt-6 p-5">
             <p className="font-medium">Owner account</p>
-            <p className="mt-1 text-[14px] text-[var(--muted)]">Your email is listed in OWNER_EMAILS, so this account has every feature and is never billed.</p>
+            <p className="mt-1 text-[14px] text-[var(--muted)]">This is the owner account: every feature is on and it is never billed.</p>
             <Link href="/calendar" className="btn btn-primary mt-4">Open the app</Link>
           </div>
         ) : subscribed ? (

@@ -11,7 +11,7 @@
   --line-strong: #cfc5b1;
   --ink: #18221e;
   --muted: #5b645e;
-  --subtle: #858b83;
+  --subtle: #676d66;
   --accent: #0e6b5b;
   --accent-ink: #ffffff;
   --accent-soft: #dcefe8;
@@ -163,12 +163,6 @@ h1, h2, h3 { text-wrap: balance; }
 .tnum { font-variant-numeric: tabular-nums; }
 .post-text { white-space: pre-wrap; word-break: break-word; }
 
-/* ---- calendar grid ---- */
-.cal-grid { display: grid; grid-template-columns: 52px repeat(7, minmax(0, 1fr)); }
-.cal-col { position: relative; border-left: 1px solid var(--line); }
-.cal-hour { height: 64px; border-top: 1px solid var(--line); }
-.cal-event { position: absolute; border-radius: 6px; border: 1px solid var(--line-strong); border-left-width: 3px; background: var(--surface); padding: 4px 6px; overflow: hidden; font-size: 12px; line-height: 1.3; box-shadow: 0 1px 1px rgba(0,0,0,.04); transition: box-shadow .12s, transform .12s; }
-.cal-event:hover { box-shadow: 0 4px 12px rgba(0,0,0,.12); z-index: 5; }
 
 /* ---- landing page ---- */
 .only-dark { display: none; }

@@ -19,7 +19,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
         <div className="mx-auto flex h-14 max-w-[720px] items-center gap-4 px-4">
           <Link href={active ? "/calendar" : "/billing"} className="flex items-center gap-2">
             <Logo size={22} />
-            <span className="font-semibold">PostFlow</span>
+            <span className="display text-[20px]">PostFlow</span>
           </Link>
           <nav className="ml-auto flex items-center gap-1 text-[13px]">
             {active && <Link href="/calendar" className="btn btn-ghost btn-sm">Open app</Link>}

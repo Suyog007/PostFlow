@@ -1,3 +1,4 @@
+import { DateTime } from "luxon";
 import { and, eq, gt, inArray } from "drizzle-orm";
 import { db, schema } from "./db/client";
 import { uid } from "./context";
@@ -23,7 +24,8 @@ export async function removePost(id: string) {
   if (p.status === "publishing") throw new PostError("It is being published right now.");
   if (!["scheduled", "failed", "unconfirmed", "expired", "draft"].includes(p.status)) throw new PostError(`A ${p.status} post cannot be removed.`);
   await db().update(schema.posts).set({ status: "cancelled", updatedAt: new Date() }).where(eq(schema.posts.id, id));
-  await addEvent("removed", `Removed a ${p.platform} post from ${p.scheduledAt.toISOString()}.`, id);
+  const tz = (await getSettings()).timezone;
+  await addEvent("removed", `Removed the ${p.platform === "x" ? "X" : "LinkedIn"} post for ${DateTime.fromJSDate(p.scheduledAt, { zone: tz }).toFormat("ccc d LLL, HH:mm")}.`, id);
 }
 
 export async function restorePost(id: string) {
@@ -31,6 +33,12 @@ export async function restorePost(id: string) {
   if (p.status !== "cancelled" && p.status !== "failed" && p.status !== "expired") throw new PostError("Only removed or failed posts can be restored.");
   if (p.scheduledAt.getTime() < Date.now() + 60_000) throw new PostError("That time has passed. Reschedule it first.");
   if (p.expiresAt && p.expiresAt.getTime() < Date.now()) throw new PostError("This time-sensitive post has expired.");
+  // Its slot may have been filled since it was removed: one live post per slot.
+  const [taken] = await db()
+    .select({ id: schema.posts.id })
+    .from(schema.posts)
+    .where(and(eq(schema.posts.userId, p.userId), eq(schema.posts.platform, p.platform), eq(schema.posts.scheduledAt, p.scheduledAt), inArray(schema.posts.status, ["scheduled", "publishing"])));
+  if (taken) throw new PostError("Another post has taken that slot since. Pick a new time below, then put it back.");
   await db().update(schema.posts).set({ status: "scheduled", error: null, attempts: 0, claimedAt: null, updatedAt: new Date() }).where(eq(schema.posts.id, id));
 }
 

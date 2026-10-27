@@ -103,7 +103,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <h2 className="display mb-3 text-[24px]">Posting schedule</h2>
         <form action={saveSlotsAction} className="card space-y-2 p-4">
           <p className="text-sm text-muted">One slot per line, in {s.timezone}: <code>platform days time</code>. Autopilot fills these slots {s.horizonDays} day(s) ahead.</p>
-          <textarea name="slots" rows={5} defaultValue={formatSlots(s.slots)} className="textarea font-mono text-sm" />
+          <textarea name="slots" aria-label="Posting slots, one per line" rows={5} defaultValue={formatSlots(s.slots)} className="textarea font-mono text-sm" />
           <button className="btn-primary">Save schedule</button>
         </form>
       </section>
@@ -114,11 +114,11 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           <p className="text-muted">When a breaking story is a clear opportunity for builders, post about it soon instead of waiting for the next slot. You get the lead time below (and a Telegram Remove button) to veto it.</p>
           <label className="flex items-center gap-2"><input type="checkbox" name="fl_enabled" defaultChecked={s.fastLane.enabled && ent.features.fastLane} disabled={!ent.features.fastLane} /> Fast lane on</label>
           <div className="grid gap-3 sm:grid-cols-3">
-            <div><label className="label">Min. score (7-10)</label><input name="fl_min" type="number" min={7} max={10} defaultValue={s.fastLane.minRelevance} className="input" /></div>
-            <div><label className="label">Max per day, per platform</label><input name="fl_max" type="number" min={1} max={3} defaultValue={s.fastLane.maxPerDay} className="input" /></div>
-            <div><label className="label">Lead time (minutes)</label><input name="fl_lead" type="number" min={15} max={240} defaultValue={s.fastLane.leadMinutes} className="input" /></div>
-            <div><label className="label">Quiet from</label><input name="fl_qs" defaultValue={s.fastLane.quietStart} className="input" /></div>
-            <div><label className="label">Quiet until</label><input name="fl_qe" defaultValue={s.fastLane.quietEnd} className="input" /></div>
+            <label className="block"><span className="label">Min. score (7-10)</span><input name="fl_min" type="number" min={7} max={10} defaultValue={s.fastLane.minRelevance} className="input" /></label>
+            <label className="block"><span className="label">Max per day, per platform</span><input name="fl_max" type="number" min={1} max={3} defaultValue={s.fastLane.maxPerDay} className="input" /></label>
+            <label className="block"><span className="label">Lead time (minutes)</span><input name="fl_lead" type="number" min={15} max={240} defaultValue={s.fastLane.leadMinutes} className="input" /></label>
+            <label className="block"><span className="label">Quiet from</span><input name="fl_qs" defaultValue={s.fastLane.quietStart} className="input" /></label>
+            <label className="block"><span className="label">Quiet until</span><input name="fl_qe" defaultValue={s.fastLane.quietEnd} className="input" /></label>
           </div>
           <div className="flex gap-6">
             <label className="flex items-center gap-2"><input type="checkbox" name="fl_x" defaultChecked={s.fastLane.platforms.includes("x")} /> X</label>
@@ -132,29 +132,29 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <h2 className="display mb-3 text-[24px]">You and your voice</h2>
         <form action={saveProfileAction} className="card space-y-3 p-4 text-sm">
           <div className="grid gap-3 sm:grid-cols-2">
-            <div><label className="label">Name</label><input name="name" defaultValue={s.profile.name} className="input" /></div>
-            <div><label className="label">Role</label><input name="role" defaultValue={s.profile.role} placeholder="e.g. Founder of a dev-tools startup" className="input" /></div>
+            <label className="block"><span className="label">Name</span><input name="name" defaultValue={s.profile.name} className="input" /></label>
+            <label className="block"><span className="label">Role</span><input name="role" defaultValue={s.profile.role} placeholder="e.g. Founder of a dev-tools startup" className="input" /></label>
           </div>
-          <div><label className="label">Your region, for local tech scene posts (optional)</label><input name="region" defaultValue={s.profile.region} placeholder="e.g. Berlin, Nepal, Lagos" className="input" /></div>
-          <div><label className="label">Short bio</label><textarea name="bio" rows={2} defaultValue={s.profile.bio} className="textarea" /></div>
-          <div><label className="label">Topics you can credibly write about (comma or line separated)</label><textarea name="expertise" rows={2} defaultValue={s.profile.expertise.join(", ")} className="textarea" /></div>
-          <div><label className="label">Voice</label><textarea name="voice" rows={2} defaultValue={s.profile.voice} className="textarea" /></div>
-          <div><label className="label">Never write about</label><textarea name="avoid" rows={2} defaultValue={s.profile.avoid} className="textarea" /></div>
+          <label className="block"><span className="label">Your region, for local tech scene posts (optional)</span><input name="region" defaultValue={s.profile.region} placeholder="e.g. Berlin, Nepal, Lagos" className="input" /></label>
+          <label className="block"><span className="label">Short bio</span><textarea name="bio" rows={2} defaultValue={s.profile.bio} className="textarea" /></label>
+          <label className="block"><span className="label">Topics you can credibly write about (comma or line separated)</span><textarea name="expertise" rows={2} defaultValue={s.profile.expertise.join(", ")} className="textarea" /></label>
+          <label className="block"><span className="label">Voice</span><textarea name="voice" rows={2} defaultValue={s.profile.voice} className="textarea" /></label>
+          <label className="block"><span className="label">Never write about</span><textarea name="avoid" rows={2} defaultValue={s.profile.avoid} className="textarea" /></label>
           <div>
             <label className="label">Content mix (relative weights)</label>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               {([["w_own_work", "My work", s.pillars.own_work], ["w_news", "Tech news", s.pillars.news], ["w_local", s.profile.region ? `${s.profile.region} scene` : "Local scene", s.pillars.local], ["w_learning", "Learning", s.pillars.learning]] as const).map(([n, l, v]) => (
-                <div key={n}><span className="text-xs text-muted">{l}</span><input name={n} type="number" min={0} step={1} defaultValue={v} className="input" /></div>
+                <label key={n} className="block"><span className="text-xs text-muted">{l}</span><input name={n} type="number" min={0} step={1} defaultValue={v} className="input" /></label>
               ))}
             </div>
           </div>
           <div className="grid gap-3 sm:grid-cols-3">
-            <div><label className="label">Timezone</label><input name="timezone" defaultValue={s.timezone} className="input" /></div>
-            <div><label className="label">Plan ahead (days)</label><input name="horizonDays" type="number" min={1} max={14} defaultValue={s.horizonDays} className="input" /></div>
-            <div><label className="label">Min. news score, X (1-10)</label><input name="minRelevance" type="number" min={1} max={10} defaultValue={s.minRelevance} className="input" /></div>
-            <div><label className="label">Min. news score, LinkedIn (1-10)</label><input name="linkedinMinRelevance" type="number" min={1} max={10} defaultValue={s.linkedinMinRelevance} className="input" /></div>
+            <label className="block"><span className="label">Timezone</span><input name="timezone" defaultValue={s.timezone} className="input" /></label>
+            <label className="block"><span className="label">Plan ahead (days)</span><input name="horizonDays" type="number" min={1} max={14} defaultValue={s.horizonDays} className="input" /></label>
+            <label className="block"><span className="label">Min. news score, X (1-10)</span><input name="minRelevance" type="number" min={1} max={10} defaultValue={s.minRelevance} className="input" /></label>
+            <label className="block"><span className="label">Min. news score, LinkedIn (1-10)</span><input name="linkedinMinRelevance" type="number" min={1} max={10} defaultValue={s.linkedinMinRelevance} className="input" /></label>
           </div>
-          <div><label className="label">Your own sites (links to these are treated as your own articles)</label><input name="ownDomains" defaultValue={s.ownDomains.join(", ")} placeholder="yourname.dev, blog.yourname.com" className="input" /></div>
+          <label className="block"><span className="label">Your own sites (links to these are treated as your own articles)</span><input name="ownDomains" defaultValue={s.ownDomains.join(", ")} placeholder="yourname.dev, blog.yourname.com" className="input" /></label>
           <label className="flex items-center gap-2"><input type="checkbox" name="fillerPosts" defaultChecked={s.fillerPosts} /> Fill empty slots with evergreen explainers when there is nothing strong to post <span className="text-xs text-muted">(off: the slot stays empty)</span></label>
           <div className="flex flex-wrap gap-6">
             <label className="flex items-center gap-2"><input type="checkbox" name="tags_x" defaultChecked={s.hashtags.x} /> Add 1-2 hashtags on X</label>
@@ -208,9 +208,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           {!sources.length && <li className="p-3 text-muted">Feeds are added automatically on the first scheduler pass.</li>}
         </ul>
         <form action={addSourceAction} className="card mt-3 flex flex-wrap gap-2 p-3">
-          <input name="name" placeholder="Name" className="input w-40" />
-          <input name="url" placeholder="https://example.com/feed.xml" className="input min-w-60 flex-1" required />
-          <select name="pillar" className="input w-auto"><option value="news">News</option><option value="local">{s.profile.region ? `${s.profile.region} scene` : "Local scene"}</option></select>
+          <input name="name" aria-label="Feed name" placeholder="Name" className="input w-40" />
+          <input name="url" aria-label="Feed address" placeholder="https://example.com/feed.xml" className="input min-w-60 flex-1" required />
+          <select name="pillar" aria-label="Feed type" className="input w-auto"><option value="news">News</option><option value="local">{s.profile.region ? `${s.profile.region} scene` : "Local scene"}</option></select>
           <button className="btn-secondary">Add feed</button>
         </form>
       </section>

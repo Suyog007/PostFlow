@@ -52,12 +52,13 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     <div className="min-h-screen">
       <header className="border-b border-[var(--line)] bg-[var(--surface)]">
         <div className="mx-auto flex h-14 max-w-[1120px] items-center gap-4 px-4">
-          <Link href="/calendar" className="flex items-center gap-2"><Logo size={22} /><span className="font-semibold">PostFlow</span></Link>
+          <Link href="/calendar" className="flex items-center gap-2"><Logo size={22} /><span className="display text-[20px]">PostFlow</span></Link>
           <span className="badge">Admin</span>
           <Link href="/calendar" className="btn btn-ghost btn-sm ml-auto">Back to app</Link>
         </div>
       </header>
       <main className="mx-auto max-w-[1120px] space-y-8 px-4 py-8">
+        <h1 className="display text-[34px]">Admin</h1>
         {sp.ok && <p role="status" className="rounded-md bg-[var(--good-soft)] px-3 py-2 text-[13px] text-[var(--good)]">{sp.ok}</p>}
         {sp.error && <p role="alert" className="rounded-md bg-[var(--bad-soft)] px-3 py-2 text-[13px] text-[var(--bad)]">{sp.error}</p>}
 
@@ -72,7 +73,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         <p className="-mt-5 text-[12px] text-[var(--subtle)]">MRR counts active and past-due subscriptions at list price (yearly plans per month), before discounts, tax and fees. Model usage in the last 30 days: {Number(tokens.input).toLocaleString("en-US")} input and {Number(tokens.output).toLocaleString("en-US")} output tokens.</p>
 
         <section>
-          <h2 className="mb-2 text-lg font-semibold">Accounts</h2>
+          <h2 className="display mb-3 text-[24px]">Accounts</h2>
           <div className="panel overflow-x-auto">
             <table className="w-full min-w-[760px] text-left text-[13px]">
               <thead className="text-[12px] text-[var(--muted)]">
@@ -102,7 +103,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         </section>
 
         <section>
-          <h2 className="mb-2 text-lg font-semibold">System</h2>
+          <h2 className="display mb-3 text-[24px]">System</h2>
           <ul className="panel divide-y divide-[var(--line)] text-[13px]">
             {checks.map((c) => (
               <li key={c.label} className="flex gap-3 p-3">
@@ -118,7 +119,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         </section>
 
         <section>
-          <h2 className="mb-2 text-lg font-semibold">Waitlist <span className="text-sm font-normal text-[var(--muted)]">· {waitlist.length}</span></h2>
+          <h2 className="display mb-3 text-[24px]">Waitlist <span className="text-sm font-normal text-[var(--muted)]">· {waitlist.length}</span></h2>
           <ul className="panel divide-y divide-[var(--line)] text-[13px]">
             {waitlist.map((w) => (
               <li key={w.id} className="flex items-center gap-3 p-3">

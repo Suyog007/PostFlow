@@ -6,10 +6,19 @@ import { getSettings } from "@/server/settings";
 import { lastHeartbeat } from "@/server/health";
 import { Avatar, Logo } from "@/components/ui";
 import { SideNav, TabBar } from "@/components/nav";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { togglePauseAction } from "../actions";
 import { logoutAction } from "../auth-actions";
 
 export const dynamic = "force-dynamic";
+
+/** "just now", "4 min ago", "3 h ago", "6 days ago". */
+function ago(mins: number) {
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} min ago`;
+  if (mins < 48 * 60) return `${Math.round(mins / 60)} h ago`;
+  return `${Math.round(mins / 1440)} days ago`;
+}
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireActiveUser();
@@ -44,15 +53,18 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               <span className={`inline-block h-2 w-2 rounded-full ${s.paused ? "bg-[var(--warn)]" : alive ? "bg-[var(--good)]" : "bg-[var(--subtle)]"}`} />
               {s.paused ? "Autopilot paused" : "Autopilot on"}
             </div>
-            <p className="mt-1 text-[11px] text-[var(--subtle)]">{beat ? `Scheduler checked in ${mins === 0 ? "just now" : `${mins} min ago`}` : "Scheduler has not run yet"}</p>
+            <p className="mt-1 text-[11px] text-[var(--subtle)]">{beat ? `Scheduler checked in ${ago(mins!)}` : "Scheduler has not run yet"}</p>
             <button className="btn btn-sm mt-2 w-full">{s.paused ? "Resume" : "Pause"}</button>
           </form>
           <div className="flex items-center gap-2 px-1">
             <Avatar name={name} size={28} />
             <div className="min-w-0 flex-1">
               <div className="truncate text-[12px] font-medium">{name}</div>
-              <div className="truncate text-[11px] text-[var(--subtle)]">{DateTime.now().setZone(s.timezone).toFormat("ccc d LLL, HH:mm")}</div>
+              <div className="truncate text-[11px] text-[var(--muted)]">{DateTime.now().setZone(s.timezone).toFormat("ccc d LLL, HH:mm")}</div>
             </div>
+          </div>
+          <div className="flex items-center justify-between px-1">
+            <ThemeToggle />
             <form action={logoutAction}>
               <button className="btn btn-ghost btn-sm" title="Sign out" aria-label="Sign out">Sign out</button>
             </form>
@@ -65,7 +77,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <Logo size={22} />
           <span className="display text-[20px]">PostFlow</span>
           <div className="press-stripe absolute inset-x-0 bottom-0" aria-hidden="true" />
-          <span className="ml-auto flex items-center gap-1.5 text-[12px] text-[var(--muted)]">
+          <span className="ml-auto"><ThemeToggle /></span>
+          <span className="flex items-center gap-1.5 text-[12px] text-[var(--muted)]">
             <span className={`inline-block h-2 w-2 rounded-full ${s.paused ? "bg-[var(--warn)]" : "bg-[var(--good)]"}`} />
             {s.paused ? "Paused" : "On"}
           </span>

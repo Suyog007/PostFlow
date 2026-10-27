@@ -16,7 +16,7 @@ export function parseSlots(text: string): Slot[] {
         const [a, b] = part.split("-");
         const i = DAY.indexOf(a.slice(0, 3));
         const j = b ? DAY.indexOf(b.slice(0, 3)) : i;
-        if (i < 0 || j < 0) throw new Error(`Unknown day in "${raw.trim()}".`);
+        if (i < 0 || j < 0) throw new Error(`Unknown day in "${raw.trim()}". Use day names like mon-fri, sat, sun or daily, e.g. "linkedin mon-fri 09:15".`);
         for (let d = i; ; d = (d + 1) % 7) {
           days.push(d + 1);
           if (d === j) break;

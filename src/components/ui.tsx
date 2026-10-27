@@ -90,9 +90,12 @@ export function PageHeader({ title, description, actions }: { title: string; des
 
 export function Field({ label, hint, children }: { label: string; hint?: ReactNode; children: ReactNode }) {
   return (
+    // The label wraps its field, so screen readers and clicks on the label reach the input.
     <div>
-      <label className="label">{label}</label>
-      {children}
+      <label className="block">
+        <span className="label">{label}</span>
+        {children}
+      </label>
       {hint && <p className="hint mt-1">{hint}</p>}
     </div>
   );
