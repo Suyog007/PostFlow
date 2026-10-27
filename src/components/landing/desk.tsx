@@ -8,6 +8,7 @@ import { Logo, PlatformGlyph } from "@/components/ui";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 const NAV = [
+  { href: "#who", label: "Who it's for" },
   { href: "#how", label: "How it works" },
   { href: "#desk", label: "What's inside" },
   { href: "#pricing", label: "Pricing" },

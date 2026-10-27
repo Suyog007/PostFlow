@@ -13,7 +13,7 @@ import { env } from "@/server/env";
 
 const TITLE = "PostFlow · The news breaks. Your post is ready.";
 const DESCRIPTION =
-  "PostFlow reads the news in your field, writes a clear LinkedIn or X post, checks every fact, and waits for your one-tap OK on Telegram.";
+  "For engineers, doctors, accountants, lawyers and anyone whose work is in the news. PostFlow reads the news in your field, writes a clear LinkedIn or X post, checks every fact, and waits for your one-tap OK on Telegram.";
 
 export const metadata: Metadata = {
   title: TITLE,
@@ -82,6 +82,16 @@ function Rule() {
   return <hr className="mx-auto max-w-[1200px] border-[var(--d-sky-line)]" />;
 }
 
+/** One line per profession: what PostFlow watches for them, and the rule their posts follow. */
+const PROFESSIONS = [
+  { who: "Software engineers", watch: "Launches, security alerts and AI news in your stack.", rule: "Explains every acronym." },
+  { who: "Doctors & clinicians", watch: "Guideline changes, recalls and strong new studies in your speciality.", rule: "Never gives medical advice." },
+  { who: "Accountants & finance", watch: "Tax changes, filing deadlines and new reporting standards.", rule: "Always names the country." },
+  { who: "Lawyers & compliance", watch: "New laws, rulings and compliance deadlines in your area.", rule: "Always names the jurisdiction." },
+  { who: "Marketers & sales", watch: "Platform, algorithm and privacy changes that move your numbers.", rule: "Never invents results." },
+  { who: "Teachers & educators", watch: "Exam, curriculum and policy changes, and what the evidence says.", rule: "Never names a student." },
+];
+
 const DESK = [
   { t: "News desk", b: "Reads your field all day. Keeps what your audience will care about." },
   { t: "Research", b: "Digs into any link, even an X post, before a word is written." },
@@ -129,7 +139,7 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
               className="text-[50px] sm:text-[72px] xl:text-[80px]"
             />
             <p className="mt-7 max-w-[560px] text-[19px] leading-[1.7] text-[var(--d-muted)] sm:text-[21px]">
-              PostFlow reads <span className="hl">the news in your field</span>, writes <span className="hl">a clear post anyone can follow</span> and checks every fact. Ten minutes before it goes out, Telegram asks for your OK.
+              Whatever you do, engineer, doctor, accountant or lawyer: PostFlow reads <span className="hl">the news in your field</span>, writes <span className="hl">a clear post anyone can follow</span> and checks every fact. Ten minutes before it goes out, Telegram asks for your OK.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
               <a href={cta.href} className="btn-desk">{cta.label}</a>
@@ -142,6 +152,30 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
             </p>
           </div>
           <HeroDemo />
+        </section>
+
+        <Rule />
+
+        {/* ---------- who it's for ---------- */}
+        <section id="who" className="mx-auto max-w-[1200px] scroll-mt-24 px-4 py-20 sm:px-6 sm:py-24">
+          <div className="mb-12 grid gap-6 lg:grid-cols-2 lg:items-end">
+            <Headline a="Any profession." b="Your field's news." className="text-[46px] sm:text-[68px]" />
+            <p className="max-w-[520px] text-[19px] leading-relaxed text-[var(--d-muted)] lg:justify-self-end">
+              Pick your field and the topics you know when you sign up. What counts as news, who the posts are written for and the rules they follow all change with it.
+            </p>
+          </div>
+          <div className="grid gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
+            {PROFESSIONS.map((p, i) => (
+              <div key={p.who} className="card-lift reveal pt-4" style={{ "--d": `${(i % 3) * 80}ms` } as React.CSSProperties}>
+                <h3 className="display text-[26px] tracking-[-0.03em]">{p.who}</h3>
+                <p className="mt-2 text-[16px] leading-relaxed text-[var(--d-muted)]">{p.watch}</p>
+                <p className="typed mt-3 text-[12px] uppercase tracking-[.12em] text-[var(--accent)]">{p.rule}</p>
+              </div>
+            ))}
+          </div>
+          <p className="mt-10 text-[16px] text-[var(--d-muted)]">
+            Something else? Architects, designers, consultants and researchers pick <span className="font-semibold text-[var(--d-ink)]">Something else</span> and name their topics. PostFlow follows the news on each one.
+          </p>
         </section>
 
         <Rule />
