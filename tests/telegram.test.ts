@@ -354,16 +354,17 @@ describe("/today and /tomorrow", () => {
     }
   });
 
-  it("/today sends each post with its picture and picture buttons", async () => {
+  it("/today sends each post with its logo and logo buttons", async () => {
     const { DateTime } = await import("luxon");
-    const { setImageMakingForTests, setPhotoSearchForTests, setPhotoDownloadForTests } = await import("../src/server/post-images");
+    const { setImageMakingForTests, setLogoSearchForTests, setImageDownloadForTests } = await import("../src/server/post-images");
     const now = DateTime.now().setZone("Asia/Kathmandu");
     const soon = now.plus({ minutes: 3 });
     if (!soon.hasSame(now, "day")) return; // a minute before midnight there is no "later today"
     setImageMakingForTests(true);
-    setPhotoSearchForTests(async () => [{ url: "https://images.example/1.jpg", source: "https://library.example/1", credit: "A on Pexels" }]);
-    setPhotoDownloadForTests(async () => ({ data: Buffer.alloc(20_000, 1), mime: "image/jpeg" }));
-    fakeLLM(() => ({ queries: ["bank vault"] }));
+    setLogoSearchForTests(async () => [{ url: "https://up/acme.png", source: "https://c/acme", credit: "Acme logo via Wikimedia Commons", title: "Acme logo.svg" }]);
+    const logoPng = await (await import("sharp")).default({ create: { width: 300, height: 100, channels: 3, background: { r: 30, g: 60, b: 160 } } }).png().toBuffer();
+    setImageDownloadForTests(async () => logoPng);
+    fakeLLM(() => ({ subject: "Acme" }));
     const [p] = await db().insert(schema.posts).values({ userId: me(), platform: "linkedin", pillar: "news", text: "A post for later today.", status: "scheduled", scheduledAt: soon.toJSDate() }).returning();
     process.env.TELEGRAM_BOT_TOKEN = "123:test";
     resetEnvCache();

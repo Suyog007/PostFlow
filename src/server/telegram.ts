@@ -121,7 +121,7 @@ export async function notifyReminder(post: PostRow, tz: string, blocks: boolean,
   const inTxt = minutes <= 1 ? "in about a minute" : `in about ${minutes} minutes`;
   const story = await storyLine(post, tz);
   const head = `⏰ Going out ${inTxt}\n${when}${story ? `\n${story}` : ""}\n\n${post.text}\n\n`;
-  const picture = withImage ? [[{ text: "🎨 New picture", data: `ni:${post.id}` }, { text: "🚫 No picture", data: `xi:${post.id}` }]] : [];
+  const picture = withImage ? [[{ text: "🔁 Other logo", data: `ni:${post.id}` }, { text: "🚫 No logo", data: `xi:${post.id}` }]] : [];
   if (blocks && !post.approvedAt) {
     await send(`${head}Not approved yet. If you do nothing it is skipped.`, [
       [{ text: "✅ Approve", data: `ok:${post.id}` }, { text: "🗑 Remove", data: `rm:${post.id}` }],

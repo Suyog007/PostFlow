@@ -12,7 +12,7 @@ import { TRIAL_DAYS } from "@/lib/pricing";
 
 const TITLE = "PostFlow · The news breaks. Your post is ready.";
 const DESCRIPTION =
-  "PostFlow reads the news in your field, writes a clear LinkedIn or X post with a picture, checks every fact, and waits for your one-tap OK on Telegram.";
+  "PostFlow reads the news in your field, writes a clear LinkedIn or X post, checks every fact, and waits for your one-tap OK on Telegram.";
 
 export const metadata: Metadata = {
   title: TITLE,
@@ -33,15 +33,15 @@ export const metadata: Metadata = {
 const FAQ: { q: string; a: string }[] = [
   {
     q: "Will it post something I haven't seen?",
-    a: "Not unless you choose that. Ten minutes before each post, Telegram sends it to you with its picture. If you don't approve it, it is skipped and the calendar moves on. On Pro you can switch to auto mode later.",
+    a: "Not unless you choose that. Ten minutes before each post, Telegram sends it to you. If you don't approve it, it is skipped and the calendar moves on. On Pro you can switch to auto mode later.",
   },
   {
     q: "Does it make things up?",
     a: "It is built not to. Every news post names its source, and a separate reviewer checks each claim against the article before it reaches you. Stories are only used once other publishers confirm them. First-person stories only come from notes you wrote.",
   },
   {
-    q: "Where do the pictures come from?",
-    a: "Each post gets a picture drawn for its point by an image model, in one calm style with no words in it. It is never a news site's photo, so there is nothing to credit. Don't like it? Tap New picture, or post without one.",
+    q: "Do posts come with a picture?",
+    a: "When a post is about one named company or product, it gets that company's official logo from Wikimedia Commons, so people see at a glance what it is about. Posts about a general idea go out as text only, which is how most good posts look anyway. You can switch logos off per post or per platform.",
   },
   {
     q: "What do I need to connect?",
@@ -76,7 +76,7 @@ const DESK = [
   { t: "News desk", b: "Reads your field all day. Keeps what your audience will care about." },
   { t: "Research", b: "Digs into any link, even an X post, before a word is written." },
   { t: "Fact-checker", b: "Every claim checked against the source. Weak drafts never reach you." },
-  { t: "Picture desk", b: "A picture drawn for every post. No stock photos, no words in it." },
+  { t: "Logo desk", b: "A story about Qwen gets the Qwen logo. A general idea stays text only." },
   { t: "Telegram", b: "Each post arrives ten minutes early. One tap to approve." },
   { t: "Calendar", b: "Two posts a day, and never the same story twice." },
 ];
@@ -116,7 +116,7 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
               className="text-[50px] sm:text-[72px] xl:text-[80px]"
             />
             <p className="mt-7 max-w-[560px] text-[19px] leading-[1.7] text-[var(--d-muted)] sm:text-[21px]">
-              PostFlow reads <span className="hl">the news in your field</span>, writes <span className="hl">a clear post with a picture</span> and checks every fact. Ten minutes before it goes out, Telegram asks for your OK.
+              PostFlow reads <span className="hl">the news in your field</span>, writes <span className="hl">a clear post anyone can follow</span> and checks every fact. Ten minutes before it goes out, Telegram asks for your OK.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
               <a href={cta.href} className="btn-desk">{cta.label}</a>
@@ -125,7 +125,7 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
             <p className="mt-3 text-[14px] text-[var(--d-muted)]">{open ? "No charge during the trial. Cancel anytime." : `${TRIAL_DAYS}-day free trial at launch. No card to join.`}</p>
             {/* A byline strip: what every post comes with. */}
             <p className="typed mt-10 flex flex-wrap items-center gap-x-3 gap-y-1 border-y border-[var(--line)] py-3 text-[13px] uppercase tracking-[.12em] text-[var(--d-muted)]">
-              <span>Fact-checked</span><span aria-hidden="true">·</span><span>Picture included</span><span aria-hidden="true">·</span><span>Sent only when you approve</span>
+              <span>Fact-checked</span><span aria-hidden="true">·</span><span>Plain words</span><span aria-hidden="true">·</span><span>Sent only when you approve</span>
             </p>
           </div>
           <HeroDemo />
@@ -174,7 +174,7 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
               <Headline a="One price a month." b="Every post checked." className="text-[46px] sm:text-[68px]" />
             </div>
             <p className="max-w-[520px] text-[19px] leading-relaxed text-[var(--d-muted)] lg:justify-self-end">
-              Every plan includes the fact-checker and the pictures. No free plan, because checking costs real money. A {TRIAL_DAYS}-day trial instead.
+              Every plan includes the fact-checker. No free plan, because checking costs real money. A {TRIAL_DAYS}-day trial instead.
             </p>
           </div>
           <Pricing signupsOpen={open} />

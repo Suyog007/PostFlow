@@ -161,8 +161,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <label className="flex items-center gap-2"><input type="checkbox" name="tags_linkedin" defaultChecked={s.hashtags.linkedin} /> Add up to 3 hashtags on LinkedIn</label>
           </div>
           <div className="flex flex-wrap gap-6">
-            <label className="flex items-center gap-2"><input type="checkbox" name="img_linkedin" defaultChecked={s.images.linkedin} /> Add a picture on LinkedIn posts</label>
-            <label className="flex items-center gap-2"><input type="checkbox" name="img_x" defaultChecked={s.images.x} /> Add a picture on X posts</label>
+            <label className="flex items-center gap-2"><input type="checkbox" name="img_linkedin" defaultChecked={s.images.linkedin} /> Add the logo of what a LinkedIn post is about, when there is one</label>
+            <label className="flex items-center gap-2"><input type="checkbox" name="img_x" defaultChecked={s.images.x} /> Add the logo on X posts too</label>
           </div>
           <div className="flex gap-6">
             <label className="flex items-center gap-2"><input type="checkbox" name="link_linkedin" defaultChecked={s.includeLinks.linkedin} /> Add the news source link on LinkedIn</label>

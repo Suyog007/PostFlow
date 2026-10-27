@@ -12,7 +12,7 @@ import { PostEditor } from "@/components/post-editor";
 import { Icon, PlatformGlyph, StatusBadge } from "@/components/ui";
 import { Flash } from "../../flash";
 import { storyDate } from "@/server/story-date";
-import { cardUrl, wantsImage } from "@/server/post-images";
+import { cardUrl, noPictureReason, wantsImage } from "@/server/post-images";
 import { PostPicture } from "@/components/post-picture";
 
 interface Claim { claim: string; support: string; evidence: string }
@@ -58,6 +58,7 @@ export default async function PostPage({ params, searchParams }: { params: Promi
   // When the story itself happened: for you to judge freshness, never part of the post.
   const story = await storyDate(p, s.timezone);
   const withImage = wantsImage(p, s);
+  const noPicture = noPictureReason(p);
   const photo = withImage ? await db().query.postImages.findFirst({ where: eq(schema.postImages.postId, p.id), columns: { credit: true, source: true } }) : null;
   const name = s.profile.name || "Your Name";
   const handle = (acct?.handle ?? name.toLowerCase().replace(/[^a-z0-9]/g, "")).replace(/^@/, "");
@@ -86,7 +87,7 @@ export default async function PostPage({ params, searchParams }: { params: Promi
 
       <PostEditor id={p.id} platform={p.platform} initialText={p.text} name={name} role={s.profile.role} handle={handle} editable={editable} />
 
-      {/* The picture that goes out with the post: a free-licence photo found for this post, never a news site's photo. */}
+      {/* The picture that goes out with the post: the logo of what it is about, when there is one. Many posts go out as text. */}
       <section className="panel mt-4">
         <div className="panel-head">
           <Icon name="draft" size={15} />Picture
@@ -94,7 +95,7 @@ export default async function PostPage({ params, searchParams }: { params: Promi
             {withImage && open && (
               <form action={redrawImageAction}>
                 <input type="hidden" name="id" value={p.id} />
-                <SubmitButton className="btn btn-sm" pending="Finding a new picture…">New picture</SubmitButton>
+                <SubmitButton className="btn btn-sm" pending="Looking for a logo…">{noPicture ? "Look for a logo" : "Other logo"}</SubmitButton>
               </form>
             )}
             <form action={togglePostImageAction}>
@@ -104,12 +105,14 @@ export default async function PostPage({ params, searchParams }: { params: Promi
           </div>
         </div>
         <div className="panel-body">
-          {withImage ? (
+          {withImage && noPicture ? (
+            <p className="text-[13px] text-[var(--muted)]">{noPicture} That is fine: most good posts are text only.</p>
+          ) : withImage ? (
             <>
               <PostPicture src={cardUrl(p)} alt={`Picture for: ${p.text.split("\n")[0]}`} />
               {photo?.credit && (
                 <p className="mt-2 text-[12px] text-[var(--muted)]">
-                  Photo: {photo.source ? <a href={photo.source} target="_blank" rel="noreferrer" className="underline">{photo.credit}</a> : photo.credit}. Free to use, no credit needed in the post.
+                  {photo.source ? <a href={photo.source} target="_blank" rel="noreferrer" className="underline">{photo.credit}</a> : photo.credit}.
                 </p>
               )}
             </>

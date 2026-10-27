@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { db, schema } from "../src/server/db/client";
-import { altText, cardUrl, cleanScene, drawPrompt, ensurePostImage, setAiDrawerForTests, shrink, redrawPostImage, setImageMakingForTests, setPhotoDownloadForTests, setPhotoSearchForTests, verifyCard, wantsImage, type Photo } from "../src/server/post-images";
+import { altText, cardUrl, ensurePostImage, logoCard, noPictureReason, redrawPostImage, setImageDownloadForTests, setImageMakingForTests, setLogoSearchForTests, verifyCard, wantsImage, type Logo } from "../src/server/post-images";
 import { withUser } from "../src/server/context";
 import { publishDue } from "../src/server/publisher";
 import { saveSettings } from "../src/server/settings";
@@ -9,31 +9,33 @@ import { setPlatformClientForTests } from "../src/server/platforms/accounts";
 import type { PublishOptions } from "../src/server/platforms/types";
 import { GOOD_REVIEW, fakeLLM, me, resetDb } from "./helpers";
 
-const POST = "GitLab fixed a bug that sat in its code for 12 years.\n\nAnyone could run code on an unpatched server, per The Register. Patching is the whole fix.\n\n#gitlab #security";
-const SEARCHES = { queries: ["padlock", "server room", "code screen"] };
-const jpeg = (n: number) => Buffer.concat([Buffer.from([0xff, 0xd8, n]), Buffer.alloc(20)]);
-const photo = (n: number): Photo => ({ url: `https://images.example/${n}.jpg`, source: `https://library.example/photo/${n}`, credit: `Someone ${n} on Pexels` });
+const POST = "Running Qwen on your own servers does not make it trustworthy.\n\nA sandbox test caught the model uploading a file to a cloud bucket, per the report.\n\n#ai #security";
+const png = async (w: number, h: number, rgb: [number, number, number], alpha = 1) =>
+  (await import("sharp")).default({ create: { width: w, height: h, channels: 4, background: { r: rgb[0], g: rgb[1], b: rgb[2], alpha } } }).png().toBuffer();
+const logo = (n: number): Logo => ({ url: `https://upload.example/${n}.png`, source: `https://commons.wikimedia.org/wiki/File:Qwen_logo_${n}.svg`, credit: "Qwen logo via Wikimedia Commons (Public domain)", title: `Qwen logo ${n}.svg` });
 
-/** Photos on, with the library stubbed. Returns the searches it was asked for. */
-function library(results: (q: string) => Photo[] = () => [photo(1), photo(2), photo(3)]) {
+/** Pictures on, with the subject model and Wikimedia Commons stubbed. Returns the subjects looked up. */
+async function logos(found: (subject: string) => Logo[] = () => [logo(1), logo(2)], subject: string | null = "Qwen") {
   const asked: string[] = [];
   setImageMakingForTests(true);
-  setPhotoSearchForTests(async (q) => {
+  setLogoSearchForTests(async (q) => {
     asked.push(q);
-    return results(q);
+    return found(q);
   });
-  setPhotoDownloadForTests(async (url) => ({ data: jpeg(Number(url.match(/(\d+)\.jpg/)![1])), mime: "image/jpeg" }));
-  return asked;
+  const img = await png(400, 120, [97, 92, 237]);
+  setImageDownloadForTests(async () => img);
+  const calls = fakeLLM((req) => (req.schemaName === "image_subject" ? { subject } : GOOD_REVIEW));
+  return { asked, calls };
 }
 
-async function scheduledPost(platform = "x") {
-  const [p] = await db().insert(schema.posts).values({ userId: me(), platform, pillar: "news", text: POST, status: "scheduled", scheduledAt: new Date(Date.now() + 3_600_000) }).returning();
+async function scheduledPost(platform = "x", text = POST) {
+  const [p] = await db().insert(schema.posts).values({ userId: me(), platform, pillar: "news", text, status: "scheduled", scheduledAt: new Date(Date.now() + 3_600_000) }).returning();
   return p;
 }
 
 describe("picture basics", () => {
   it("alt text is the first line without hashtags or links", () => {
-    expect(altText({ text: POST })).toBe("GitLab fixed a bug that sat in its code for 12 years.");
+    expect(altText({ text: POST })).toBe("Running Qwen on your own servers does not make it trustworthy.");
     expect(altText({ text: "#ai Big news https://x.co/a today\nmore" })).toBe("Big news today");
   });
 
@@ -52,80 +54,111 @@ describe("picture basics", () => {
     expect(wantsImage({ platform: "x", review: {} }, s)).toBe(false);
     expect(wantsImage({ platform: "linkedin", review: { noImage: true } }, s)).toBe(false);
   });
+
+  it("puts the logo on a 1200x675 card, white for dark logos and dark for white ones", async () => {
+    const sharp = (await import("sharp")).default;
+    const dark = await logoCard(await png(400, 120, [20, 30, 120]));
+    const white = await logoCard(await png(400, 120, [255, 255, 255]));
+    const corner = async (b: Buffer) => (await sharp(b).extract({ left: 2, top: 2, width: 1, height: 1 }).raw().toBuffer())[0];
+    expect((await sharp(dark!.data).metadata()).width).toBe(1200);
+    expect(await corner(dark!.data)).toBeGreaterThan(240);
+    expect(await corner(white!.data)).toBeLessThan(40);
+  });
 });
 
-describe("finding the photo", () => {
+describe("the logo of what the post is about", () => {
   beforeEach(resetDb);
 
-  it("asks the writer what to search for, takes the first photo, stores it with its credit", async () => {
-    const asked = library();
-    const calls = fakeLLM((req) => (req.schemaName === "image_search" ? SEARCHES : GOOD_REVIEW));
+  it("names the subject, takes its logo from Wikimedia Commons and stores it with the credit", async () => {
+    const { asked, calls } = await logos();
     const p = await scheduledPost();
     const img = await withUser(me(), () => ensurePostImage(p));
-    expect(img).toMatchObject({ mime: "image/jpeg", prompt: "padlock", source: "https://library.example/photo/1", credit: "Someone 1 on Pexels" });
-    expect(calls.find((c) => c.schemaName === "image_search")!.user).toContain("GitLab fixed a bug");
-    expect(asked).toEqual(["padlock"]);
-
-    // Second time it comes from storage.
+    expect(img).toMatchObject({ mime: "image/jpeg", prompt: "Qwen", source: logo(1).source, credit: "Qwen logo via Wikimedia Commons (Public domain)" });
+    expect(asked).toEqual(["Qwen"]);
+    expect(calls.find((c) => c.schemaName === "image_subject")!.system).toMatch(/Return null for subject/);
+    // Stored: the second view does not look again.
     await withUser(me(), () => ensurePostImage(p));
     expect(asked).toHaveLength(1);
   });
 
-  it("does not use the same photo for two posts, and moves on to the next search when one finds nothing", async () => {
-    library((q) => (q === "padlock" ? [photo(1)] : q === "server room" ? [] : [photo(7)]));
-    fakeLLM(() => SEARCHES);
-    const a = await withUser(me(), async () => ensurePostImage(await scheduledPost("x")));
-    const b = await withUser(me(), async () => ensurePostImage(await scheduledPost("linkedin")));
-    expect(a!.source).toBe("https://library.example/photo/1");
-    expect(b).toMatchObject({ prompt: "code screen", source: "https://library.example/photo/7" });
+  it("a post about a general idea goes out as text, and is not asked about again on every view", async () => {
+    const { asked, calls } = await logos(undefined, null);
+    const p = await scheduledPost("linkedin", "Caching is remembering an answer so you do not work it out twice.");
+    expect(await withUser(me(), () => ensurePostImage(p))).toBeNull();
+    const row = (await db().select().from(schema.posts).where(eq(schema.posts.id, p.id)))[0];
+    expect(noPictureReason(row)).toMatch(/general idea/);
+    expect(await withUser(me(), () => ensurePostImage(row))).toBeNull();
+    expect(calls.filter((c) => c.schemaName === "image_subject")).toHaveLength(1);
+    expect(asked).toHaveLength(0);
   });
 
-  it("New picture swaps in a different photo and changes the link; if none is found the old one stays", async () => {
-    library();
-    fakeLLM(() => SEARCHES);
+  it("when no logo is found, it goes out as text and says why", async () => {
+    await logos(() => []);
+    const p = await scheduledPost();
+    expect(await withUser(me(), () => ensurePostImage(p))).toBeNull();
+    expect(noPictureReason((await db().select().from(schema.posts).where(eq(schema.posts.id, p.id)))[0])).toMatch(/No Qwen logo found/);
+  });
+
+  it("Other logo takes the next one, and keeps the current one if there is no other", async () => {
+    await logos(() => [logo(1), logo(2)]);
     const p = await scheduledPost();
     await withUser(me(), () => ensurePostImage(p));
     const again = await withUser(me(), () => redrawPostImage(p));
-    expect(again!.source).toBe("https://library.example/photo/2");
-    expect(await db().select().from(schema.postImages)).toHaveLength(1);
+    expect(again!.source).toBe(logo(2).source);
     const after = (await db().select().from(schema.posts).where(eq(schema.posts.id, p.id)))[0];
     expect(cardUrl(after)).not.toBe(cardUrl(p));
 
-    library(() => []);
+    await logos(() => [logo(2)]);
     expect(await withUser(me(), () => redrawPostImage(after))).toBeNull();
-    expect((await db().select().from(schema.postImages))[0].source).toBe("https://library.example/photo/2");
+    expect((await db().select().from(schema.postImages))[0].source).toBe(logo(2).source);
   });
 
-  it("serves the stored photo on a signed link and refuses anything else", async () => {
-    library();
-    fakeLLM(() => SEARCHES);
+  it("serves the stored logo card on a signed link and refuses anything else", async () => {
+    await logos();
     const { GET } = await import("../src/app/api/cards/[id]/route");
     const p = await scheduledPost();
     const res = await GET(new Request(cardUrl(p)), { params: Promise.resolve({ id: p.id }) });
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("image/jpeg");
-    expect(Buffer.from(await res.arrayBuffer())).toEqual(jpeg(1));
-
     const bad = await GET(new Request(`http://localhost/api/cards/${p.id}?v=1&s=nope`), { params: Promise.resolve({ id: p.id }) });
     expect(bad.status).toBe(404);
   });
 
-  it("when nothing is found, nothing is stored, the reason is kept, and it waits before searching again", async () => {
-    const asked = library(() => {
-      throw new Error("Openverse HTTP 503");
-    });
-    fakeLLM(() => SEARCHES);
-    const p = await scheduledPost();
-    expect(await withUser(me(), () => ensurePostImage(p))).toBeNull();
-    expect(await db().select().from(schema.postImages)).toHaveLength(0);
-    expect((await db().select().from(schema.llmCalls)).find((c) => c.task === "find_image")!.error).toContain("Openverse HTTP 503");
-    const before = asked.length;
-    await withUser(me(), () => ensurePostImage(p));
-    expect(asked.length).toBe(before);
+  it("reads Wikimedia Commons: only files named after the subject and called a logo, SVG first", async () => {
+    setImageMakingForTests(true);
+    setLogoSearchForTests(null); // the real Commons lookup, against a stubbed network
+    const img = await png(400, 120, [97, 92, 237]);
+    setImageDownloadForTests(async () => img);
+    fakeLLM(() => ({ subject: "Qwen" }));
+    const asked: string[] = [];
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async (u: string) => {
+      asked.push(String(u));
+      return new Response(
+        JSON.stringify({
+          query: {
+            pages: {
+              "1": { index: 1, title: "File:Alibaba headquarters.jpg", imageinfo: [{ thumburl: "https://up/hq.jpg", descriptionurl: "https://c/hq" }] },
+              "2": { index: 2, title: "File:Qwen logo.png", imageinfo: [{ thumburl: "https://up/qwen.png", descriptionurl: "https://c/qwen-png", extmetadata: { LicenseShortName: { value: "Public domain" } } }] },
+              "3": { index: 3, title: "File:Qwen logo.svg", imageinfo: [{ thumburl: "https://up/qwen-svg.png", descriptionurl: "https://c/qwen-svg", extmetadata: { LicenseShortName: { value: "Public domain" } } }] },
+            },
+          },
+        }),
+      );
+    }) as typeof fetch;
+    try {
+      const out = await withUser(me(), async () => ensurePostImage(await scheduledPost()));
+      expect(out).toMatchObject({ source: "https://c/qwen-svg", credit: "Qwen logo via Wikimedia Commons (Public domain)" });
+      const q = new URL(asked[0]);
+      expect(q.hostname).toBe("commons.wikimedia.org");
+      expect(q.searchParams.get("gsrsearch")).toBe("Qwen logo");
+    } finally {
+      globalThis.fetch = realFetch;
+    }
   });
 });
 
-describe("publishing with the photo", () => {
+describe("publishing with the logo", () => {
   beforeEach(resetDb);
   const NOW = new Date("2026-10-21T04:00:00Z");
 
@@ -150,19 +183,16 @@ describe("publishing with the photo", () => {
     return p;
   }
 
-  it("attaches the photo, with the first line as its alt text", async () => {
-    library();
-    fakeLLM(() => SEARCHES);
+  it("attaches the logo card, with the first line as its alt text", async () => {
+    await logos();
     const calls = recordingClient();
     await duePost();
     expect((await publishDue({ now: NOW })).published).toBe(1);
-    expect(calls[0].media).toHaveLength(1);
-    expect(calls[0].media![0]).toMatchObject({ mime: "image/jpeg", alt: "GitLab fixed a bug that sat in its code for 12 years." });
+    expect(calls[0].media![0]).toMatchObject({ mime: "image/jpeg", alt: "Running Qwen on your own servers does not make it trustworthy." });
   });
 
-  it("still posts, as text only, when no photo is found or the upload fails", async () => {
-    library(() => []);
-    fakeLLM(() => SEARCHES);
+  it("posts as text when there is no logo, or when the upload fails", async () => {
+    await logos(() => []);
     let calls = recordingClient();
     const a = await duePost();
     await publishDue({ now: NOW });
@@ -170,8 +200,7 @@ describe("publishing with the photo", () => {
     expect((await db().select().from(schema.posts).where(eq(schema.posts.id, a.id)))[0].status).toBe("published");
 
     await resetDb();
-    library();
-    fakeLLM(() => SEARCHES);
+    await logos();
     calls = recordingClient((o) => (o.media?.length ? "X media upload failed (HTTP 400): bad image" : null));
     const b = await duePost();
     await publishDue({ now: NOW });
@@ -180,15 +209,47 @@ describe("publishing with the photo", () => {
     expect((await db().select().from(schema.posts).where(eq(schema.posts.id, b.id)))[0].status).toBe("published");
   });
 
-  it("goes without a photo when pictures are off for the platform", async () => {
-    const asked = library();
-    fakeLLM(() => SEARCHES);
+  it("goes without when pictures are off for the platform", async () => {
+    const { asked } = await logos();
     const calls = recordingClient();
     await duePost();
     await saveSettings({ images: { linkedin: true, x: false } });
     await publishDue({ now: NOW });
     expect(calls[0].media).toBeUndefined();
     expect(asked).toHaveLength(0);
+  });
+});
+
+describe("logo buttons in Telegram", () => {
+  beforeEach(resetDb);
+
+  it("Other logo sends the post back with the next one; No logo switches it off", async () => {
+    const { handleTelegramUpdate } = await import("../src/server/telegram-inbound");
+    const { resetEnvCache } = await import("../src/server/env");
+    await logos();
+    const p = await scheduledPost();
+    await withUser(me(), () => ensurePostImage(p));
+    process.env.TELEGRAM_BOT_TOKEN = "123:test";
+    resetEnvCache();
+    const sent: { method: string; body: Record<string, unknown> }[] = [];
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async (u: string, init?: { body?: string }) => {
+      sent.push({ method: String(u).split("/").pop()!, body: JSON.parse(init?.body ?? "{}") });
+      return new Response(JSON.stringify({ ok: true }));
+    }) as typeof fetch;
+    try {
+      await handleTelegramUpdate({ callback_query: { id: "1", data: `ni:${p.id}`, message: { chat: { id: 42 } } } });
+      const msg = sent.find((m) => m.method === "sendPhoto")!;
+      expect(msg.body.caption).toMatch(/^🔁 Other logo/);
+      expect(JSON.stringify(msg.body.reply_markup)).toContain(`xi:${p.id}`);
+      expect((await db().select().from(schema.postImages))[0].source).toBe(logo(2).source);
+      await handleTelegramUpdate({ callback_query: { id: "2", data: `xi:${p.id}`, message: { chat: { id: 42 } } } });
+      expect((await db().select().from(schema.posts).where(eq(schema.posts.id, p.id)))[0].review).toMatchObject({ noImage: true });
+    } finally {
+      globalThis.fetch = realFetch;
+      delete process.env.TELEGRAM_BOT_TOKEN;
+      resetEnvCache();
+    }
   });
 });
 
@@ -221,198 +282,5 @@ describe("rewriting queued posts in the new style", () => {
     fakeLLM((req) => (req.schemaName === "write_post" ? { text: "Something worse about GitLab and nothing else at all." } : { ...GOOD_REVIEW, worth_posting: 2, issues: ["Says nothing."] }));
     expect(await rewriteFresh(another.id)).toBe("kept");
     expect((await db().select().from(schema.posts).where(eq(schema.posts.id, another.id)))[0]).toMatchObject({ status: "scheduled", text: "Old but fine." });
-  });
-});
-
-describe("picture buttons in Telegram", () => {
-  beforeEach(resetDb);
-
-  it("New picture sends the post back with a different photo; No picture switches it off", async () => {
-    const { handleTelegramUpdate } = await import("../src/server/telegram-inbound");
-    const { resetEnvCache } = await import("../src/server/env");
-    library();
-    fakeLLM(() => SEARCHES);
-    const p = await scheduledPost();
-    await withUser(me(), () => ensurePostImage(p));
-
-    process.env.TELEGRAM_BOT_TOKEN = "123:test";
-    resetEnvCache();
-    const sent: { method: string; body: Record<string, unknown> }[] = [];
-    const realFetch = globalThis.fetch;
-    globalThis.fetch = (async (u: string, init?: { body?: string }) => {
-      sent.push({ method: String(u).split("/").pop()!, body: JSON.parse(init?.body ?? "{}") });
-      return new Response(JSON.stringify({ ok: true }));
-    }) as typeof fetch;
-    try {
-      await handleTelegramUpdate({ callback_query: { id: "1", data: `ni:${p.id}`, message: { chat: { id: 42 } } } });
-      const msg = sent.find((m) => m.method === "sendPhoto")!;
-      expect(msg.body.caption).toMatch(/^🎨 New picture/);
-      expect(JSON.stringify(msg.body.reply_markup)).toContain(`xi:${p.id}`);
-      expect((await db().select().from(schema.postImages))[0].source).toBe("https://library.example/photo/2");
-
-      await handleTelegramUpdate({ callback_query: { id: "2", data: `xi:${p.id}`, message: { chat: { id: 42 } } } });
-      const row = (await db().select().from(schema.posts).where(eq(schema.posts.id, p.id)))[0];
-      expect(row.review).toMatchObject({ noImage: true });
-    } finally {
-      globalThis.fetch = realFetch;
-      delete process.env.TELEGRAM_BOT_TOKEN;
-      resetEnvCache();
-    }
-  });
-});
-
-describe("the photo libraries", () => {
-  beforeEach(resetDb);
-
-  it("uses Pexels when a key is set, and public-domain Openverse photos otherwise", async () => {
-    const { resetEnvCache } = await import("../src/server/env");
-    setImageMakingForTests(true);
-    setPhotoSearchForTests(null); // the real libraries, against a stubbed network
-    setPhotoDownloadForTests(async (url) => ({ data: Buffer.from(url), mime: "image/jpeg" }));
-    fakeLLM(() => SEARCHES);
-    const asked: { url: string; auth?: string }[] = [];
-    const realFetch = globalThis.fetch;
-    globalThis.fetch = (async (u: string, init?: { headers?: Record<string, string> }) => {
-      asked.push({ url: String(u), auth: init?.headers?.Authorization });
-      if (String(u).startsWith("https://api.pexels.com/"))
-        return new Response(JSON.stringify({ photos: [{ id: 5, url: "https://www.pexels.com/photo/padlock-5/", photographer: "Ana", src: { landscape: "https://images.pexels.com/photos/5/landscape.jpeg" } }] }));
-      return new Response(JSON.stringify({ results: [{ url: "https://live.staticflickr.com/1/padlock.jpg", foreign_landing_url: "https://flickr.com/photos/1", creator: "Bo" }] }));
-    }) as typeof fetch;
-    try {
-      const a = await withUser(me(), async () => ensurePostImage(await scheduledPost("x")));
-      expect(a).toMatchObject({ source: "https://flickr.com/photos/1", credit: "Bo via Openverse (public domain)" });
-      const ov = new URL(asked.find((r) => r.url.includes("openverse"))!.url);
-      expect(ov.searchParams.get("license")).toBe("cc0,pdm");
-      expect(ov.searchParams.get("q")).toBe("padlock");
-      expect(asked.some((r) => r.url.includes("pexels"))).toBe(false);
-
-      process.env.PEXELS_API_KEY = "px-test";
-      resetEnvCache();
-      const b = await withUser(me(), async () => ensurePostImage(await scheduledPost("linkedin")));
-      expect(b).toMatchObject({ source: "https://www.pexels.com/photo/padlock-5/", credit: "Ana on Pexels" });
-      expect(b!.data.toString()).toBe("https://images.pexels.com/photos/5/landscape.jpeg");
-      expect(asked.find((r) => r.url.includes("pexels"))!.auth).toBe("px-test");
-    } finally {
-      globalThis.fetch = realFetch;
-      delete process.env.PEXELS_API_KEY;
-      resetEnvCache();
-    }
-  });
-});
-
-describe("AI illustrations", () => {
-  beforeEach(resetDb);
-  const SCENE = { style: "cinematic photograph", scene: "A massive bank vault door held shut by a single bent paper clip, cold blue light, dust in the air, a tiny figure staring up at it from the floor." };
-  const realPng = async (w: number, h: number) => (await import("sharp")).default({ create: { width: w, height: h, channels: 3, background: { r: 30, g: 60, b: 200 } } }).png().toBuffer();
-
-  it("when an image model is set up, the post gets an illustration of its point, cut to 1200x675 JPEG", async () => {
-    const prompts: string[] = [];
-    setImageMakingForTests(true);
-    setAiDrawerForTests(async (prompt) => {
-      prompts.push(prompt);
-      return realPng(1024, 1024);
-    });
-    const asked = library();
-    const calls = fakeLLM((req) => (req.schemaName === "image_scene" ? SCENE : SEARCHES));
-    const p = await scheduledPost("linkedin");
-    const img = await withUser(me(), () => ensurePostImage(p));
-    expect(calls.find((c) => c.schemaName === "image_scene")!.system).toMatch(/no lone padlock, key/);
-    expect(prompts[0]).toContain("paper clip");
-    expect(prompts[0]).toMatch(/No text, no letters/);
-    expect(img).toMatchObject({ mime: "image/jpeg", credit: "AI illustration made for this post" });
-    const meta = await (await import("sharp")).default(img!.data).metadata();
-    expect([meta.width, meta.height, meta.format]).toEqual([1200, 675, "jpeg"]);
-    expect(asked).toHaveLength(0); // no photo search needed
-  });
-
-  it("falls back to a photo when the image model fails, and keeps why", async () => {
-    setImageMakingForTests(true);
-    setAiDrawerForTests(async () => {
-      throw new Error("Cloudflare HTTP 429: daily free allocation used");
-    });
-    library();
-    fakeLLM((req) => (req.schemaName === "image_scene" ? SCENE : SEARCHES));
-    const img = await withUser(me(), async () => ensurePostImage(await scheduledPost()));
-    expect(img!.source).toBe("https://library.example/photo/1");
-  });
-
-  it("big downloaded photos are made small", async () => {
-    const big = await (await import("sharp")).default({ create: { width: 4000, height: 3000, channels: 3, background: { r: 200, g: 100, b: 50 } } }).jpeg({ quality: 100 }).toBuffer();
-    const out = await shrink(big);
-    const meta = await (await import("sharp")).default(out!.data).metadata();
-    expect([meta.width, meta.height]).toEqual([1200, 675]);
-    expect(out!.data.length).toBeLessThan(big.length);
-    expect(drawPrompt(SCENE)).toContain("bank vault");
-  });
-});
-
-describe("Cloudflare Workers AI", () => {
-  beforeEach(resetDb);
-
-  async function withCloudflare(reply: (model: string, req: { form?: FormData; json?: Record<string, unknown> }) => Response | Promise<Response>) {
-    const { resetEnvCache } = await import("../src/server/env");
-    process.env.CLOUDFLARE_ACCOUNT_ID = "acc123";
-    process.env.CLOUDFLARE_API_TOKEN = "cf-token";
-    resetEnvCache();
-    setImageMakingForTests(true);
-    setAiDrawerForTests(undefined); // the real Cloudflare call, against a stubbed network
-    fakeLLM(() => ({ scene: 'A huge vault door held shut by one small paper clip "4-bit", labeled weak key.' }));
-    const seen: { model: string; form?: FormData; json?: Record<string, unknown> }[] = [];
-    const realFetch = globalThis.fetch;
-    globalThis.fetch = (async (u: string, init?: { body?: unknown; headers?: Record<string, string> }) => {
-      expect(String(u)).toMatch(/^https:\/\/api\.cloudflare\.com\/client\/v4\/accounts\/acc123\/ai\/run\/@cf\/black-forest-labs\//);
-      expect(init?.headers?.Authorization).toBe("Bearer cf-token");
-      const model = String(u).split("/").pop()!;
-      const req = init?.body instanceof FormData ? { form: init.body } : { json: JSON.parse(String(init?.body)) };
-      seen.push({ model, ...req });
-      return reply(model, req);
-    }) as typeof fetch;
-    try {
-      const img = await withUser(me(), async () => ensurePostImage(await scheduledPost("linkedin")));
-      return { img, seen };
-    } finally {
-      globalThis.fetch = realFetch;
-      delete process.env.CLOUDFLARE_ACCOUNT_ID;
-      delete process.env.CLOUDFLARE_API_TOKEN;
-      resetEnvCache();
-    }
-  }
-  const png = async () => (await import("sharp")).default({ create: { width: 1280, height: 720, channels: 3, background: { r: 10, g: 20, b: 30 } } }).png().toBuffer();
-  const ok = async () => new Response(JSON.stringify({ success: true, result: { image: (await png()).toString("base64") } }), { headers: { "content-type": "application/json" } });
-
-  it("draws with FLUX.2 klein at 16:9 first, with the house style and without any words for the model to draw", async () => {
-    const { img, seen } = await withCloudflare(() => ok());
-    expect(img).toMatchObject({ mime: "image/jpeg", credit: "AI illustration made for this post" });
-    expect(seen.map((s) => s.model)).toEqual(["flux-2-klein-9b"]);
-    expect([seen[0].form!.get("width"), seen[0].form!.get("height")]).toEqual(["1280", "720"]);
-    const prompt = String(seen[0].form!.get("prompt"));
-    expect(prompt).toContain("vault door held shut by one small paper clip");
-    expect(prompt).not.toMatch(/4-bit|labeled|weak key/);
-    expect(prompt).toMatch(/Minimal editorial 3D illustration/);
-  });
-
-  it("falls back to FLUX.1 schnell when klein refuses (for example, the free allowance is used up), dropping settings schnell refuses", async () => {
-    const { img, seen } = await withCloudflare(async (model, req) => {
-      if (model === "flux-2-klein-9b") return new Response(JSON.stringify({ success: false, errors: [{ message: "4006: you have used up your daily free allocation of 10,000 neurons" }] }), { status: 429 });
-      if (req.json && "steps" in req.json) return new Response(JSON.stringify({ success: false, errors: [{ message: "AiError: Bad input: Error: Additional or unevaluated properties '/steps' at '/' not allowed" }] }), { status: 400 });
-      return ok();
-    });
-    expect(img).toMatchObject({ mime: "image/jpeg" });
-    expect(seen.map((s) => s.model)).toEqual(["flux-2-klein-9b", "flux-1-schnell", "flux-1-schnell"]);
-    expect(seen[2].json).toEqual({ prompt: expect.stringContaining("paper clip") });
-  });
-
-  it("keeps both models' errors when neither draws", async () => {
-    library(() => []);
-    const { img } = await withCloudflare(() => new Response(JSON.stringify({ success: false, errors: [{ message: "Internal error" }] }), { status: 500 }));
-    expect(img).toBeNull();
-    const err = (await db().select().from(schema.llmCalls)).find((c) => c.task === "find_image")!.error!;
-    expect(err).toMatch(/klein HTTP 500/);
-    expect(err).toMatch(/schnell HTTP 500/);
-  });
-
-  it("removes quoted words and labels from scenes", () => {
-    expect(cleanScene('A jar labeled "64 MB" sits on a chip.')).toBe("A jar sits on a chip.");
-    expect(cleanScene("A cup marked old version, next to a fresh loaf.")).toBe("A cup, next to a fresh loaf.");
   });
 });

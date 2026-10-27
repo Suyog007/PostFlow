@@ -35,7 +35,7 @@ Other ways to feed me:
 /learn  a short, simple lesson for your audience in the next free slots. Add a topic to choose it: /learn how indexes work
 /refresh  rewrite every queued post you have not approved, in the latest style
 /fill   write posts now for every open slot in the next 5 days
-/today  today's posts, each with its picture
+/today  today's posts, with their logos
 /tomorrow  tomorrow's posts
 /queue  upcoming posts by day, in full. Each has Approve, Post now, Remove, Another story and New wording buttons
 /pause  stop all posting
@@ -116,7 +116,7 @@ async function showQueue(chat: number | string, userId: string, onlyDay?: 0 | 1)
           continue;
         }
         const fresh = (await db().query.posts.findFirst({ where: eq(schema.posts.id, p.id) })) ?? p;
-        await sendPhotoTo(chat, cardUrl(fresh), line(p, i), [...buttonsFor(p, i), [{ text: `🎨 New picture ${i + 1}`, data: `ni:${p.id}` }, { text: `🚫 No picture ${i + 1}`, data: `xi:${p.id}` }]]);
+        await sendPhotoTo(chat, cardUrl(fresh), line(p, i), [...buttonsFor(p, i), [{ text: `🔁 Other logo ${i + 1}`, data: `ni:${p.id}` }, { text: `🚫 No logo ${i + 1}`, data: `xi:${p.id}` }]]);
       }
       continue;
     }
@@ -150,7 +150,7 @@ function postButtons(id: string, picture = false) {
   return [
     [{ text: "✅ Approve", data: `ok:${id}` }, { text: "🗑 Remove", data: `rm:${id}` }],
     [{ text: "🔁 Another story", data: `rj:${id}` }, { text: "✍️ New wording", data: `rw:${id}` }],
-    ...(picture ? [[{ text: "🎨 New picture", data: `ni:${id}` }, { text: "🚫 No picture", data: `xi:${id}` }]] : []),
+    ...(picture ? [[{ text: "🔁 Other logo", data: `ni:${id}` }, { text: "🚫 No logo", data: `xi:${id}` }]] : []),
   ];
 }
 
@@ -252,14 +252,14 @@ async function handleForUser(u: Update, chat: number): Promise<void> {
       return;
     } else if (data.startsWith("ni:")) {
       // Draw the picture again. Takes a few seconds, so acknowledge first; the post comes back with the new one.
-      await telegramApi("answerCallbackQuery", { callback_query_id: u.callback_query.id, text: "Finding another photo…" });
+      await telegramApi("answerCallbackQuery", { callback_query_id: u.callback_query.id, text: "Looking for another logo…" });
       const id = data.slice(3);
       const run = () =>
         withUser(userId, async () => {
           const p = await db().query.posts.findFirst({ where: and(eq(schema.posts.id, id), eq(schema.posts.userId, userId)) });
           if (!p || !["scheduled", "draft"].includes(p.status)) return void (await sendTo(chat, "That post is not waiting to go out any more."));
-          if (!(await redrawPostImage(p))) return void (await sendTo(chat, "Could not find another photo right now. The post keeps the one it has."));
-          await sendPost(chat, id, "🎨 New picture");
+          if (!(await redrawPostImage(p))) return void (await sendTo(chat, "No other logo found. The post keeps the one it has."));
+          await sendPost(chat, id, "🔁 Other logo");
         });
       try {
         after(run);
@@ -272,7 +272,7 @@ async function handleForUser(u: Update, chat: number): Promise<void> {
       if (!p) answer = "Post not found.";
       else {
         await db().update(schema.posts).set({ review: { ...((p.review ?? {}) as Record<string, unknown>), noImage: true }, updatedAt: new Date() }).where(eq(schema.posts.id, p.id));
-        answer = "🚫 This post will go out without a picture.";
+        answer = "🚫 This post will go out without a logo.";
       }
     } else if (data.startsWith("fw:")) {
       // "Write it anyway" after the research said a link or topic was weak.

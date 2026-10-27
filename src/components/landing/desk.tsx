@@ -59,78 +59,25 @@ export function DeskNav({ loggedIn }: { loggedIn: boolean }) {
 }
 
 // ---------------------------------------------------------------------------
-// Pictures in the house style: one or two simple objects, one accent colour, no words.
+// The logo card a post gets when it is about one named thing. These brands are made up for the demo.
 
-function Frame({ bg, children, label }: { bg: [string, string]; children: ReactNode; label: string }) {
-  const id = `g${bg[0].slice(1)}`;
+function LogoCard({ name, color, mark, label }: { name: string; color: string; mark: ReactNode; label: string }) {
   return (
-    <svg viewBox="0 0 640 300" role="img" aria-label={label} className="block h-auto w-full">
-      <defs>
-        <radialGradient id={id} cx="50%" cy="35%" r="80%">
-          <stop offset="0%" stopColor={bg[0]} />
-          <stop offset="100%" stopColor={bg[1]} />
-        </radialGradient>
-        <filter id={`${id}s`} x="-20%" y="-20%" width="140%" height="140%">
-          <feDropShadow dx="0" dy="12" stdDeviation="12" floodColor="#1d2b3a" floodOpacity=".25" />
-        </filter>
-      </defs>
-      <rect width="640" height="300" fill={`url(#${id})`} />
-      <ellipse cx="320" cy="268" rx="160" ry="13" fill="#1d2b3a" opacity=".14" />
-      <g filter={`url(#${id}s)`}>{children}</g>
+    <svg viewBox="0 0 640 300" role="img" aria-label={label} className="block h-auto w-full border-t border-[var(--line)] bg-white">
+      <rect width="640" height="300" fill="#ffffff" />
+      <g transform="translate(176 118)">
+        <g fill={color}>{mark}</g>
+        <text x="84" y="48" fontFamily="Inter, system-ui, sans-serif" fontWeight="800" fontSize="44" letterSpacing="-1.5" fill="#18221e">{name}</text>
+      </g>
     </svg>
   );
 }
 
 const PICTURES: Record<string, ReactNode> = {
-  security: (
-    <Frame bg={["#e2eaee", "#b7c6cd"]} label="Illustration: a huge vault door held shut by one small orange paper clip">
-      <circle cx="320" cy="150" r="112" fill="#e9eef0" stroke="#9fadb3" strokeWidth="5" />
-      <circle cx="320" cy="150" r="88" fill="none" stroke="#9fadb3" strokeWidth="5" opacity=".7" />
-      <circle cx="320" cy="150" r="26" fill="#dfe5e8" stroke="#9fadb3" strokeWidth="5" />
-      {[0, 60, 120, 180, 240, 300].map((a) => (
-        <rect key={a} x="316" y="80" width="8" height="46" rx="4" fill="#9fadb3" transform={`rotate(${a} 320 150)`} />
-      ))}
-      <path d="M432 100 v100" stroke="#8e9ca3" strokeWidth="4" strokeLinecap="round" />
-      <g transform="translate(414 138) rotate(-8)">
-        <path d="M8 0 h40 a14 14 0 0 1 0 28 h-36 a9 9 0 0 1 0 -18 h30" fill="none" stroke="#e8743b" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" />
-      </g>
-    </Frame>
-  ),
-  ai: (
-    <Frame bg={["#efe7da", "#d5c6ae"]} label="Illustration: a large price tag with a pair of orange scissors cutting it in half">
-      <g transform="rotate(-10 320 150)">
-        <path d="M230 90 h170 l50 60 l-50 60 h-170 a14 14 0 0 1 -14 -14 v-92 a14 14 0 0 1 14 -14 Z" fill="#fbf6ee" stroke="#b8a58a" strokeWidth="5" />
-        <circle cx="400" cy="150" r="11" fill="none" stroke="#b8a58a" strokeWidth="5" />
-        <path d="M318 84 l-8 132" stroke="#b8a58a" strokeWidth="3" strokeDasharray="8 8" />
-      </g>
-      <g transform="translate(250 200) rotate(-35)">
-        <circle cx="0" cy="0" r="16" fill="none" stroke="#e8743b" strokeWidth="8" />
-        <circle cx="0" cy="44" r="16" fill="none" stroke="#e8743b" strokeWidth="8" />
-        <path d="M12 10 L90 34 M12 34 L90 10" stroke="#e8743b" strokeWidth="8" strokeLinecap="round" />
-      </g>
-    </Frame>
-  ),
-  web: (
-    <Frame bg={["#e3ecf9", "#b9cbe6"]} label="Illustration: a tall hourglass with almost all the sand still at the top, and a small orange lightning bolt beside it">
-      <rect x="262" y="40" width="116" height="16" rx="8" fill="#8fa3c2" />
-      <rect x="262" y="246" width="116" height="16" rx="8" fill="#8fa3c2" />
-      <path d="M276 56 h88 c0 50 -40 70 -44 95 c4 25 44 45 44 95 h-88 c0 -50 40 -70 44 -95 c-4 -25 -44 -45 -44 -95 Z" fill="#f4f7fc" stroke="#8fa3c2" strokeWidth="5" />
-      <path d="M284 70 h72 c-4 30 -30 50 -36 66 c-6 -16 -32 -36 -36 -66 Z" fill="#d9c7a0" />
-      <path d="M314 238 h12 l-6 -8 Z" fill="#d9c7a0" />
-      <path d="M430 110 l-26 52 h22 l-14 48 l40 -62 h-24 l16 -38 Z" fill="#e8743b" />
-    </Frame>
-  ),
-  saas: (
-    <Frame bg={["#e4efe6", "#bcd2c1"]} label="Illustration: a small green seedling growing out of a neat stack of coins, with one orange coin on top">
-      {[0, 1, 2, 3].map((i) => (
-        <ellipse key={i} cx="320" cy={236 - i * 22} rx="70" ry="18" fill="#f1ede2" stroke="#a9b8a6" strokeWidth="5" />
-      ))}
-      <ellipse cx="320" cy="148" rx="70" ry="18" fill="#e8743b" />
-      <path d="M320 140 c0 -30 0 -50 4 -70" stroke="#5f8a62" strokeWidth="7" fill="none" strokeLinecap="round" />
-      <path d="M324 92 c20 -24 50 -22 60 -16 c-10 20 -40 30 -60 16 Z" fill="#7fae80" />
-      <path d="M322 110 c-18 -20 -46 -18 -54 -12 c10 18 36 26 54 12 Z" fill="#7fae80" />
-    </Frame>
-  ),
+  security: <LogoCard name="Pixelforge" color="#e8743b" label="Logo card: Pixelforge, a made-up image library" mark={<><rect x="0" y="4" width="28" height="28" rx="6" /><rect x="34" y="4" width="28" height="28" rx="6" opacity=".55" /><rect x="0" y="38" width="28" height="28" rx="6" opacity=".55" /><rect x="34" y="38" width="28" height="28" rx="6" /></>} />,
+  ai: <LogoCard name="Lumen AI" color="#0e6b5b" label="Logo card: Lumen AI, a made-up AI company" mark={<><circle cx="32" cy="35" r="30" /><circle cx="32" cy="35" r="13" fill="#ffffff" /></>} />,
+  web: <LogoCard name="Waypoint" color="#2f6fde" label="Logo card: Waypoint, a made-up web browser" mark={<path d="M32 2 L62 66 L32 50 L2 66 Z" />} />,
+  saas: <LogoCard name="Paywell" color="#6b4fd8" label="Logo card: Paywell, a made-up payments company" mark={<><rect x="0" y="12" width="64" height="44" rx="10" /><rect x="0" y="24" width="64" height="9" fill="#ffffff" /></>} />,
 };
 
 const FIELDS = [
@@ -144,28 +91,28 @@ type Field = (typeof FIELDS)[number]["id"];
 /** Made-up stories that show the shape of a post; they are labelled as samples on the page. */
 const SAMPLES: Record<Field, { linkedin: string; x: string; tags: string }> = {
   security: {
-    linkedin: "A bug in a popular image library lets a crafted picture run code on your server.\n\nIf your app resizes uploaded images, you are probably using it. The maintainers shipped a fix today, per the project's advisory. Update before you do anything else this week.",
-    x: "A crafted image can run code on servers using a popular image library. Fixed today, per the maintainers. If you resize uploads, update now.",
+    linkedin: "A bug in Pixelforge, a popular image library, lets a crafted picture run code on your server.\n\nIf your app resizes uploaded images, you are probably using it. The maintainers shipped a fix today, per the project's advisory. Update before you do anything else this week.",
+    x: "A crafted image can run code on servers using Pixelforge, a popular image library. Fixed today, per the maintainers. If you resize uploads, update now.",
     tags: "#security #webdev",
   },
   ai: {
-    linkedin: "Running a large AI model just got 80% cheaper.\n\nThe provider cut prices on its main model, per its announcement. For a small SaaS, that is the difference between an AI feature you ration and one you can offer on every plan.",
-    x: "Large AI model prices just fell 80%, per the provider. AI features you rationed last month now fit on every plan.",
+    linkedin: "Lumen AI just made its main model 80% cheaper.\n\nPer its announcement, the price cut applies to every plan. For a small SaaS, that is the difference between an AI feature you ration and one you can offer to everyone.",
+    x: "Lumen AI cut its main model's price by 80%, per its announcement. AI features you rationed last month now fit on every plan.",
     tags: "#ai #saas",
   },
   web: {
-    linkedin: "Slow pages lose visitors before your code even runs.\n\nA browser team says its new loading feature cuts first-load time by a third on typical sites. It is one line in your HTML, so it is worth a test on your heaviest page.",
-    x: "A new browser loading feature cuts first-load time by a third, per the team behind it. One line of HTML. Worth a test today.",
+    linkedin: "Slow pages lose visitors before your code even runs.\n\nThe Waypoint browser team says its new loading feature cuts first-load time by a third on typical sites. It is one line in your HTML, so it is worth a test on your heaviest page.",
+    x: "Waypoint's new loading feature cuts first-load time by a third, per the browser team. One line of HTML. Worth a test today.",
     tags: "#webperf #frontend",
   },
   saas: {
-    linkedin: "A payments provider will stop charging small teams a monthly minimum.\n\nFor a SaaS with its first ten customers, that fee was often bigger than the revenue. Per the company, the change starts next month for new and existing accounts.",
-    x: "No more monthly minimum for small teams, per the payments provider. For a SaaS with ten customers, that fee was often bigger than revenue.",
+    linkedin: "Paywell will stop charging small teams a monthly minimum.\n\nFor a SaaS with its first ten customers, that fee was often bigger than the revenue. Per the company, the change starts next month for new and existing accounts.",
+    x: "No more monthly minimum for small teams on Paywell, per the company. For a SaaS with ten customers, that fee was often bigger than revenue.",
     tags: "#saas #startups",
   },
 };
 
-/** Pick a field and a platform, see the kind of post PostFlow writes, with its picture. */
+/** Pick a field and a platform, see the kind of post PostFlow writes, with the logo of what it is about. */
 export function HeroDemo({ name = "Your Name" }: { name?: string }) {
   const [field, setField] = useState<Field>("security");
   const [platform, setPlatform] = useState<"linkedin" | "x">("linkedin");
@@ -202,7 +149,7 @@ export function HeroDemo({ name = "Your Name" }: { name?: string }) {
         <p className="whitespace-pre-line px-5 pb-4 pt-3 text-[15px] leading-relaxed">{text}</p>
         {PICTURES[field]}
       </article>
-      <p className="typed mt-4 text-right text-[12px] text-[var(--d-muted)]">Sample post · made-up story · pick a beat above</p>
+      <p className="typed mt-4 text-right text-[12px] text-[var(--d-muted)]">Sample post · made-up story and brand · pick a beat above</p>
     </div>
   );
 }
@@ -218,7 +165,7 @@ const TABS = [
     body: "PostFlow reads the news in your field all day, keeps the stories your audience will care about, and skips the version bumps.",
     you: null as string | null,
     bot: ["⏰ Going out in about 10 minutes", "LinkedIn · 09:15 · story from this morning, The Register"],
-    draft: "A bug in a popular image library lets a crafted picture run code on your server. If your app resizes uploads, update this week.",
+    draft: "A bug in Pixelforge, a popular image library, lets a crafted picture run code on your server. If your app resizes uploads, update this week.",
   },
   {
     id: "link",
@@ -290,7 +237,7 @@ export function DeskTabs() {
           <div className="mt-5 flex flex-wrap gap-2 text-[14px] font-semibold">
             <span className="rounded-md bg-[var(--d-ink)] px-3 py-2 text-[var(--d-paper)]">✅ Approve</span>
             <span className="rounded-md border border-[var(--d-sky-line)] px-3 py-2">✍️ New wording</span>
-            <span className="rounded-md border border-[var(--d-sky-line)] px-3 py-2">🎨 New picture</span>
+            <span className="rounded-md border border-[var(--d-sky-line)] px-3 py-2">🔁 Other story</span>
           </div>
         </div>
       </div>

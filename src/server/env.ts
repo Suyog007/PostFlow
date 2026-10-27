@@ -34,11 +34,6 @@ const schema = z.object({
   /** Reasoning effort for the reviewer. Defaults to "medium" when FIREWORKS_REASONING_EFFORT is set. */
   FIREWORKS_REVIEW_REASONING_EFFORT: optional,
   FIREWORKS_BASE_URL: z.string().default("https://api.fireworks.ai/inference/v1"),
-  /** Free key from pexels.com/api for better post photos. Without it, public-domain photos from Openverse are used. */
-  PEXELS_API_KEY: optional,
-  /** Cloudflare Workers AI, for drawing post pictures (free daily allowance). Both are needed. */
-  CLOUDFLARE_ACCOUNT_ID: optional,
-  CLOUDFLARE_API_TOKEN: optional,
   /** Owner accounts' model-call cap per rolling 24h (customers get their plan's cap). */
   MAX_LLM_CALLS_PER_DAY: z.coerce.number().default(150),
   /** Hard stop across all users per rolling 24h, so a bug can never run up a bill. */
