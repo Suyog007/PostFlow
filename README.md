@@ -68,7 +68,7 @@ Telegram: send any text = note (`#local`, `#learning` tags steer it), `/queue`, 
 1. **Database.** Create a Neon database; put the pooled connection string in `DATABASE_URL` and run `npm run db:migrate` once locally against it (again after every update that adds a migration).
 2. **Netlify.** Add new site → Import an existing project → this repo. `netlify.toml` already sets the build and Node 22. Add every variable from `.env.example` under Site configuration → Environment variables. Set `APP_URL` to your Netlify URL or custom domain, and `OWNER_EMAILS` to your email. Deploy.
 3. **Sign in as the owner** at `/signup` (or with Google) using your `OWNER_EMAILS` address. You land in the app with your old data.
-4. **Resend.** Add and verify your domain, create an API key, set `RESEND_API_KEY` and `EMAIL_FROM`.
+4. **Email.** No domain? Use Gmail: turn on 2-Step Verification, create an app password at myaccount.google.com/apppasswords, and set `GMAIL_USER` and `GMAIL_APP_PASSWORD` (about 500 emails a day). With a domain, use Resend instead: verify the domain, set `RESEND_API_KEY` and `EMAIL_FROM`.
 5. **Stripe** (start in test mode):
    - Set `STRIPE_SECRET_KEY`, then run `npm run stripe:setup` once. It creates the Starter and Pro products with monthly and yearly prices from `pricing.ts` (re-run it after changing prices).
    - Developers → Webhooks → add endpoint `{APP_URL}/api/stripe/webhook` with events `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`, `invoice.payment_failed`. Copy the signing secret into `STRIPE_WEBHOOK_SECRET`.

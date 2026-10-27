@@ -1,3 +1,4 @@
+import nodemailer from "nodemailer";
 import { env } from "./env";
 import { log } from "./log";
 
@@ -10,7 +11,7 @@ export interface Email {
   action?: { label: string; url: string };
 }
 
-/** Emails "sent" while RESEND_API_KEY is not set (development and tests). */
+/** Emails "sent" while no email service is set up (development and tests). */
 export const outbox: Email[] = [];
 
 function escapeHtml(s: string) {
@@ -34,30 +35,75 @@ function html(e: Email) {
   </div></body></html>`;
 }
 
-/** Sends through Resend. Without an API key the email is logged instead (and kept in `outbox`). */
+let gmail: nodemailer.Transporter | null = null;
+function gmailTransport() {
+  if (!gmail) {
+    gmail = nodemailer.createTransport({
+      host: "smtp.gmail.com",
+      port: 465,
+      secure: true,
+      // Google shows app passwords in groups of four; the spaces are not part of it.
+      auth: { user: env().GMAIL_USER!, pass: env().GMAIL_APP_PASSWORD!.replace(/\s+/g, "") },
+    });
+  }
+  return gmail;
+}
+
+/** Test hook: replace the Gmail transport. */
+export function setGmailTransportForTests(t: nodemailer.Transporter | null) {
+  gmail = t;
+}
+
+/** Which service sends email: Gmail when an app password is set, else Resend, else none (logged only). */
+export function emailProvider(): "gmail" | "resend" | null {
+  const e = env();
+  if (e.GMAIL_USER && e.GMAIL_APP_PASSWORD) return "gmail";
+  if (e.RESEND_API_KEY) return "resend";
+  return null;
+}
+
+/** Sends through Gmail or Resend. With neither set up the email is logged instead (and kept in `outbox`). */
 export async function sendEmail(e: Email): Promise<void> {
-  const key = env().RESEND_API_KEY;
-  if (!key) {
+  const provider = emailProvider();
+  if (!provider) {
     outbox.push(e);
     log.info("email_not_sent_no_api_key", { to: e.to, subject: e.subject, link: e.action?.url });
     return;
   }
+  const text = e.action ? `${e.text}\n\n${e.action.label}: ${e.action.url}` : e.text;
+  const replyTo = env().CONTACT_EMAIL || undefined;
+  if (provider === "gmail") {
+    try {
+      await gmailTransport().sendMail({
+        from: { name: env().GMAIL_FROM_NAME || env().COMPANY_NAME, address: env().GMAIL_USER! },
+        to: e.to,
+        subject: e.subject,
+        text,
+        html: html(e),
+        replyTo,
+      });
+    } catch (err) {
+      log.error("email_send_failed", { provider, error: String(err).slice(0, 300) });
+      throw new Error("We could not send the email. Please try again in a minute.");
+    }
+    return;
+  }
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    headers: { Authorization: `Bearer ${env().RESEND_API_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       from: env().EMAIL_FROM,
       to: [e.to],
       subject: e.subject,
-      text: e.action ? `${e.text}\n\n${e.action.label}: ${e.action.url}` : e.text,
+      text,
       html: html(e),
-      ...(env().CONTACT_EMAIL ? { reply_to: env().CONTACT_EMAIL } : {}),
+      ...(replyTo ? { reply_to: replyTo } : {}),
     }),
     signal: AbortSignal.timeout(15_000),
   });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    log.error("email_send_failed", { status: res.status, body: body.slice(0, 300) });
+    log.error("email_send_failed", { provider, status: res.status, body: body.slice(0, 300) });
     throw new Error("We could not send the email. Please try again in a minute.");
   }
 }

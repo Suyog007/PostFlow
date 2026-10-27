@@ -43,7 +43,13 @@ const schema = z.object({
   GOOGLE_CLIENT_ID: optional,
   GOOGLE_CLIENT_SECRET: optional,
 
-  // Email (resend.com)
+  // Email: Gmail (no domain needed) or Resend (needs a domain you own)
+  /** The Gmail address that sends the emails. */
+  GMAIL_USER: optional,
+  /** An app password from myaccount.google.com/apppasswords (needs 2-Step Verification). */
+  GMAIL_APP_PASSWORD: optional,
+  /** Name shown as the sender. Defaults to COMPANY_NAME. */
+  GMAIL_FROM_NAME: optional,
   RESEND_API_KEY: optional,
   /** e.g. "PostFlow <hello@yourdomain.com>" on a domain verified in Resend. */
   EMAIL_FROM: z.string().default("PostFlow <onboarding@resend.dev>"),
