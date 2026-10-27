@@ -88,8 +88,8 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                   return (
                     <tr key={u.id} className="border-b border-[var(--line)] last:border-0">
                       <td className="p-3"><div className="font-medium">{u.email}</div><div className="text-[12px] text-[var(--subtle)]">{u.name}{u.emailVerifiedAt ? "" : " · email not confirmed"}</div></td>
-                      <td className="p-3">{u.isOwner ? "Owner" : planById(u.plan)?.name ?? "None"}{u.billingInterval && !u.isOwner ? ` · ${u.billingInterval === "year" ? "yearly" : "monthly"}` : ""}</td>
-                      <td className="p-3"><span className={`badge ${e.active ? "badge-good" : ""}`}>{u.isOwner ? "owner" : u.subscriptionStatus ?? "no plan"}</span>{u.cancelAtPeriodEnd && <span className="ml-1 text-[12px] text-[var(--warn)]">cancels</span>}</td>
+                      <td className="p-3">{u.isOwner ? "Owner" : e.plan === "beta" ? "Free beta" : planById(u.plan)?.name ?? "None"}{u.billingInterval && !u.isOwner ? ` · ${u.billingInterval === "year" ? "yearly" : "monthly"}` : ""}</td>
+                      <td className="p-3"><span className={`badge ${e.active ? "badge-good" : ""}`}>{u.isOwner ? "owner" : e.plan === "beta" ? "beta" : u.subscriptionStatus ?? "no plan"}</span>{u.cancelAtPeriodEnd && <span className="ml-1 text-[12px] text-[var(--warn)]">cancels</span>}</td>
                       <td className="p-3 tnum">{postsByUser.get(u.id) ?? 0}{e.active && e.plan !== "owner" ? ` / ${e.quota.postsPerMonth}` : ""}</td>
                       <td className="p-3 tnum">{callsByUser.get(u.id) ?? 0}</td>
                       <td className="p-3">{u.telegramChatId ? "linked" : ""}</td>

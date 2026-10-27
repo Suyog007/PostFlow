@@ -19,6 +19,11 @@ const schema = z.object({
     .string()
     .optional()
     .transform((v) => v === "true" || v === "1"),
+  /** "true" makes PostFlow free for every confirmed account: no trial, no checkout. Turn it off to start charging. */
+  FREE_BETA: z
+    .string()
+    .optional()
+    .transform((v) => v === "true" || v === "1"),
   /** Shown on the legal pages and in emails. */
   COMPANY_NAME: z.string().default("PostFlow"),
   CONTACT_EMAIL: optional,

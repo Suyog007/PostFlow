@@ -8,7 +8,8 @@ import { Pricing } from "@/components/landing/pricing";
 import { WaitlistForm } from "@/components/landing/waitlist-form";
 import { LandingMotion } from "@/components/landing/motion";
 import { DeskNav, DeskTabs, HeroDemo } from "@/components/landing/desk";
-import { TRIAL_DAYS } from "@/lib/pricing";
+import { BETA, TRIAL_DAYS } from "@/lib/pricing";
+import { env } from "@/server/env";
 
 const TITLE = "PostFlow · The news breaks. Your post is ready.";
 const DESCRIPTION =
@@ -30,7 +31,7 @@ export const metadata: Metadata = {
   twitter: { card: "summary_large_image", title: "PostFlow · The news breaks. Your post is ready.", description: DESCRIPTION, images: ["/landing/calendar-light.png"] },
 };
 
-const FAQ: { q: string; a: string }[] = [
+const faqFor = (beta: boolean): { q: string; a: string }[] => [
   {
     q: "Will it post something I haven't seen?",
     a: "Not unless you choose that. Ten minutes before each post, Telegram sends it to you. If you don't approve it, it is skipped and the calendar moves on. On Pro you can switch to auto mode later.",
@@ -47,10 +48,15 @@ const FAQ: { q: string; a: string }[] = [
     q: "What do I need to connect?",
     a: "Your LinkedIn profile and your X account, through their official sign-in pages. PostFlow never sees your passwords. Telegram is optional and free: it's the fastest way to approve posts and send links from your phone.",
   },
-  {
-    q: "Why is there no free plan?",
-    a: `Every post costs real money to make: several AI calls to write, check and draw it, and X charges per post. A free plan would mean cutting the fact-checking. Every plan starts with a ${TRIAL_DAYS}-day free trial instead.`,
-  },
+  beta
+    ? {
+        q: "Is it really free?",
+        a: `Yes, while PostFlow is in beta. You get every Pro feature and up to ${BETA.quota.postsPerMonth} posts a month, with no card. Paid plans come later, and you will hear well before anything is charged.`,
+      }
+    : {
+        q: "Why is there no free plan?",
+        a: `Every post costs real money to make: several AI calls to write, check and draw it, and X charges per post. A free plan would mean cutting the fact-checking. Every plan starts with a ${TRIAL_DAYS}-day free trial instead.`,
+      },
   {
     q: "Can I cancel?",
     a: "Anytime, from your account. Disconnecting an account in Settings stops all posting to it immediately.",
@@ -85,7 +91,10 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
   const { plan, deleted } = await searchParams;
   const loggedIn = await isLoggedIn().catch(() => false);
   const open = signupsOpen();
-  const cta = open ? { href: "/signup?plan=pro&interval=year", label: `Start my ${TRIAL_DAYS}-day trial` } : { href: "#early-access", label: "Get early access" };
+  const beta = env().FREE_BETA;
+  const FAQ = faqFor(beta);
+  const startLabel = beta ? "Join the free beta" : `Start my ${TRIAL_DAYS}-day trial`;
+  const cta = open ? { href: "/signup?plan=pro&interval=year", label: startLabel } : { href: "#early-access", label: "Get early access" };
 
   return (
     <div className="desk min-h-screen text-[16px]">
@@ -122,7 +131,7 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
               <a href={cta.href} className="btn-desk">{cta.label}</a>
               <a href="#how" className="btn-outline">See how it works</a>
             </div>
-            <p className="mt-3 text-[14px] text-[var(--d-muted)]">{open ? "No charge during the trial. Cancel anytime." : `${TRIAL_DAYS}-day free trial at launch. No card to join.`}</p>
+            <p className="mt-3 text-[14px] text-[var(--d-muted)]">{beta ? "Free during the beta. No card needed." : open ? "No charge during the trial. Cancel anytime." : `${TRIAL_DAYS}-day free trial at launch. No card to join.`}</p>
             {/* A byline strip: what every post comes with. */}
             <p className="typed mt-10 flex flex-wrap items-center gap-x-3 gap-y-1 border-y border-[var(--line)] py-3 text-[13px] uppercase tracking-[.12em] text-[var(--d-muted)]">
               <span>Fact-checked</span><span aria-hidden="true">·</span><span>Plain words</span><span aria-hidden="true">·</span><span>Sent only when you approve</span>
@@ -174,10 +183,12 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
               <Headline a="One price a month." b="Every post checked." className="text-[46px] sm:text-[68px]" />
             </div>
             <p className="max-w-[520px] text-[19px] leading-relaxed text-[var(--d-muted)] lg:justify-self-end">
-              Every plan includes the fact-checker. No free plan, because checking costs real money. A {TRIAL_DAYS}-day trial instead.
+              {beta
+                ? "Free while PostFlow is in beta. These are the prices after it, and every plan includes the fact-checker."
+                : `Every plan includes the fact-checker. No free plan, because checking costs real money. A ${TRIAL_DAYS}-day trial instead.`}
             </p>
           </div>
-          <Pricing signupsOpen={open} />
+          <Pricing signupsOpen={open} beta={beta} />
         </section>
 
         <Rule />
@@ -204,12 +215,14 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
             <div>
               <Headline a="Your next post" b="is already in the news." className="text-[44px] sm:text-[64px]" />
               <p className="mt-6 max-w-[500px] text-[19px] leading-relaxed text-[var(--d-muted)]">
-                {open ? `Connect LinkedIn or X, pick your field, and your first posts arrive in Telegram today. ${TRIAL_DAYS} days free.` : `PostFlow is opening to a small group first. Join the list for an invite and a ${TRIAL_DAYS}-day free trial.`}
+                {open
+                  ? `Connect LinkedIn or X, pick your field, and your first posts arrive in Telegram today. ${beta ? "Free during the beta." : `${TRIAL_DAYS} days free.`}`
+                  : `PostFlow is opening to a small group first. Join the list for an invite${beta ? " to the free beta." : ` and a ${TRIAL_DAYS}-day free trial.`}`}
               </p>
             </div>
             {open && plan !== "agency" ? (
               <div className="rounded-2xl border-[1.5px] border-[var(--d-sky-line)] bg-[var(--surface)] p-8 shadow-[0_6px_0_var(--d-sky-line)]">
-                <a href="/signup?plan=pro&interval=year" className="btn-desk w-full">Start my {TRIAL_DAYS}-day trial</a>
+                <a href="/signup?plan=pro&interval=year" className="btn-desk w-full">{startLabel}</a>
                 <p className="mt-4 text-center text-[15px] text-[var(--d-muted)]">
                   Already on the desk? <Link href="/login" className="font-semibold underline">Sign in</Link>
                 </p>

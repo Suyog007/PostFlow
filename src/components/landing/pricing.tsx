@@ -4,7 +4,7 @@ import { useState } from "react";
 import { PLANS, TRIAL_DAYS } from "@/lib/pricing";
 import { Icon } from "@/components/ui";
 
-export function Pricing({ signupsOpen = false }: { signupsOpen?: boolean }) {
+export function Pricing({ signupsOpen = false, beta = false }: { signupsOpen?: boolean; beta?: boolean }) {
   const [yearly, setYearly] = useState(true);
   return (
     <div>
@@ -64,14 +64,16 @@ export function Pricing({ signupsOpen = false }: { signupsOpen?: boolean }) {
                 ))}
               </ul>
               <a href={signupsOpen && !p.soon ? `/signup?plan=${p.id}&interval=${yearly ? "year" : "month"}` : `/?plan=${p.id}#early-access`} className={`btn mt-6 h-10 text-[14px] ${p.popular ? "btn-primary" : ""}`}>
-                {p.soon ? "Join the waitlist" : `Start ${TRIAL_DAYS}-day trial`}
+                {p.soon ? "Join the waitlist" : beta ? "Join the free beta" : `Start ${TRIAL_DAYS}-day trial`}
               </a>
             </div>
           );
         })}
       </div>
       <p className="mt-6 text-center text-[13px] text-[var(--subtle)]">
-        Prices in USD. Every plan starts with a {TRIAL_DAYS}-day free trial. A post is one post on one platform.
+        {beta
+          ? "Free while PostFlow is in beta, with every Pro feature and up to 60 posts a month. These are the prices after the beta; you will hear well before anything is charged."
+          : `Prices in USD. Every plan starts with a ${TRIAL_DAYS}-day free trial. A post is one post on one platform.`}
       </p>
     </div>
   );

@@ -59,7 +59,16 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
         {sp.checkout === "cancelled" && <p className="mt-4 rounded-md bg-[var(--side)] px-3 py-2 text-[13px] text-[var(--muted)]">Checkout cancelled. Nothing was charged.</p>}
         {waitingForWebhook && <p role="status" className="mt-4 rounded-md bg-[var(--accent-soft)] px-3 py-2 text-[13px] text-[var(--accent)]">Payment received. Finishing setup, this page refreshes in a moment…</p>}
 
-        {ent.plan === "owner" ? (
+        {ent.plan === "beta" ? (
+          <div className="panel mt-6 p-5">
+            <p className="font-medium">Free during the beta</p>
+            <p className="mt-1 text-[14px] text-[var(--muted)]">
+              Every feature is on and nothing is charged. You can make up to {ent.quota.postsPerMonth} posts a month. We will email you well before paid plans start, and you can decide then.
+            </p>
+            <p className="mt-3 text-[14px]"><span className="font-medium tnum">{used}</span> of {ent.quota.postsPerMonth} posts used this month</p>
+            <Link href="/calendar" className="btn btn-primary mt-4">Open the app</Link>
+          </div>
+        ) : ent.plan === "owner" ? (
           <div className="panel mt-6 p-5">
             <p className="font-medium">Owner account</p>
             <p className="mt-1 text-[14px] text-[var(--muted)]">This is the owner account: every feature is on and it is never billed.</p>

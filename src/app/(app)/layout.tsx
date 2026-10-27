@@ -42,7 +42,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <SideNav owner={user.isOwner} />
         {used !== null && (
           <Link href="/billing" className="mx-1 rounded-lg border border-[var(--line)] bg-[var(--surface)] p-3 text-[12px] hover:border-[var(--line-strong)]">
-            <div className="flex justify-between font-medium"><span>{ent.plan === "pro" ? "Pro" : "Starter"} plan</span><span className="tnum text-[var(--muted)]">{used}/{ent.quota.postsPerMonth}</span></div>
+            <div className="flex justify-between font-medium"><span>{ent.plan === "beta" ? "Free beta" : ent.plan === "pro" ? "Pro plan" : "Starter plan"}</span><span className="tnum text-[var(--muted)]">{used}/{ent.quota.postsPerMonth}</span></div>
             <div className="mt-1.5 h-1.5 rounded-full bg-[var(--side)]"><div className="h-1.5 rounded-full bg-[var(--accent)]" style={{ width: `${Math.min(100, (used / ent.quota.postsPerMonth) * 100)}%` }} /></div>
             <div className="mt-1 text-[11px] text-[var(--subtle)]">posts this month{user.subscriptionStatus === "trialing" ? " · free trial" : ""}</div>
           </Link>

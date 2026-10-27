@@ -5,6 +5,7 @@ import { requireUser } from "@/server/auth";
 import { BillingError, createCheckout, createPortal } from "@/server/billing/stripe";
 import { isPaidPlan, type Interval } from "@/lib/pricing";
 import { log } from "@/server/log";
+import { env } from "@/server/env";
 
 function fail(err: unknown): never {
   const msg = err instanceof BillingError ? err.message : "Billing is unavailable right now. Please try again.";
@@ -15,6 +16,7 @@ function fail(err: unknown): never {
 export async function checkoutAction(form: FormData) {
   const user = await requireUser();
   if (!user.emailVerifiedAt) redirect("/verify-email");
+  if (env().FREE_BETA) redirect("/billing");
   const plan = String(form.get("plan"));
   const interval: Interval = form.get("interval") === "month" ? "month" : "year";
   if (!isPaidPlan(plan)) redirect("/billing?error=Pick%20a%20plan.");

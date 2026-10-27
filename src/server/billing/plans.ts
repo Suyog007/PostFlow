@@ -1,8 +1,8 @@
-import { and, count, eq, gte, inArray, ne } from "drizzle-orm";
+import { and, count, eq, gte, inArray, isNotNull, ne } from "drizzle-orm";
 import { db, schema } from "../db/client";
 import { env } from "../env";
 import { uid } from "../context";
-import { planById, type PlanFeatures, type PlanQuota } from "../../lib/pricing";
+import { BETA, planById, type PlanFeatures, type PlanQuota } from "../../lib/pricing";
 
 /** Stripe statuses that keep the service running. past_due: Stripe is still retrying the card. */
 export const ENTITLED_STATUSES = ["trialing", "active", "past_due"] as const;
@@ -10,8 +10,8 @@ export const ENTITLED_STATUSES = ["trialing", "active", "past_due"] as const;
 export interface Entitlement {
   /** May use the app and does the scheduler work for them. */
   active: boolean;
-  /** "owner" for the admin account. */
-  plan: "owner" | "starter" | "pro" | null;
+  /** "owner" for the admin account, "beta" for everyone while FREE_BETA is on. */
+  plan: "owner" | "beta" | "starter" | "pro" | null;
   quota: PlanQuota;
   features: PlanFeatures;
 }
@@ -44,7 +44,9 @@ export function entitlementOf(u: Pick<UserRow, "isOwner" | "plan" | "subscriptio
   }
   const plan = planById(u.plan);
   const paying = !!u.subscriptionStatus && (ENTITLED_STATUSES as readonly string[]).includes(u.subscriptionStatus);
-  if (!plan || plan.soon || !paying || !u.emailVerifiedAt) return NONE;
+  if (!u.emailVerifiedAt) return NONE;
+  if (env().FREE_BETA && !(paying && plan && !plan.soon)) return { active: true, plan: "beta", quota: BETA.quota, features: BETA.features };
+  if (!plan || plan.soon || !paying) return NONE;
   return { active: true, plan: plan.id as "starter" | "pro", quota: plan.quota, features: plan.features };
 }
 
@@ -94,7 +96,7 @@ export async function assertPostQuota(): Promise<void> {
   if (!e.active) throw new LimitError("Your subscription is not active. Choose a plan on the Billing page.");
   const used = await postsThisMonth(userId);
   if (used >= e.quota.postsPerMonth) {
-    throw new LimitError(`You have used all ${e.quota.postsPerMonth} posts for this month.${e.plan === "starter" ? " Upgrade to Pro for 150 a month." : " The count resets on the 1st."}`);
+    throw new LimitError(`You have used all ${e.quota.postsPerMonth} posts for this month.${e.plan === "starter" ? " Upgrade to Pro for 150 a month." : e.plan === "beta" ? " That is the beta limit; the count resets on the 1st." : " The count resets on the 1st."}`);
   }
 }
 
@@ -111,15 +113,15 @@ export async function assertFeedQuota(): Promise<void> {
     .select({ n: count() })
     .from(schema.sources)
     .where(and(eq(schema.sources.userId, userId), ne(schema.sources.url, "tips://manual")));
-  if (Number(row.n) >= e.quota.feeds) throw new LimitError(`Your plan allows up to ${e.quota.feeds} feeds. Remove one or upgrade.`);
+  if (Number(row.n) >= e.quota.feeds) throw new LimitError(`Your plan allows up to ${e.quota.feeds} feeds. Remove one${e.plan === "beta" ? " to add another" : " or upgrade"}.`);
 }
 
-/** Users the scheduler works for: the owner, and verified users with a running subscription. */
+/** Users the scheduler works for: the owner, and verified users with a running subscription (everyone verified during the free beta). */
 export async function entitledUsers() {
   const rows = await db()
     .select()
     .from(schema.users)
-    .where(inArray(schema.users.subscriptionStatus, [...ENTITLED_STATUSES]));
+    .where(env().FREE_BETA ? isNotNull(schema.users.emailVerifiedAt) : inArray(schema.users.subscriptionStatus, [...ENTITLED_STATUSES]));
   const owners = await db().select().from(schema.users).where(eq(schema.users.isOwner, true));
   const all = new Map([...rows, ...owners].map((u) => [u.id, u]));
   return [...all.values()].filter((u) => entitlementOf(u).active);

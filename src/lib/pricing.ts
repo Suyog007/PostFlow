@@ -41,6 +41,12 @@ export interface Plan {
 
 export const TRIAL_DAYS = 7;
 
+/** What everyone gets while FREE_BETA is on: Pro features, with limits that keep AI costs in check. */
+export const BETA = {
+  quota: { postsPerMonth: 60, feeds: 30, llmCallsPerDay: 120 } as PlanQuota,
+  features: { autoMode: true, fastLane: true, links: true } as PlanFeatures,
+};
+
 export const PLANS: Plan[] = [
   {
     id: "starter",

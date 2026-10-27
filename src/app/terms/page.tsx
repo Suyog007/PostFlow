@@ -20,6 +20,7 @@ export default function TermsPage() {
         <li>Keep your sign-in details safe. Tell us promptly about any unauthorised use.</li>
       </ul>
       <h2>3. Plans, trial and billing</h2>
+      {env().FREE_BETA && <p>PostFlow is currently in a free beta: nothing is charged and no card is needed. We will email you at least 14 days before paid plans start, and nothing is charged unless you choose a plan.</p>}
       <p>Paid plans are billed in advance, monthly or yearly, through Stripe. New subscribers get a {TRIAL_DAYS}-day free trial; if you cancel before it ends you are not charged. Subscriptions renew automatically until cancelled. You can change plans or cancel at any time in the billing portal; cancellation takes effect at the end of the current period. Except where the law requires otherwise, payments are not refundable. Prices may change with at least 30 days&apos; notice before your next renewal.</p>
       <h2>4. Limits</h2>
       <p>Each plan has limits (for example posts per month and news feeds) described on the pricing page. We may pause automated activity that threatens the Service, your accounts or third-party platforms.</p>

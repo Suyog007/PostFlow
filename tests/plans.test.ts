@@ -78,4 +78,42 @@ describe("plans and limits", () => {
       resetEnvCache();
     }
   });
+
+  describe("free beta", () => {
+    const withBeta = async (fn: () => Promise<void> | void) => {
+      process.env.FREE_BETA = "true";
+      resetEnvCache();
+      try {
+        await fn();
+      } finally {
+        delete process.env.FREE_BETA;
+        resetEnvCache();
+      }
+    };
+
+    it("every confirmed account gets Pro features with beta limits, and no one unconfirmed", () =>
+      withBeta(() => {
+        const e = entitlementOf({ isOwner: false, plan: null, subscriptionStatus: null, emailVerifiedAt: new Date() });
+        expect(e).toMatchObject({ active: true, plan: "beta", features: { autoMode: true, links: true }, quota: { postsPerMonth: 60 } });
+        expect(entitlementOf({ isOwner: false, plan: null, subscriptionStatus: "canceled", emailVerifiedAt: new Date() }).plan).toBe("beta");
+        expect(entitlementOf({ isOwner: false, plan: null, subscriptionStatus: null, emailVerifiedAt: null }).active).toBe(false);
+        // Someone already paying keeps their own plan.
+        expect(entitlementOf({ isOwner: false, plan: "pro", subscriptionStatus: "active", emailVerifiedAt: new Date() }).plan).toBe("pro");
+        expect(entitlementOf({ isOwner: true, plan: null, subscriptionStatus: null, emailVerifiedAt: new Date() }).plan).toBe("owner");
+      }));
+
+    it("the scheduler works for every confirmed account", () =>
+      withBeta(async () => {
+        const free = await addUser({ email: "free@example.com", plan: null, subscriptionStatus: null });
+        const unconfirmed = await addUser({ email: "new@example.com", plan: null, subscriptionStatus: null, emailVerifiedAt: null });
+        actAs(null);
+        const ids = (await entitledUsers()).map((u) => u.id);
+        expect(ids).toContain(free.id);
+        expect(ids).not.toContain(unconfirmed.id);
+      }));
+
+    it("without the beta, an account with no plan gets nothing", () => {
+      expect(entitlementOf({ isOwner: false, plan: null, subscriptionStatus: null, emailVerifiedAt: new Date() }).active).toBe(false);
+    });
+  });
 });

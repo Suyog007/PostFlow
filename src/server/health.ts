@@ -54,7 +54,9 @@ export async function systemChecks(): Promise<Check[]> {
     { label: "Token encryption key", ok: !!e.TOKEN_ENCRYPTION_KEY, critical: true, hint: "Set TOKEN_ENCRYPTION_KEY (openssl rand -base64 32)." },
     { label: "Cron secret", ok: !!e.CRON_SECRET, critical: true, hint: "Set CRON_SECRET so only your scheduler can trigger ticks." },
     { label: e.GMAIL_USER && e.GMAIL_APP_PASSWORD ? "Email (Gmail)" : "Email (Gmail or Resend)", ok: !!(e.GMAIL_USER && e.GMAIL_APP_PASSWORD) || !!e.RESEND_API_KEY, critical: true, hint: "Set GMAIL_USER and GMAIL_APP_PASSWORD (no domain needed), or RESEND_API_KEY and EMAIL_FROM on a domain you own. Without one, verification and reset emails are only logged." },
-    { label: "Payments (Stripe)", ok: !!e.STRIPE_SECRET_KEY && !!e.STRIPE_WEBHOOK_SECRET, critical: true, hint: "Set STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET, then run npm run stripe:setup." },
+    e.FREE_BETA
+      ? { label: "Payments: off (free beta)", ok: true, hint: "FREE_BETA is on, so nobody is charged. Remove it once a payment provider is set up." }
+      : { label: "Payments (Stripe)", ok: !!e.STRIPE_SECRET_KEY && !!e.STRIPE_WEBHOOK_SECRET, critical: true, hint: "Set STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET, then run npm run stripe:setup." },
     { label: "Google sign-in", ok: !!e.GOOGLE_CLIENT_ID && !!e.GOOGLE_CLIENT_SECRET, hint: "Optional: set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET." },
     { label: "LinkedIn app", ok: isPlatformConfigured("linkedin"), hint: "Set LINKEDIN_CLIENT_ID and LINKEDIN_CLIENT_SECRET." },
     { label: "X app", ok: isPlatformConfigured("x"), hint: "Set X_CLIENT_ID (and X_CLIENT_SECRET)." },
