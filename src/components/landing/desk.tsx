@@ -76,15 +76,13 @@ function LogoCard({ name, color, mark, label }: { name: string; color: string; m
 const PICTURES: Record<string, ReactNode> = {
   security: <LogoCard name="Pixelforge" color="#e8743b" label="Logo card: Pixelforge, a made-up image library" mark={<><rect x="0" y="4" width="28" height="28" rx="6" /><rect x="34" y="4" width="28" height="28" rx="6" opacity=".55" /><rect x="0" y="38" width="28" height="28" rx="6" opacity=".55" /><rect x="34" y="38" width="28" height="28" rx="6" /></>} />,
   ai: <LogoCard name="Lumen AI" color="#0e6b5b" label="Logo card: Lumen AI, a made-up AI company" mark={<><circle cx="32" cy="35" r="30" /><circle cx="32" cy="35" r="13" fill="#ffffff" /></>} />,
-  web: <LogoCard name="Waypoint" color="#2f6fde" label="Logo card: Waypoint, a made-up web browser" mark={<path d="M32 2 L62 66 L32 50 L2 66 Z" />} />,
-  saas: <LogoCard name="Paywell" color="#6b4fd8" label="Logo card: Paywell, a made-up payments company" mark={<><rect x="0" y="12" width="64" height="44" rx="10" /><rect x="0" y="24" width="64" height="9" fill="#ffffff" /></>} />,
 };
 
 const FIELDS = [
-  { id: "security", label: "Security" },
-  { id: "ai", label: "AI" },
-  { id: "web", label: "Web dev" },
-  { id: "saas", label: "Startups" },
+  { id: "security", label: "Tech", role: "Software engineer" },
+  { id: "ai", label: "AI", role: "Startup founder" },
+  { id: "health", label: "Healthcare", role: "Eye doctor" },
+  { id: "tax", label: "Accounting", role: "Chartered accountant" },
 ] as const;
 type Field = (typeof FIELDS)[number]["id"];
 
@@ -100,15 +98,15 @@ const SAMPLES: Record<Field, { linkedin: string; x: string; tags: string }> = {
     x: "Lumen AI cut its main model's price by 80%, per its announcement. AI features you rationed last month now fit on every plan.",
     tags: "#ai #saas",
   },
-  web: {
-    linkedin: "Slow pages lose visitors before your code even runs.\n\nThe Waypoint browser team says its new loading feature cuts first-load time by a third on typical sites. It is one line in your HTML, so it is worth a test on your heaviest page.",
-    x: "Waypoint's new loading feature cuts first-load time by a third, per the browser team. One line of HTML. Worth a test today.",
-    tags: "#webperf #frontend",
+  health: {
+    linkedin: "Children should now have their first eye check at three, not five.\n\nThe Eye Health Council changed its screening advice this week, saying lazy eye responds best to treatment when it is caught young. For parents of toddlers, that moves the first check two years earlier.\n\nGeneral information, not medical advice.",
+    x: "First eye check for children moves from age five to three, per the Eye Health Council. Lazy eye responds best when caught young. General information, not medical advice.",
+    tags: "#eyehealth #paediatrics",
   },
-  saas: {
-    linkedin: "Paywell will stop charging small teams a monthly minimum.\n\nFor a SaaS with its first ten customers, that fee was often bigger than the revenue. Per the company, the change starts next month for new and existing accounts.",
-    x: "No more monthly minimum for small teams on Paywell, per the company. For a SaaS with ten customers, that fee was often bigger than revenue.",
-    tags: "#saas #startups",
+  tax: {
+    linkedin: "Small businesses get two extra months to file this year's VAT return.\n\nPer the Revenue Office, the new deadline covers firms under the registration threshold, and late-filing penalties are waived until then. For anyone whose books are behind, that is a real window to catch up.",
+    x: "Small firms get two extra months for this year's VAT return, per the Revenue Office. Late-filing penalties are waived until the new date.",
+    tags: "#tax #smallbusiness",
   },
 };
 
@@ -142,12 +140,12 @@ export function HeroDemo({ name = "Your Name" }: { name?: string }) {
           <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--d-cream)] text-[14px] font-bold" aria-hidden="true">{name.split(" ").map((w) => w[0]).join("").slice(0, 2)}</span>
           <div className="min-w-0">
             <p className="text-[15px] font-bold">{name}</p>
-            <p className="truncate text-[12px] text-[var(--d-muted)]">Software engineer · now</p>
+            <p className="truncate text-[12px] text-[var(--d-muted)]">{FIELDS.find((f) => f.id === field)?.role} · now</p>
           </div>
           <span className="ml-auto"><PlatformGlyph platform={platform} size={20} /></span>
         </div>
         <p className="whitespace-pre-line px-5 pb-4 pt-3 text-[15px] leading-relaxed">{text}</p>
-        {PICTURES[field]}
+        {PICTURES[field] ?? null}
       </article>
       <p className="typed mt-4 text-right text-[12px] text-[var(--d-muted)]">Sample post · made-up story and brand · pick a beat above</p>
     </div>

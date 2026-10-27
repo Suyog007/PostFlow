@@ -1,3 +1,4 @@
+import { FIELD_IDS, FIELDS, fieldOf } from "@/lib/fields";
 import { DateTime } from "luxon";
 import Link from "next/link";
 import { asc, eq } from "drizzle-orm";
@@ -18,6 +19,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const ent = entitlementOf(user);
   const pro = (label: string) => <Link href="/billing" className="badge badge-accent ml-1" title={`${label} is part of Pro`}>Pro</Link>;
   const s = await getSettings();
+  const field = fieldOf(s.profile.field);
   const checks = await myChecks();
   const accounts = await db().select().from(schema.platformAccounts).where(eq(schema.platformAccounts.userId, user.id));
   const sources = await db().select().from(schema.sources).where(eq(schema.sources.userId, user.id)).orderBy(asc(schema.sources.pillar), asc(schema.sources.name));
@@ -143,9 +145,19 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <form action={saveProfileAction} className="card space-y-3 p-4 text-sm">
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block"><span className="label">Name</span><input name="name" defaultValue={s.profile.name} className="input" /></label>
-            <label className="block"><span className="label">Role</span><input name="role" defaultValue={s.profile.role} placeholder="e.g. Founder of a dev-tools startup" className="input" /></label>
+            <label className="block"><span className="label">Role</span><input name="role" defaultValue={s.profile.role} placeholder={field.roleExample} className="input" /></label>
           </div>
-          <label className="block"><span className="label">Your region, for local tech scene posts (optional)</span><input name="region" defaultValue={s.profile.region} placeholder="e.g. Berlin, Nepal, Lagos" className="input" /></label>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block">
+              <span className="label">Field</span>
+              <select name="field" defaultValue={field.id} className="input">
+                {FIELD_IDS.map((id) => <option key={id} value={id}>{FIELDS[id].label}</option>)}
+              </select>
+              <span className="hint mt-1 block">Decides which news counts and the safety rules posts follow. Changing it does not change your feeds; add or remove those below.</span>
+            </label>
+            <label className="block"><span className="label">Who reads your posts (optional)</span><input name="audience" maxLength={160} defaultValue={s.profile.audience} placeholder={field.audience} className="input" /></label>
+          </div>
+          <label className="block"><span className="label">Your region, for local {field.community} scene posts (optional)</span><input name="region" defaultValue={s.profile.region} placeholder="e.g. Berlin, Nepal, Lagos" className="input" /></label>
           <label className="block"><span className="label">Short bio</span><textarea name="bio" rows={2} defaultValue={s.profile.bio} className="textarea" /></label>
           <label className="block"><span className="label">Topics you can credibly write about (comma or line separated)</span><textarea name="expertise" rows={2} defaultValue={s.profile.expertise.join(", ")} className="textarea" /></label>
           <label className="block"><span className="label">Voice</span><textarea name="voice" rows={2} defaultValue={s.profile.voice} className="textarea" /></label>
@@ -153,7 +165,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           <div>
             <label className="label">Content mix (relative weights)</label>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {([["w_own_work", "My work", s.pillars.own_work], ["w_news", "Tech news", s.pillars.news], ["w_local", s.profile.region ? `${s.profile.region} scene` : "Local scene", s.pillars.local], ["w_learning", "Learning", s.pillars.learning]] as const).map(([n, l, v]) => (
+              {([["w_own_work", "My work", s.pillars.own_work], ["w_news", field.newsLabel, s.pillars.news], ["w_local", s.profile.region ? `${s.profile.region} scene` : "Local scene", s.pillars.local], ["w_learning", "Learning", s.pillars.learning]] as const).map(([n, l, v]) => (
                 <label key={n} className="block"><span className="text-xs text-muted">{l}</span><input name={n} type="number" min={0} step={1} defaultValue={v} className="input" /></label>
               ))}
             </div>

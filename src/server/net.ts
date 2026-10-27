@@ -64,7 +64,9 @@ async function realFetchArticle(url: string, maxChars: number): Promise<Article>
 
 export function normalizeUrl(raw: string): string {
   try {
-    const u = new URL(raw);
+    let u = new URL(raw);
+    // Bing News feed links point at a click tracker; the article's own address is in ?url=.
+    if (/(^|\.)bing\.com$/i.test(u.hostname) && u.searchParams.get("url")) u = new URL(u.searchParams.get("url")!);
     u.hash = "";
     for (const k of [...u.searchParams.keys()]) if (/^(utm_|fbclid|gclid|ref$|ref_src|mc_)/i.test(k)) u.searchParams.delete(k);
     u.hostname = u.hostname.toLowerCase();

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { gate } from "../src/server/generate";
-import { writerSystem, REVIEWER_SYSTEM } from "../src/server/prompts";
+import { writerSystem, reviewerSystem } from "../src/server/prompts";
 import { settingsSchema } from "../src/server/settings";
 import { GOOD_REVIEW } from "./helpers";
 
@@ -18,6 +18,6 @@ describe("clear enough for someone new to the topic", () => {
     const w = writerSystem(settingsSchema.parse({}), "linkedin");
     expect(w).toMatch(/Spell out every acronym/);
     expect(w).toMatch(/Never a list of instructions/);
-    expect(REVIEWER_SYSTEM).toMatch(/clarity \(0-10\)/);
+    expect(reviewerSystem(settingsSchema.parse({}))).toMatch(/clarity \(0-10\)/);
   });
 });

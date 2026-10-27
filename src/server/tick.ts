@@ -1,3 +1,4 @@
+import { needsWelcome } from "./welcome";
 import { and, desc, eq, gt, inArray, isNull } from "drizzle-orm";
 import { db, schema, sqlClient } from "./db/client";
 import { collectFeeds, seedSourcesIfEmpty } from "./collect";
@@ -56,6 +57,11 @@ async function pipelinePhase(out: TickResult, deadline: number) {
   // Nothing is fetched, scored or written for an account that cannot publish yet (the owner is exempt).
   if (!(await activePlatforms()).length) {
     out.idle = "connect LinkedIn or X first";
+    return;
+  }
+  // Until the welcome step names their field and topics, feeds would be the wrong ones for them.
+  if (needsWelcome(s)) {
+    out.idle = "finish the welcome step first";
     return;
   }
   // Things the user asked for come before anything the autopilot decides on its own.

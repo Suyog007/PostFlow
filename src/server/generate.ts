@@ -12,7 +12,7 @@ async function mine<T extends { userId: unknown }>(t: T) {
   return eq(t.userId as never, await uid());
 }
 import { getSettings, saveSettings, type Settings } from "./settings";
-import { REVIEWER_SYSTEM, profileBlock, writerSystem } from "./prompts";
+import { fieldFor, profileBlock, reviewerSystem, writerSystem } from "./prompts";
 import { runChecks, type Check } from "./checks";
 import { afterQuietHours, slotsBetween, formatLocal, nextFreeSlot } from "./slots";
 import { warnOnError } from "./log";
@@ -222,8 +222,8 @@ async function pickEvergreenTopic(s: Settings, platform: Platform): Promise<Mate
     role: "writer",
     system: `Pick ONE topic for a short lesson that teaches the owner's audience one thing in plain words.
 
-Best: the idea BEHIND one of this week's stories, so the lesson feels timely and people want it now. A supply-chain attack on a popular package → "what a supply-chain attack is and how one bad dependency reaches your app"; a certificate authority caught issuing bad certificates → "what a certificate authority actually vouches for"; a decompression bug in a common library → "what a decompression bomb is". Name the story in the angle so the writer can mention it in one line.
-Otherwise: a common, costly mistake or a concept many developers half-understand. Never a generic "how to use <tool> for <task>" tutorial (no "Using Next.js middleware for auth", "Deploying X on Netlify", "Managing rate limits in a SaaS"). Those read like documentation, not a post.
+Best: the idea BEHIND one of this week's stories, so the lesson feels timely and people want it now. ${fieldFor(s).lessonExample} Name the story in the angle so the writer can mention it in one line.
+Otherwise: ${fieldFor(s).lessonFallback}
 It must sit inside the owner's expertise and be easy for a beginner to follow. Not a personal story.
 ${profileBlock(s)}
 Do not repeat or closely overlap any recent topic.`,
@@ -399,6 +399,17 @@ export const MOVES = {
 } as const;
 export type Move = keyof typeof MOVES;
 
+/** The move's instruction in the owner's field: tech keeps the original wording. */
+export function moveText(move: Move, s: Settings): string {
+  const f = fieldFor(s);
+  if (f.id === "tech") return MOVES[move];
+  if (move === "guess") return f.guess;
+  if (move === "plain") return MOVES.plain.replace("a smart friend outside tech", f.outsider);
+  if (move === "who") return "Who this actually affects, named concretely (for example a small practice, a solo professional, a family, a small business), and what changes for them.";
+  if (move === "explain") return MOVES.explain.replace("a smart friend who is not a security or infrastructure expert", f.outsider).replace("what that lets an attacker (or the outage) do", "what it means in practice");
+  return MOVES[move];
+}
+
 /** A move not used by the last few posts, so consecutive posts take different shapes. */
 async function pickMove(): Promise<Move> {
   const rows = await db()
@@ -469,7 +480,7 @@ async function write(m: Material, platform: Platform, s: Settings, recent: strin
     recent.length ? `STYLE CONTRAST ONLY (your recent posts; NOT material for this post, never write about their subjects). Do not reuse their openings, phrases or structure:\n${recent.slice(0, 8).map((r) => `- ${r.replace(/\s+/g, " ").slice(0, 140)}`).join("\n")}\n` : "",
     describeMaterial(m),
     feedback ? `\nYour previous draft:\n"""${feedback.previous}"""\nAn editor rejected it for these reasons. Fix every one, keep what worked, do not add new facts:\n${feedback.notes.map((n) => `- ${n}`).join("\n")}` : "",
-    m.kind === "news" && move ? `\nTHIS POST'S MOVE (how to make your point this time): ${MOVES[move]}` : "",
+    m.kind === "news" && move ? `\nTHIS POST'S MOVE (how to make your point this time): ${moveText(move, s)}` : "",
     "\nWrite the post about the material above and nothing else.",
   ].join("\n");
   const res = await runTask({ task: "write_post", role: "writer", system: writerSystem(s, platform, { explainer: move === "explain" }), user, output: writerOut, maxTokens: 1200, temperature: 0.7 });
@@ -486,6 +497,8 @@ const reviewOut = z.object({
   issues: z.array(z.string()),
   revision_instructions: z.string(),
   is_duplicate: z.boolean(),
+  /** Field rules the draft breaks (medical advice, missing jurisdiction...). Any entry blocks the post. */
+  rule_breaks: z.array(z.string()).default([]),
 });
 export type Review = z.infer<typeof reviewOut>;
 
@@ -503,7 +516,7 @@ async function review(m: Material, text: string, platform: Platform, recent: str
     `RECENT POSTS (for duplicate detection):\n${recent.slice(0, 10).map((r) => `- ${r.replace(/\s+/g, " ").slice(0, 200)}`).join("\n") || "(none)"}`,
   ];
   // Room for the model's reasoning as well as the JSON answer.
-  return runTask({ task: extra.earlier !== undefined ? "recheck_post" : "review_post", role: "reviewer", system: REVIEWER_SYSTEM, user: user.filter(Boolean).join("\n\n"), output: reviewOut, maxTokens: 4000, temperature: 0.1, reasoningEffort: extra.effort });
+  return runTask({ task: extra.earlier !== undefined ? "recheck_post" : "review_post", role: "reviewer", system: reviewerSystem(s), user: user.filter(Boolean).join("\n\n"), output: reviewOut, maxTokens: 4000, temperature: 0.1, reasoningEffort: extra.effort });
 }
 
 export interface Verdict {
@@ -523,6 +536,7 @@ export function gate(r: Review, checks: Check[], m: Material): Verdict {
   if (r.clarity < 7) reasons.push(`Hard to follow (${r.clarity}/10): ${r.issues.find((i) => /unclear|acronym|explain|vague|jargon|understand/i.test(i)) ?? "a newcomer would not get what it is about"}`);
   if (r.slop < 7) reasons.push(`Reads like AI slop (${r.slop}/10).`);
   if (r.is_duplicate) reasons.push("Repeats a recent post.");
+  for (const b of r.rule_breaks ?? []) reasons.push(`Breaks a field rule: ${b}`);
   for (const c of checks.filter((c) => c.severity === "block")) reasons.push(c.message);
   return { approved: reasons.length === 0, reasons };
 }

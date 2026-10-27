@@ -45,6 +45,10 @@ const faqFor = (beta: boolean): { q: string; a: string }[] => [
     a: "When a post is about one named company or product, it gets that company's official logo from Wikimedia Commons, so people see at a glance what it is about. Posts about a general idea go out as text only, which is how most good posts look anyway. You can switch logos off per post or per platform.",
   },
   {
+    q: "Is it only for software engineers?",
+    a: "No. When you sign up you pick your field: software and tech, healthcare, finance and accounting, law, marketing, education or something else, plus the topics you know best. The news, what counts as important, and the rules each post follows all change with it. A doctor's posts never give medical advice, and an accountant's always say which country a tax rule is from.",
+  },
+  {
     q: "What do I need to connect?",
     a: `${beta ? "Your LinkedIn profile (X comes with Pro)" : "Your LinkedIn profile and your X account"}, through their official sign-in pages. PostFlow never sees your passwords. Telegram is optional and free: it's the fastest way to approve posts and send links from your phone.`,
   },

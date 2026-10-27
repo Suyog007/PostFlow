@@ -323,13 +323,13 @@ describe("lessons for your audience", () => {
 
 describe("hooks for reach", () => {
   it("the writer is asked for a hook first, plain-language explanation and no invented advice; the reviewer checks the opener", async () => {
-    const { writerSystem, REVIEWER_SYSTEM } = await import("../src/server/prompts");
+    const { writerSystem, reviewerSystem } = await import("../src/server/prompts");
     const { getSettings } = await import("../src/server/settings");
     const sys = writerSystem(await getSettings(), "linkedin");
     expect(sys).toMatch(/HOOK \(line 1, at most 14 words\)/);
     expect(sys).toMatch(/Do NOT give advice, steps, experiments or recommendations of your own/);
     expect(sys).toMatch(/3 to 5 short lines, 300 to 600 characters/);
-    expect(REVIEWER_SYSTEM).toMatch(/FIRST LINE make a busy developer stop scrolling/);
+    expect(reviewerSystem(await getSettings())).toMatch(/FIRST LINE make a busy developer stop scrolling/);
     const { MOVES } = await import("../src/server/generate");
     expect(Object.keys(MOVES)).not.toContain("try"); // "the first thing you would try" made the writer invent experiments
     expect(Object.keys(MOVES)).toContain("plain");

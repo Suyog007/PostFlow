@@ -58,12 +58,12 @@ export function wantsImage(post: Pick<PostLike, "platform" | "review">, s: Pick<
   return !!s.images[post.platform as "x" | "linkedin"];
 }
 
-const SUBJECT_SYSTEM = `Read a LinkedIn or X post and name the ONE company, product, open-source project or programming technology it is mainly about, the way its own logo spells it: "Qwen", "OpenAI", "Node.js", "GitLab", "Stripe", "PostgreSQL", "Next.js".
+const SUBJECT_SYSTEM = `Read a LinkedIn or X post and name the ONE company, organisation, product, open-source project or technology it is mainly about, the way its own logo spells it: "Qwen", "OpenAI", "Node.js", "GitLab", "Stripe", "PostgreSQL", "Next.js".
 
 Return null for subject when:
 - the post is about a general idea, a habit or a lesson (caching, code review, technical debt) rather than one named thing;
 - it is about several things equally (a comparison of three products);
-- the thing has no logo of its own (TLS, "AI models", "databases", a vulnerability).
+- the thing has no logo of its own (TLS, "AI models", "databases", a vulnerability, a disease, a drug's chemical name, a law, a tax rule).
 Pick the thing the story is about, not the publisher that reported it.`;
 
 const Subject = z.object({ subject: z.string().min(1).max(60).nullable() });

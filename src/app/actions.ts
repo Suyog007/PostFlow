@@ -1,5 +1,6 @@
 "use server";
 
+import { fieldOf } from "@/lib/fields";
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { redirect } from "next/navigation";
@@ -283,6 +284,8 @@ export async function saveProfileAction(form: FormData) {
       ownDomains: String(form.get("ownDomains") ?? "").split(/[\s,]+/).map((d) => d.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "")).filter(Boolean),
       profile: {
         name: String(form.get("name") ?? ""),
+        field: fieldOf(String(form.get("field") ?? s.profile.field)).id,
+        audience: String(form.get("audience") ?? s.profile.audience).trim().slice(0, 160),
         role: String(form.get("role") ?? ""),
         bio: String(form.get("bio") ?? ""),
         region: String(form.get("region") ?? "").trim().slice(0, 60),

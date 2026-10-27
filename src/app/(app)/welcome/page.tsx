@@ -14,9 +14,9 @@ export default async function WelcomePage() {
     <div className="max-w-[720px]">
       <PageHeader
         title="Two questions before your first post"
-        description="PostFlow writes from the news in your field. Tell it what your field is, so the stories it picks are ones you can speak about, not the same headlines every other engineer gets."
+        description="PostFlow writes from the news in your field. Tell it what your field is, so the stories it picks are ones you can speak about, not the same headlines everyone else gets."
       />
-      <WelcomeForm role={s.profile.role} expertise={s.profile.expertise.join(", ")} region={s.profile.region} />
+      <WelcomeForm field={s.profile.field} audience={s.profile.audience} role={s.profile.role} expertise={s.profile.expertise.join(", ")} region={s.profile.region} />
     </div>
   );
 }

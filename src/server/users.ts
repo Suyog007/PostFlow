@@ -81,7 +81,7 @@ export async function createUser(input: { email: string; name?: string; password
   await withUser(user.id, async () => {
     await saveSettings({
       timezone: isValidTimezone(input.timezone) ? input.timezone : "UTC",
-      profile: { name, role: "", bio: "", region: "", expertise: [], voice: "Direct, practical and specific. Plain words. Opinionated but fair. No hype.", avoid: "Politics, religion, anything about employers, unverified claims about people or companies." },
+      profile: { name, field: "tech", audience: "", role: "", bio: "", region: "", expertise: [], voice: "Direct, practical and specific. Plain words. Opinionated but fair. No hype.", avoid: "Politics, religion, anything about employers, unverified claims about people or companies." },
     });
   });
   return user;

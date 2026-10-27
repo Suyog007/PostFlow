@@ -4,6 +4,7 @@ import { uid } from "./context";
 import { getSettings, saveSettings, type Settings } from "./settings";
 import { seedSourcesIfEmpty } from "./collect";
 import { discoverFeed } from "./feed-discover";
+import { fieldOf } from "../lib/fields";
 import { assertFeedQuota, LimitError } from "./billing/plans";
 
 /** True until the account has said who it is: a role and at least one topic. */
@@ -16,6 +17,8 @@ export function splitTopics(raw: string) {
 }
 
 export interface WelcomeInput {
+  field?: string;
+  audience?: string;
   role: string;
   expertise: string;
   region?: string;
@@ -40,7 +43,16 @@ export async function completeWelcome(input: WelcomeInput): Promise<WelcomeResul
   }
 
   const s = await getSettings();
-  await saveSettings({ profile: { ...s.profile, role, expertise, region: (input.region ?? "").trim().slice(0, 60) || s.profile.region } });
+  await saveSettings({
+    profile: {
+      ...s.profile,
+      field: fieldOf(input.field ?? s.profile.field).id,
+      audience: (input.audience ?? "").trim().replace(/\s+/g, " ").slice(0, 160) || s.profile.audience,
+      role,
+      expertise,
+      region: (input.region ?? "").trim().slice(0, 60) || s.profile.region,
+    },
+  });
 
   // The default feeds are only added to an account with no feeds, so add them before the user's own.
   await seedSourcesIfEmpty();

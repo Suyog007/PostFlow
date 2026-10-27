@@ -3,19 +3,34 @@ import { and, asc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { db, schema } from "./db/client";
 import { uid } from "./context";
 import { DEFAULT_SOURCES } from "./sources-default";
+import { getSettings, type Settings } from "./settings";
+import { fieldOf, topicFeed } from "../lib/fields";
+import type { Pillar } from "./db/schema";
 import { isPublicHttpUrl, normalizeUrl } from "./net";
 import { addEvent } from "./events";
 
 const parser = new Parser({ timeout: 15_000, headers: { "User-Agent": "Mozilla/5.0 (compatible; PostFlowBot/0.2)", Accept: "application/rss+xml, application/atom+xml, application/xml;q=0.9, text/xml;q=0.9, */*;q=0.8" } });
 
-/** Inserts the default feeds the first time only (never re-adds ones the owner deleted). */
+/** How many of the owner's topics get their own news search feed (outside tech). */
+export const TOPIC_FEEDS = 4;
+
+/** The starting feeds for an account: tech keeps the curated list; other fields get their known feeds plus news on each topic. */
+export function starterSources(s: Pick<Settings, "profile">): { name: string; url: string; pillar: Pillar; enabled?: boolean }[] {
+  const field = fieldOf(s.profile.field);
+  if (field.id === "tech") return DEFAULT_SOURCES;
+  return [...field.feeds, ...s.profile.expertise.slice(0, TOPIC_FEEDS).map(topicFeed)].map((f) => ({ ...f, pillar: "news" as const }));
+}
+
+/** Inserts the starting feeds the first time only (never re-adds ones the owner deleted). */
 export async function seedSourcesIfEmpty() {
   const userId = await uid();
   const [row] = await db().select({ n: sql<number>`count(*)` }).from(schema.sources).where(eq(schema.sources.userId, userId));
   if (Number(row.n) > 0) return;
+  const starters = starterSources(await getSettings());
+  if (!starters.length) return;
   await db()
     .insert(schema.sources)
-    .values(DEFAULT_SOURCES.map((s) => ({ userId, name: s.name, url: s.url, pillar: s.pillar, enabled: s.enabled ?? true })))
+    .values(starters.map((s) => ({ userId, name: s.name.slice(0, 80), url: s.url, pillar: s.pillar, enabled: s.enabled ?? true })))
     .onConflictDoNothing();
 }
 

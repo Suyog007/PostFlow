@@ -6,7 +6,7 @@ import { z } from "zod";
 import { fetchArticle, isPublicHttpUrl } from "./net";
 import { checkStory, registrableDomain, searchNews, type Mention } from "./verify";
 import { runTask, untrusted } from "./llm";
-import { profileBlock } from "./prompts";
+import { audienceOf, fieldFor, profileBlock } from "./prompts";
 import { log } from "./log";
 import type { Material } from "./generate";
 import type { Settings } from "./settings";
@@ -197,9 +197,9 @@ async function assess(s: Settings, gathered: string): Promise<Assessment> {
     role: "analyst",
     system: `You research a story for one person's LinkedIn and X audience, then decide whether it deserves a post from them.
 ${profileBlock(s)}
-Score "worth" 0-10: is it new, specific and something this person's audience (developers, builders, founders, and the topics above) would care about, talk about or act on? 0-3 skip, 4-5 weak, 6-7 decent, 8-10 strong. A big launch or shift that many people are discussing scores high even without a direct "opportunity".
+Score "worth" 0-10: is it new, specific and something this person's audience (${audienceOf(s)}, and the topics above) would care about, talk about or act on? 0-3 skip, 4-5 weak, 6-7 decent, 8-10 strong. A big launch or shift that many people are discussing scores high even without a direct "opportunity".
 "why": one or two plain sentences the owner will read, saying why it is or is not worth posting.
-"kind": "must_know" for vulnerabilities, attacks, outages, shutdowns; "opportunity" for openings builders can act on; "other" otherwise.
+"kind": ${fieldFor(s).kinds.replace(" above", "")}
 "facts": the key facts, ONLY from the texts given, each with who said it ("the post by @jack", "block.xyz", "The Verge"). When only the company or its founder says something (like "the most authentic model ever built"), write it as their claim, not as fact.
 "angle": the most interesting angle for this audience, in one sentence, with no new facts.`,
     user: untrusted("research", gathered, 14000),

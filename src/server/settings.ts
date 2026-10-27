@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { FIELD_IDS } from "../lib/fields";
 import { eq } from "drizzle-orm";
 import { db, schema } from "./db/client";
 import { uid } from "./context";
@@ -25,6 +26,10 @@ export const settingsSchema = z.object({
   profile: z
     .object({
       name: z.string().default(""),
+      /** Professional field: decides the audience, which news matters and extra safety rules. */
+      field: z.enum(FIELD_IDS).catch("tech").default("tech"),
+      /** Who reads their posts, in their words (optional), e.g. "patients and other eye doctors". */
+      audience: z.string().default(""),
       role: z.string().default(""),
       bio: z.string().default(""),
       /** City, country or community for "local scene" posts, e.g. "Nepal" or "Berlin". Empty = no local posts. */
@@ -36,6 +41,8 @@ export const settingsSchema = z.object({
     })
     .default({
       name: "",
+      field: "tech",
+      audience: "",
       role: "",
       bio: "",
       region: "",

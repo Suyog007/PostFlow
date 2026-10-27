@@ -1,3 +1,4 @@
+import { fieldOf } from "@/lib/fields";
 import { DateTime } from "luxon";
 import { desc, eq } from "drizzle-orm";
 import { requireActiveUser } from "@/server/auth";
@@ -6,7 +7,7 @@ import { getSettings } from "@/server/settings";
 import { addNoteAction, deleteNoteAction } from "@/app/actions";
 import { Flash } from "../flash";
 
-const PILLAR_LABEL: Record<string, string> = { own_work: "Something I built or did", learning: "Something I learned", local: "My local tech scene", news: "A take on news" };
+const PILLAR_LABEL: Record<string, string> = { own_work: "Something I built or did", learning: "Something I learned", local: "My local scene", news: "A take on news" };
 
 export default async function NotesPage({ searchParams }: { searchParams: Promise<{ ok?: string; error?: string }> }) {
   const sp = await searchParams;
@@ -26,7 +27,7 @@ export default async function NotesPage({ searchParams }: { searchParams: Promis
         <textarea name="text" rows={4} required placeholder="e.g. Moved our invoice PDF generation to a background job. Page load dropped from 4s to 1.2s. Mistake: I first cached it, which hid the real problem." className="textarea" />
         <div className="flex items-center gap-3">
           <select name="pillar" aria-label="What the note is about" className="input w-auto" defaultValue="own_work">
-            {["own_work", "learning", "local"].map((p) => <option key={p} value={p}>{p === "local" && s.profile.region ? `${s.profile.region} tech scene` : PILLAR_LABEL[p]}</option>)}
+            {["own_work", "learning", "local"].map((p) => <option key={p} value={p}>{p === "local" && s.profile.region ? `${s.profile.region} ${fieldOf(s.profile.field).community} scene` : PILLAR_LABEL[p]}</option>)}
           </select>
           <button className="btn-primary">Save note</button>
         </div>
