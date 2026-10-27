@@ -5,6 +5,7 @@ import { env } from "@/server/env";
 import { finishGoogleFlow, safeNext, type GoogleFlow } from "@/server/google";
 import { startSession } from "@/server/auth";
 import { AuthError, userFromGoogle } from "@/server/users";
+import { visitSource } from "@/server/attribution";
 import { log } from "@/server/log";
 
 export const dynamic = "force-dynamic";
@@ -34,7 +35,7 @@ export async function GET(req: Request) {
 
   try {
     const profile = await finishGoogleFlow(code, flow);
-    const user = await userFromGoogle({ ...profile, timezone: flow.timezone });
+    const user = await userFromGoogle({ ...profile, timezone: flow.timezone, source: await visitSource() });
     await startSession(user);
     return NextResponse.redirect(`${base}${safeNext(flow.next)}`);
   } catch (err) {

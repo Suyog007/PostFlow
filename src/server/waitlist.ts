@@ -13,7 +13,7 @@ const input = z.object({
 export type JoinResult = { ok: true; message: string } | { ok: false; error: string };
 
 /** Adds an email to the early-access list. Joining twice is not an error. */
-export async function joinWaitlist(raw: { email: unknown; plan?: unknown; role?: unknown }): Promise<JoinResult> {
+export async function joinWaitlist(raw: { email: unknown; plan?: unknown; role?: unknown; source?: string | null }): Promise<JoinResult> {
   const parsed = input.safeParse({
     email: raw.email,
     plan: PLANS.includes(raw.plan as never) ? raw.plan : undefined,
@@ -23,8 +23,8 @@ export async function joinWaitlist(raw: { email: unknown; plan?: unknown; role?:
   const { email, plan, role } = parsed.data;
   await db()
     .insert(schema.waitlist)
-    .values({ email, plan: plan ?? null, role: role ?? null })
-    .onConflictDoUpdate({ target: schema.waitlist.email, set: { plan: sql`coalesce(excluded.plan, ${schema.waitlist.plan})`, role: sql`coalesce(excluded.role, ${schema.waitlist.role})` } });
+    .values({ email, plan: plan ?? null, role: role ?? null, source: raw.source ?? null })
+    .onConflictDoUpdate({ target: schema.waitlist.email, set: { plan: sql`coalesce(excluded.plan, ${schema.waitlist.plan})`, role: sql`coalesce(excluded.role, ${schema.waitlist.role})`, source: sql`coalesce(${schema.waitlist.source}, excluded.source)` } });
   return { ok: true, message: "You're on the list. We'll email you when your invite is ready." };
 }
 

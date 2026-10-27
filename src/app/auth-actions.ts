@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { endSession, getSessionUser, rateLimited, startSession } from "@/server/auth";
+import { visitSource } from "@/server/attribution";
 import { AuthError, checkPassword, consumeToken, createUser, emailSchema, passwordSchema, sendPasswordReset, sendVerificationEmail, setPassword } from "@/server/users";
 import { safeNext } from "@/server/google";
 import { log } from "@/server/log";
@@ -35,7 +36,7 @@ export async function signupAction(_: FormState, form: FormData): Promise<FormSt
     const email = emailSchema.parse(form.get("email"));
     const password = passwordSchema.parse(String(form.get("password") ?? ""));
     if (!form.get("terms")) return { error: "Please accept the terms to continue." };
-    user = await createUser({ email, password, name: String(form.get("name") ?? ""), verified: false, timezone: String(form.get("tz") ?? "") || undefined });
+    user = await createUser({ email, password, name: String(form.get("name") ?? ""), verified: false, timezone: String(form.get("tz") ?? "") || undefined, source: await visitSource() });
     await startSession(user);
     await sendVerificationEmail(user);
   } catch (err) {

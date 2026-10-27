@@ -52,7 +52,7 @@ function isValidTimezone(tz: string | undefined): tz is string {
  * Creates an account. When the email is an owner email and data from the single-user version is
  * waiting, the owner takes over that account (and its data) instead of getting an empty one.
  */
-export async function createUser(input: { email: string; name?: string; password?: string; googleSub?: string; verified: boolean; timezone?: string }): Promise<UserRow> {
+export async function createUser(input: { email: string; name?: string; password?: string; googleSub?: string; verified: boolean; timezone?: string; source?: string | null }): Promise<UserRow> {
   const email = emailSchema.parse(input.email);
   const owner = isOwnerEmail(email);
   if (!owner && !signupsOpen()) throw new AuthError("Sign-ups are not open yet. Join the waitlist on the home page.");
@@ -65,6 +65,7 @@ export async function createUser(input: { email: string; name?: string; password
     googleSub: input.googleSub ?? null,
     emailVerifiedAt: input.verified ? new Date() : null,
     isOwner: owner,
+    signupSource: input.source ?? null,
     updatedAt: new Date(),
   };
 
@@ -115,7 +116,7 @@ export async function syncOwnerFlag(user: UserRow): Promise<UserRow> {
  * An existing account whose email was never verified is taken over by the Google identity and its
  * password is removed: whoever set it never proved they own the address.
  */
-export async function userFromGoogle(g: { sub: string; email: string; emailVerified: boolean; name: string; timezone?: string }): Promise<UserRow> {
+export async function userFromGoogle(g: { sub: string; email: string; emailVerified: boolean; name: string; timezone?: string; source?: string | null }): Promise<UserRow> {
   const bySub = await db().query.users.findFirst({ where: eq(schema.users.googleSub, g.sub) });
   if (bySub) return syncOwnerFlag(bySub);
   if (!g.emailVerified) throw new AuthError("Your Google account's email is not verified.");
@@ -127,7 +128,7 @@ export async function userFromGoogle(g: { sub: string; email: string; emailVerif
     const [u] = await db().update(schema.users).set(patch).where(eq(schema.users.id, byEmail.id)).returning();
     return syncOwnerFlag(u);
   }
-  return createUser({ email: g.email, name: g.name, googleSub: g.sub, verified: true, timezone: g.timezone });
+  return createUser({ email: g.email, name: g.name, googleSub: g.sub, verified: true, timezone: g.timezone, source: g.source });
 }
 
 // ---------------------------------------------------------------------------

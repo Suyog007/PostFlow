@@ -7,7 +7,7 @@ export const metadata: Metadata = { title: "Privacy Policy · PostFlow" };
 export default function PrivacyPage() {
   const { COMPANY_NAME: company, CONTACT_EMAIL: contact } = env();
   return (
-    <LegalShell title="Privacy Policy" updated="21 October 2026">
+    <LegalShell title="Privacy Policy" updated="27 October 2026">
       <p>This policy explains what {company} collects when you use PostFlow, why, and the choices you have.</p>
       <h2>What we collect</h2>
       <ul>
@@ -16,11 +16,13 @@ export default function PrivacyPage() {
         <li><strong>Your content:</strong> notes, links, profile and voice settings, news feeds, and the posts and reviews generated for you.</li>
         <li><strong>Billing:</strong> handled by Stripe. We store your Stripe customer id and subscription status, never your card details.</li>
         <li><strong>Usage:</strong> basic logs (for example sign-in attempts, errors and the number of AI calls) to run, secure and bill for the Service.</li>
+        <li><strong>How you found us:</strong> a small cookie (<code>pf_src</code>, kept 30 days) remembers which site or shared link you came from, for example &quot;reddit&quot;. If you sign up or join the waitlist, that label is saved with your account. It holds no personal details.</li>
+        <li><strong>Visitor statistics:</strong> Cloudflare Web Analytics counts page visits, the referring site, country and device type. It sets no cookies and does not track you across sites.</li>
       </ul>
       <h2>How we use it</h2>
       <p>To provide the Service (write, review, schedule and publish your posts), to send account emails (confirmation, password reset, important notices), to process payments, to prevent abuse, and to improve reliability. We do not sell your data and do not use your content to train AI models.</p>
       <h2>Service providers</h2>
-      <p>We share data only with providers that help run PostFlow, under their own privacy terms: Netlify (hosting), our database host, Stripe (payments), Resend (email), Fireworks AI (text generation; your notes and source material are sent to generate and review drafts), Google (if you sign in with Google), LinkedIn and X (publishing), and Telegram (if you link it).</p>
+      <p>We share data only with providers that help run PostFlow, under their own privacy terms: Netlify (hosting), our database host, Cloudflare (visitor statistics), Stripe (payments), Google Gmail or Resend (email), Fireworks AI (text generation; your notes and source material are sent to generate and review drafts), Google (if you sign in with Google), LinkedIn and X (publishing), and Telegram (if you link it).</p>
       <h2>Retention and deletion</h2>
       <p>We keep your data while your account exists. Deleting your account (Account page) cancels your subscription and permanently deletes your notes, posts, settings, feeds and stored tokens. Billing records are kept by Stripe as required by law. You can disconnect LinkedIn, X or Telegram at any time in Settings.</p>
       <h2>Your rights</h2>

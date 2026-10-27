@@ -57,6 +57,7 @@ export async function systemChecks(): Promise<Check[]> {
     e.FREE_BETA
       ? { label: "Payments: off (free beta)", ok: true, hint: "FREE_BETA is on, so nobody is charged. Remove it once a payment provider is set up." }
       : { label: "Payments (Stripe)", ok: !!e.STRIPE_SECRET_KEY && !!e.STRIPE_WEBHOOK_SECRET, critical: true, hint: "Set STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET, then run npm run stripe:setup." },
+    { label: "Visitor analytics (Cloudflare)", ok: !!e.CF_ANALYTICS_TOKEN, hint: "Optional: set CF_ANALYTICS_TOKEN from Cloudflare > Analytics & Logs > Web Analytics to count visitors and where they come from." },
     { label: "Google sign-in", ok: !!e.GOOGLE_CLIENT_ID && !!e.GOOGLE_CLIENT_SECRET, hint: "Optional: set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET." },
     { label: "LinkedIn app", ok: isPlatformConfigured("linkedin"), hint: "Set LINKEDIN_CLIENT_ID and LINKEDIN_CLIENT_SECRET." },
     { label: "X app", ok: isPlatformConfigured("x"), hint: "Set X_CLIENT_ID (and X_CLIENT_SECRET)." },

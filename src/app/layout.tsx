@@ -1,6 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import Script from "next/script";
 import { body, display, typed } from "./fonts";
+import { SourceTracker } from "@/components/source-tracker";
+import { env } from "@/server/env";
 
 // Netlify sets URL to the site's main address; APP_URL is the app's own setting.
 const SITE_URL = process.env.APP_URL || process.env.URL || "http://localhost:3000";
@@ -18,13 +21,19 @@ export const viewport: Viewport = { width: "device-width", initialScale: 1 };
 const THEME_SCRIPT = `try{var t=localStorage.getItem("postflow-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  const cfToken = env().CF_ANALYTICS_TOKEN;
   return (
     // The theme script sets data-theme before the first paint, so a chosen theme never flashes the other one.
     <html lang="en" suppressHydrationWarning className={`${display.variable} ${body.variable} ${typed.variable}`}>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
       </head>
-      <body className="min-h-screen">{children}</body>
+      <body className="min-h-screen">
+        {children}
+        <SourceTracker />
+        {/* Cloudflare Web Analytics: free visitor counts without cookies. Only loads when the token is set. */}
+        {cfToken && <Script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon={JSON.stringify({ token: cfToken })} strategy="afterInteractive" />}
+      </body>
     </html>
   );
 }

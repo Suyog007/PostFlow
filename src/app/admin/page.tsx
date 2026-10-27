@@ -39,8 +39,25 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       const p = planById(u.plan);
       return sum + (p ? (u.billingInterval === "year" ? p.yearly : p.monthly) : 0);
     }, 0);
+  // Where people come from: sign-ups (not the owner) and waitlist entries, by the source remembered at their first visit.
+  const weekAgo = Date.now() - 7 * 86_400_000;
+  const sources = new Map<string, { signups: number; confirmed: number; waitlist: number; week: number }>();
+  const tally = (src: string | null, at: Date, field: "signups" | "waitlist", confirmed = false) => {
+    const key = src || "unknown";
+    const row = sources.get(key) ?? { signups: 0, confirmed: 0, waitlist: 0, week: 0 };
+    row[field]++;
+    if (confirmed) row.confirmed++;
+    if (at.getTime() >= weekAgo) row.week++;
+    sources.set(key, row);
+  };
+  for (const u of users) if (!u.isOwner) tally(u.signupSource, u.createdAt, "signups", !!u.emailVerifiedAt);
+  for (const w of waitlist) tally(w.source, w.createdAt, "waitlist");
+  const sourceRows = [...sources.entries()].sort((a, b) => b[1].signups + b[1].waitlist - (a[1].signups + a[1].waitlist));
+  const newThisWeek = users.filter((u) => !u.isOwner && u.createdAt.getTime() >= weekAgo).length;
+
   const stats = [
     { label: "Accounts", value: users.length },
+    { label: "New this week", value: newThisWeek },
     { label: "In trial", value: by("trialing") },
     { label: "Paying", value: by("active") + by("past_due") },
     { label: "Payment failed", value: by("past_due") },
@@ -62,7 +79,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         {sp.ok && <p role="status" className="rounded-md bg-[var(--good-soft)] px-3 py-2 text-[13px] text-[var(--good)]">{sp.ok}</p>}
         {sp.error && <p role="alert" className="rounded-md bg-[var(--bad-soft)] px-3 py-2 text-[13px] text-[var(--bad)]">{sp.error}</p>}
 
-        <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <section className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
           {stats.map((s) => (
             <div key={s.label} className="panel p-4">
               <div className="text-[12px] text-[var(--muted)]">{s.label}</div>
@@ -87,7 +104,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                   const e = entitlementOf(u);
                   return (
                     <tr key={u.id} className="border-b border-[var(--line)] last:border-0">
-                      <td className="p-3"><div className="font-medium">{u.email}</div><div className="text-[12px] text-[var(--subtle)]">{u.name}{u.emailVerifiedAt ? "" : " · email not confirmed"}</div></td>
+                      <td className="p-3"><div className="font-medium">{u.email}</div><div className="text-[12px] text-[var(--subtle)]">{[u.name, u.signupSource && `from ${u.signupSource}`, !u.emailVerifiedAt && "email not confirmed"].filter(Boolean).join(" · ")}</div></td>
                       <td className="p-3">{u.isOwner ? "Owner" : e.plan === "beta" ? "Free beta" : planById(u.plan)?.name ?? "None"}{u.billingInterval && !u.isOwner ? ` · ${u.billingInterval === "year" ? "yearly" : "monthly"}` : ""}</td>
                       <td className="p-3"><span className={`badge ${e.active ? "badge-good" : ""}`}>{u.isOwner ? "owner" : e.plan === "beta" ? "beta" : u.subscriptionStatus ?? "no plan"}</span>{u.cancelAtPeriodEnd && <span className="ml-1 text-[12px] text-[var(--warn)]">cancels</span>}</td>
                       <td className="p-3 tnum">{postsByUser.get(u.id) ?? 0}{e.active && e.plan !== "owner" ? ` / ${e.quota.postsPerMonth}` : ""}</td>
@@ -97,6 +114,36 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                     </tr>
                   );
                 })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section>
+          <h2 className="display mb-1 text-[24px]">Where people come from</h2>
+          <p className="mb-3 text-[13px] text-[var(--muted)]">
+            From the first visit before signing up: a <code>?ref=</code> tag on the link if it had one, otherwise the site they clicked through from. Share links like <code>/?ref=reddit</code> to tell communities apart. Visitor numbers are in Cloudflare Web Analytics.
+          </p>
+          <div className="panel overflow-x-auto">
+            <table className="w-full text-left text-[13px]">
+              <thead>
+                <tr className="border-b border-[var(--line)]">
+                  <th className="p-3 font-medium">Source</th><th className="p-3 font-medium">Sign-ups</th><th className="p-3 font-medium">Confirmed email</th><th className="p-3 font-medium">Waitlist</th><th className="p-3 font-medium">Last 7 days</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sourceRows.map(([src, r]) => (
+                  <tr key={src} className="border-b border-[var(--line)] last:border-0">
+                    <td className="p-3 font-medium">{src}</td>
+                    <td className="p-3 tnum">{r.signups}</td>
+                    <td className="p-3 tnum">{r.confirmed}</td>
+                    <td className="p-3 tnum">{r.waitlist}</td>
+                    <td className="p-3 tnum">{r.week}</td>
+                  </tr>
+                ))}
+                {!sourceRows.length && (
+                  <tr><td colSpan={5} className="p-3 text-[var(--muted)]">Nobody has signed up yet.</td></tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -125,7 +172,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
               <li key={w.id} className="flex items-center gap-3 p-3">
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-medium">{w.email}</div>
-                  <div className="truncate text-[12px] text-[var(--muted)]">{[w.plan && `${w.plan[0].toUpperCase()}${w.plan.slice(1)} plan`, w.role].filter(Boolean).join(" · ") || "No plan picked"}</div>
+                  <div className="truncate text-[12px] text-[var(--muted)]">{[w.plan && `${w.plan[0].toUpperCase()}${w.plan.slice(1)} plan`, w.role, w.source && `from ${w.source}`].filter(Boolean).join(" · ") || "No plan picked"}</div>
                 </div>
                 <span className="text-[12px] text-[var(--muted)]">{DateTime.fromJSDate(w.createdAt).toRelative()}</span>
               </li>

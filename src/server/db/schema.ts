@@ -28,6 +28,8 @@ export const users = pgTable("users", {
   googleSub: text("google_sub").unique(),
   emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
   isOwner: boolean("is_owner").notNull().default(false),
+  /** Where they came from before signing up, e.g. "reddit" or "linkedin / launch". */
+  signupSource: text("signup_source"),
   /** Bumped on password change or "sign out everywhere"; older sessions stop working. */
   sessionVersion: integer("session_version").notNull().default(1),
   // Billing (mirrors Stripe; the webhook keeps it in sync)
@@ -241,6 +243,7 @@ export const waitlist = pgTable("waitlist", {
   email: text("email").notNull().unique(),
   plan: text("plan"), // starter | pro | agency (what they were looking at)
   role: text("role"), // optional: what they do
+  source: text("source"), // where they came from, e.g. "reddit"
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

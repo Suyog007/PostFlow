@@ -48,6 +48,9 @@ const schema = z.object({
   GOOGLE_CLIENT_ID: optional,
   GOOGLE_CLIENT_SECRET: optional,
 
+  // Visitor analytics: the token from Cloudflare > Analytics & Logs > Web Analytics (free, no cookies)
+  CF_ANALYTICS_TOKEN: optional,
+
   // Email: Gmail (no domain needed) or Resend (needs a domain you own)
   /** The Gmail address that sends the emails. */
   GMAIL_USER: optional,
