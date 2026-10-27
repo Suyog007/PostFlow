@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import Script from "next/script";
 import { body, display, typed } from "./fonts";
 import { SourceTracker } from "@/components/source-tracker";
 import { env } from "@/server/env";
@@ -27,12 +26,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" suppressHydrationWarning className={`${display.variable} ${body.variable} ${typed.variable}`}>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+        {/* Cloudflare Web Analytics: free visitor counts without cookies. Only loads when the token is set. */}
+        {cfToken && <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon={JSON.stringify({ token: cfToken })} />}
       </head>
       <body className="min-h-screen">
         {children}
         <SourceTracker />
-        {/* Cloudflare Web Analytics: free visitor counts without cookies. Only loads when the token is set. */}
-        {cfToken && <Script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon={JSON.stringify({ token: cfToken })} strategy="afterInteractive" />}
       </body>
     </html>
   );
