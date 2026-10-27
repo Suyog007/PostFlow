@@ -13,6 +13,8 @@ export interface PlanFeatures {
   fastLane: boolean;
   /** Create posts from a link or from the user's own articles. */
   links: boolean;
+  /** Post to X. Its API is paid per post, so it is not part of the free beta. */
+  x: boolean;
 }
 
 export interface PlanQuota {
@@ -41,10 +43,10 @@ export interface Plan {
 
 export const TRIAL_DAYS = 7;
 
-/** What everyone gets while FREE_BETA is on: Pro features, with limits that keep AI costs in check. */
+/** What everyone gets while FREE_BETA is on: Pro features on LinkedIn only (X costs money per post), with limits that keep AI costs in check. */
 export const BETA = {
   quota: { postsPerMonth: 60, feeds: 30, llmCallsPerDay: 120 } as PlanQuota,
-  features: { autoMode: true, fastLane: true, links: true } as PlanFeatures,
+  features: { autoMode: true, fastLane: true, links: true, x: false } as PlanFeatures,
 };
 
 export const PLANS: Plan[] = [
@@ -55,7 +57,7 @@ export const PLANS: Plan[] = [
     monthly: 19,
     yearly: 15,
     quota: { postsPerMonth: 60, feeds: 15, llmCallsPerDay: 80 },
-    features: { autoMode: false, fastLane: false, links: false },
+    features: { autoMode: false, fastLane: false, links: false, x: true },
     limits: ["1 LinkedIn + 1 X account", "60 posts a month", "Up to 15 news feeds"],
     bullets: [
       "Posts written from your notes",
@@ -73,7 +75,7 @@ export const PLANS: Plan[] = [
     yearly: 31,
     popular: true,
     quota: { postsPerMonth: 150, feeds: 100, llmCallsPerDay: 200 },
-    features: { autoMode: true, fastLane: true, links: true },
+    features: { autoMode: true, fastLane: true, links: true, x: true },
     limits: ["1 LinkedIn + 1 X account", "150 posts a month", "Up to 100 news feeds"],
     bullets: [
       "Everything in Starter",
@@ -91,7 +93,7 @@ export const PLANS: Plan[] = [
     yearly: 79,
     soon: true,
     quota: { postsPerMonth: 600, feeds: 300, llmCallsPerDay: 800 },
-    features: { autoMode: true, fastLane: true, links: true },
+    features: { autoMode: true, fastLane: true, links: true, x: true },
     limits: ["Up to 5 profiles", "600 posts a month, shared", "Up to 300 news feeds"],
     bullets: ["Everything in Pro", "Separate voice and calendar per profile", "Approval per client", "Priority support"],
   },

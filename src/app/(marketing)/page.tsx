@@ -46,12 +46,12 @@ const faqFor = (beta: boolean): { q: string; a: string }[] => [
   },
   {
     q: "What do I need to connect?",
-    a: "Your LinkedIn profile and your X account, through their official sign-in pages. PostFlow never sees your passwords. Telegram is optional and free: it's the fastest way to approve posts and send links from your phone.",
+    a: `${beta ? "Your LinkedIn profile (X comes with Pro)" : "Your LinkedIn profile and your X account"}, through their official sign-in pages. PostFlow never sees your passwords. Telegram is optional and free: it's the fastest way to approve posts and send links from your phone.`,
   },
   beta
     ? {
         q: "Is it really free?",
-        a: `Yes, while PostFlow is in beta. You get every Pro feature and up to ${BETA.quota.postsPerMonth} posts a month, with no card. Paid plans come later, and you will hear well before anything is charged.`,
+        a: `Yes, on LinkedIn, while PostFlow is in beta: up to ${BETA.quota.postsPerMonth} posts a month, with no card. Posting to X comes with the Pro plan, because X charges for every post. Pro opens soon; join the waitlist and you will hear first.`,
       }
     : {
         q: "Why is there no free plan?",
@@ -131,7 +131,7 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
               <a href={cta.href} className="btn-desk">{cta.label}</a>
               <a href="#how" className="btn-outline">See how it works</a>
             </div>
-            <p className="mt-3 text-[14px] text-[var(--d-muted)]">{beta ? "Free during the beta. No card needed." : open ? "No charge during the trial. Cancel anytime." : `${TRIAL_DAYS}-day free trial at launch. No card to join.`}</p>
+            <p className="mt-3 text-[14px] text-[var(--d-muted)]">{beta ? "Free on LinkedIn during the beta. No card needed." : open ? "No charge during the trial. Cancel anytime." : `${TRIAL_DAYS}-day free trial at launch. No card to join.`}</p>
             {/* A byline strip: what every post comes with. */}
             <p className="typed mt-10 flex flex-wrap items-center gap-x-3 gap-y-1 border-y border-[var(--line)] py-3 text-[13px] uppercase tracking-[.12em] text-[var(--d-muted)]">
               <span>Fact-checked</span><span aria-hidden="true">·</span><span>Plain words</span><span aria-hidden="true">·</span><span>Sent only when you approve</span>
@@ -184,7 +184,7 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
             </div>
             <p className="max-w-[520px] text-[19px] leading-relaxed text-[var(--d-muted)] lg:justify-self-end">
               {beta
-                ? "Free while PostFlow is in beta. These are the prices after it, and every plan includes the fact-checker."
+                ? "LinkedIn is free while PostFlow is in beta. Pro adds X and opens soon. Every plan includes the fact-checker."
                 : `Every plan includes the fact-checker. No free plan, because checking costs real money. A ${TRIAL_DAYS}-day trial instead.`}
             </p>
           </div>
@@ -215,12 +215,16 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
             <div>
               <Headline a="Your next post" b="is already in the news." className="text-[44px] sm:text-[64px]" />
               <p className="mt-6 max-w-[500px] text-[19px] leading-relaxed text-[var(--d-muted)]">
-                {open
-                  ? `Connect LinkedIn or X, pick your field, and your first posts arrive in Telegram today. ${beta ? "Free during the beta." : `${TRIAL_DAYS} days free.`}`
+                {open && beta && plan
+                  ? `The ${plan === "agency" ? "Agency" : "Pro"} plan adds X and opens soon. Join the list and you will hear first. Until then, LinkedIn is free.`
+                  : open
+                  ? beta
+                    ? "Connect LinkedIn, pick your field, and your first posts arrive in Telegram today. Free during the beta."
+                    : `Connect LinkedIn or X, pick your field, and your first posts arrive in Telegram today. ${TRIAL_DAYS} days free.`
                   : `PostFlow is opening to a small group first. Join the list for an invite${beta ? " to the free beta." : ` and a ${TRIAL_DAYS}-day free trial.`}`}
               </p>
             </div>
-            {open && plan !== "agency" ? (
+            {open && plan !== "agency" && !(beta && plan) ? (
               <div className="rounded-2xl border-[1.5px] border-[var(--d-sky-line)] bg-[var(--surface)] p-8 shadow-[0_6px_0_var(--d-sky-line)]">
                 <a href="/signup?plan=pro&interval=year" className="btn-desk w-full">{startLabel}</a>
                 <p className="mt-4 text-center text-[15px] text-[var(--d-muted)]">

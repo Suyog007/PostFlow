@@ -20,7 +20,7 @@ const NONE: Entitlement = {
   active: false,
   plan: null,
   quota: { postsPerMonth: 0, feeds: 0, llmCallsPerDay: 0 },
-  features: { autoMode: false, fastLane: false, links: false },
+  features: { autoMode: false, fastLane: false, links: false, x: false },
 };
 
 type UserRow = typeof schema.users.$inferSelect;
@@ -39,7 +39,7 @@ export function entitlementOf(u: Pick<UserRow, "isOwner" | "plan" | "subscriptio
       active: true,
       plan: "owner",
       quota: { postsPerMonth: 100_000, feeds: 1_000, llmCallsPerDay: env().MAX_LLM_CALLS_PER_DAY },
-      features: { autoMode: true, fastLane: true, links: true },
+      features: { autoMode: true, fastLane: true, links: true, x: true },
     };
   }
   const plan = planById(u.plan);
@@ -68,10 +68,13 @@ export class LimitError extends Error {}
  */
 export async function activePlatforms(userId?: string): Promise<("x" | "linkedin")[]> {
   const id = userId ?? (await uid());
-  if ((await entitlementFor(id)).plan === "owner") return ["linkedin", "x"];
+  const ent = await entitlementFor(id);
+  if (ent.plan === "owner") return ["linkedin", "x"];
   const rows = await db().select({ platform: schema.platformAccounts.platform }).from(schema.platformAccounts).where(and(eq(schema.platformAccounts.userId, id), eq(schema.platformAccounts.status, "connected")));
-  return (["linkedin", "x"] as const).filter((p) => rows.some((r) => r.platform === p));
+  return (["linkedin", "x"] as const).filter((p) => (p !== "x" || ent.features.x) && rows.some((r) => r.platform === p));
 }
+
+export const X_IS_PRO = "Posting to X is part of the Pro plan, which opens soon. Join the waitlist on the home page and you will hear first.";
 
 export const CONNECT_FIRST = "Connect LinkedIn or X in Settings first. PostFlow starts writing posts once an account is connected.";
 

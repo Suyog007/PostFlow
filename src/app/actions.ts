@@ -7,7 +7,7 @@ import { DateTime } from "luxon";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { requireActiveUser, requireOwnerUser } from "@/server/auth";
 import { withUser } from "@/server/context";
-import { activePlatforms, assertFeature, assertFeedQuota, CONNECT_FIRST, LimitError } from "@/server/billing/plans";
+import { activePlatforms, assertFeature, assertFeedQuota, CONNECT_FIRST, entitlementFor, LimitError, X_IS_PRO } from "@/server/billing/plans";
 import { db, schema } from "@/server/db/client";
 import { PILLARS, type Pillar } from "@/server/db/schema";
 import { getSettings, saveSettings } from "@/server/settings";
@@ -336,9 +336,10 @@ export async function togglePauseAction() {
 }
 
 export async function connectAction(form: FormData) {
-  await requireActiveUser();
+  const user = await requireActiveUser();
   const platform = String(form.get("platform"));
   if (platform !== "x" && platform !== "linkedin") return;
+  if (platform === "x" && !(await entitlementFor(user.id)).features.x) back("/settings", "error", X_IS_PRO);
   let url: string;
   try {
     url = await startOAuth(platform);

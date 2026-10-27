@@ -1,7 +1,7 @@
 import { and, eq, gt, inArray, isNull, lt, lte, sql } from "drizzle-orm";
 import { db, schema } from "./db/client";
 import { uid } from "./context";
-import { approvalGate, entitlementFor } from "./billing/plans";
+import { approvalGate, entitlementFor, X_IS_PRO } from "./billing/plans";
 import { getSettings, type Settings } from "./settings";
 import { altText, ensurePostImage, wantsImage } from "./post-images";
 import { getCredentials, getPlatformClient, markAccountError, NotConnectedError } from "./platforms/accounts";
@@ -64,6 +64,12 @@ async function publishOne(post: PostRow, now: Date): Promise<"published" | "othe
       return "other";
     }
     await setStatus(post.id, { status: "expired", error: "Missed its slot and no later slot is free." });
+    return "other";
+  }
+
+  if (platform === "x" && !(await entitlementFor(post.userId)).features.x) {
+    await setStatus(post.id, { status: "failed", error: X_IS_PRO });
+    await addEvent("failed", `X post not published: ${X_IS_PRO}`, post.id);
     return "other";
   }
 

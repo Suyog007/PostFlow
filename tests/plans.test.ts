@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { db, schema } from "../src/server/db/client";
 import { resetEnvCache } from "../src/server/env";
-import { assertFeedQuota, assertPostQuota, entitledUsers, entitlementOf, LimitError } from "../src/server/billing/plans";
+import { activePlatforms, assertFeedQuota, assertPostQuota, entitledUsers, entitlementOf, LimitError } from "../src/server/billing/plans";
 import { createRequest } from "../src/server/requests";
 import { publishDue } from "../src/server/publisher";
 import { saveSettings } from "../src/server/settings";
@@ -110,6 +110,27 @@ describe("plans and limits", () => {
         const ids = (await entitledUsers()).map((u) => u.id);
         expect(ids).toContain(free.id);
         expect(ids).not.toContain(unconfirmed.id);
+      }));
+
+    it("beta accounts write and post for LinkedIn only; X is for paying plans", () =>
+      withBeta(async () => {
+        await db().update(schema.users).set({ plan: null, subscriptionStatus: null }).where(eq(schema.users.id, me()));
+        await saveSettings({ requireApproval: false });
+        await connectAccount("x");
+        await connectAccount("linkedin");
+        expect(await activePlatforms()).toEqual(["linkedin"]);
+
+        await db().insert(schema.posts).values({ userId: me(), platform: "x", pillar: "own_work", text: "Old X post", status: "scheduled", approvedAt: new Date(), scheduledAt: new Date(Date.now() - 60_000) });
+        const sent = fakePlatform("x", () => ({ kind: "success", externalIds: ["1"] }));
+        await publishDue();
+        expect(sent).toHaveLength(0);
+        const post = await db().query.posts.findFirst({ where: eq(schema.posts.platform, "x") });
+        expect(post?.status).toBe("failed");
+        expect(post?.error).toMatch(/Pro plan/);
+
+        // A paying Pro user keeps X.
+        await db().update(schema.users).set({ plan: "pro", subscriptionStatus: "active" }).where(eq(schema.users.id, me()));
+        expect(await activePlatforms()).toEqual(["linkedin", "x"]);
       }));
 
     it("without the beta, an account with no plan gets nothing", () => {

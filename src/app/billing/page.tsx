@@ -63,7 +63,8 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
           <div className="panel mt-6 p-5">
             <p className="font-medium">Free during the beta</p>
             <p className="mt-1 text-[14px] text-[var(--muted)]">
-              Every feature is on and nothing is charged. You can make up to {ent.quota.postsPerMonth} posts a month. We will email you well before paid plans start, and you can decide then.
+              PostFlow is free on LinkedIn, with up to {ent.quota.postsPerMonth} posts a month. Posting to X comes with the Pro plan, which opens soon:{" "}
+              <Link href="/?plan=pro#early-access" className="underline">join the waitlist</Link>. We will email you well before paid plans start, and nothing is charged unless you choose one.
             </p>
             <p className="mt-3 text-[14px]"><span className="font-medium tnum">{used}</span> of {ent.quota.postsPerMonth} posts used this month</p>
             <Link href="/calendar" className="btn btn-primary mt-4">Open the app</Link>

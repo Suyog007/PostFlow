@@ -85,6 +85,16 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <div className="card divide-y divide-line text-sm">
           {(["linkedin", "x"] as const).map((p) => {
             const a = acct(p);
+            if (p === "x" && !ent.features.x)
+              return (
+                <div key={p} className="flex items-center gap-3 p-3">
+                  <div className="flex-1">
+                    <div className="font-medium">X <Link href="/?plan=pro#early-access" className="badge badge-accent ml-1">Pro</Link></div>
+                    <div className="text-muted">Posting to X comes with the Pro plan, which opens soon. The free beta posts to LinkedIn.</div>
+                  </div>
+                  <Link href="/?plan=pro#early-access" className="btn-secondary">Join the waitlist</Link>
+                </div>
+              );
             return (
               <div key={p} className="flex items-center gap-3 p-3">
                 <div className="flex-1">
