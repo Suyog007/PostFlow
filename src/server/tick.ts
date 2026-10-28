@@ -5,7 +5,7 @@ import { acquireLease, withLease } from "./lease";
 import { pruneRateLimits } from "./rate-limit";
 import { collectFeeds, seedSourcesIfEmpty } from "./collect";
 import { analyzeBatch } from "./analyze";
-import { fillCalendar, fillNowDays, extraQueuedLessons, rejectAndReplace, repeatedQueuedPosts, rewriteFresh, weakQueuedPosts, type FillResult } from "./generate";
+import { fillCalendar, fillNowDays, extraQueuedLessons, rejectAndReplace, replaceDeclined, repeatedQueuedPosts, rewriteFresh, weakQueuedPosts, type FillResult } from "./generate";
 import { env } from "./env";
 import { formatLocal } from "./slots";
 import { processRequests } from "./requests";
@@ -262,7 +262,25 @@ export async function startBackgroundFill(userId: string): Promise<boolean> {
   return startBackgroundJob(userId, "fill");
 }
 
-async function startBackgroundJob(userId: string, job: "fill" | "refresh"): Promise<boolean> {
+/**
+ * "Find another story": writing the replacement takes longer than a web request may run (about 30 s on
+ * Netlify), so it runs in the background function. The result arrives on the calendar and in Telegram.
+ */
+export async function requestReplacement(userId: string, postId: string, fallback: (job: () => Promise<unknown>) => void): Promise<void> {
+  if (await startBackgroundJob(userId, "replace", postId)) return;
+  fallback(() => replaceForUser(userId, postId).catch(warnOnError("replace_failed", { userId })));
+}
+
+/** Writes the replacement for a declined post and tells the owner on Telegram when none could be found. */
+export async function replaceForUser(userId: string, postId: string): Promise<{ replacementId: string | null; message: string }> {
+  return withUser(userId, async () => {
+    const r = await replaceDeclined(postId).catch((err: Error) => ({ replacementId: null, message: err.message }));
+    if (!r.replacementId) await notifyText(`ℹ️ ${r.message}`).catch(warnOnError("notify_failed", { what: "replace" }));
+    return r;
+  });
+}
+
+async function startBackgroundJob(userId: string, job: "fill" | "refresh" | "replace", postId?: string): Promise<boolean> {
   const e = env();
   if (!e.CRON_SECRET) return false;
   const base = e.APP_URL.replace(/\/$/, "").replace(/^http:\/\/(?!localhost)/, "https://");
@@ -270,7 +288,7 @@ async function startBackgroundJob(userId: string, job: "fill" | "refresh"): Prom
     const res = await fetch(`${base}/.netlify/functions/tick-background`, {
       method: "POST",
       headers: { authorization: `Bearer ${e.CRON_SECRET}`, "content-type": "application/json" },
-      body: JSON.stringify(job === "fill" ? { fillUserId: userId } : { refreshUserId: userId }),
+      body: JSON.stringify(job === "fill" ? { fillUserId: userId } : job === "replace" ? { replaceUserId: userId, replacePostId: postId } : { refreshUserId: userId }),
       redirect: "manual",
       signal: AbortSignal.timeout(10_000),
     });

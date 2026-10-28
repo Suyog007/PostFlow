@@ -842,13 +842,24 @@ export async function recheckPost(id: string): Promise<{ approved: boolean; mess
 
 /** The owner rejected a post: drop it and write a different one for the same platform. Its story is not reused. */
 export async function rejectAndReplace(id: string): Promise<{ replacementId: string | null; message: string }> {
+  await declinePost(id);
+  return replaceDeclined(id);
+}
+
+/** Step 1 of "find another story", quick enough for a web request: takes the post off the calendar. */
+export async function declinePost(id: string): Promise<void> {
   const p = await db().query.posts.findFirst({ where: and(eq(schema.posts.id, id), await mine(schema.posts)) });
   if (!p) throw new Error("Post not found.");
   if (p.status === "declined") throw new Error("That post was already swapped for another story. The new one was sent to you separately.");
   if (!["scheduled", "draft"].includes(p.status)) throw new Error(`That post is ${p.status === "cancelled" ? "removed" : p.status} now, so there is nothing to swap.`);
   await db().update(schema.posts).set({ status: "declined", approvedAt: null, updatedAt: new Date() }).where(eq(schema.posts.id, id));
   await addEvent("declined", `You rejected a ${p.platform} post; looking for a different story.`, id);
+}
 
+/** Step 2, slow (several model calls): writes a different story for a declined post's slot. */
+export async function replaceDeclined(id: string): Promise<{ replacementId: string | null; message: string }> {
+  const p = await db().query.posts.findFirst({ where: and(eq(schema.posts.id, id), await mine(schema.posts)) });
+  if (!p || p.status !== "declined") throw new Error("Post not found.");
   const s = await getSettings();
   const platform = p.platform as Platform;
   const now = new Date();

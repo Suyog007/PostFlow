@@ -8,8 +8,8 @@ import { cardUrl, ensurePostImage, redrawPostImage, wantsImage } from "./post-im
 import { getSettings, saveSettings } from "./settings";
 import { approvePost, postNow, removePost, PostError, upcoming } from "./posts";
 import { publishDue } from "./publisher";
-import { refillSlot, rejectAndReplace, rewordPost, writeLesson } from "./generate";
-import { requestFillNow, requestRefresh } from "./tick";
+import { declinePost, refillSlot, rewordPost, writeLesson } from "./generate";
+import { requestFillNow, requestRefresh, requestReplacement } from "./tick";
 import { formatLocal } from "./slots";
 import { consumeToken } from "./users";
 import { sendEmail } from "./email";
@@ -247,16 +247,20 @@ async function handleForUser(u: Update, chat: number): Promise<void> {
       // Finding and writing a replacement takes a while; acknowledge first, the new post arrives as its own message.
       await telegramApi("answerCallbackQuery", { callback_query_id: u.callback_query.id, text: "Rejected. Looking for another story…" });
       const id = data.slice(3);
-      const run = () =>
-        withUser(userId, async () => {
-          const r = await rejectAndReplace(id).catch((err: Error) => ({ replacementId: null, message: err.message }));
-          if (!r.replacementId) await sendTo(chat, r.message);
-        });
       try {
-        after(run);
-      } catch {
-        await run(); // outside a request (tests)
+        await withUser(userId, () => declinePost(id));
+      } catch (err) {
+        await sendTo(chat, (err as Error).message);
+        return;
       }
+      // Writing the replacement can outlast the webhook request, so it runs in the background function.
+      await requestReplacement(userId, id, (job) => {
+        try {
+          after(job);
+        } catch {
+          void job(); // outside a request (tests)
+        }
+      });
       return;
     } else if (data.startsWith("rw:")) {
       // Same story and facts, written again from a different angle. Takes a moment, so acknowledge first.

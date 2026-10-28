@@ -1,7 +1,7 @@
 // Netlify background function: runs one scheduler pass (publish, collect, write, review).
 // Background functions may run for up to 15 minutes, which a normal request (~30 s) cannot.
 import { timingSafeEqual } from "node:crypto";
-import { fillNowForUser, refreshQueuedForUser, tick } from "../../src/server/tick";
+import { fillNowForUser, refreshQueuedForUser, replaceForUser, tick } from "../../src/server/tick";
 
 export default async (req: Request) => {
   const secret = process.env.CRON_SECRET;
@@ -12,7 +12,18 @@ export default async (req: Request) => {
     return;
   }
   // "Fill now" from the calendar sends the account to fill; the scheduler sends an empty body.
-  const body = (await req.json().catch(() => ({}))) as { fillUserId?: string; refreshUserId?: string };
+  const body = (await req.json().catch(() => ({}))) as { fillUserId?: string; refreshUserId?: string; replaceUserId?: string; replacePostId?: string };
+  const uuid = /^[0-9a-f-]{36}$/i;
+  // "Find another story" on a post or in Telegram: write the replacement for one declined post.
+  if (typeof body.replaceUserId === "string" && uuid.test(body.replaceUserId) && typeof body.replacePostId === "string" && uuid.test(body.replacePostId)) {
+    try {
+      const r = await replaceForUser(body.replaceUserId, body.replacePostId);
+      console.warn("replace", JSON.stringify(r));
+    } catch (err) {
+      console.error("replace failed", (err as Error).message);
+    }
+    return;
+  }
   // "Rewrite queued posts" from the calendar or /refresh in Telegram.
   if (typeof body.refreshUserId === "string" && /^[0-9a-f-]{36}$/i.test(body.refreshUserId)) {
     try {

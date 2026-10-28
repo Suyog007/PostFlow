@@ -18,10 +18,10 @@ import { createRequest, processRequests, retryAnyway, type RequestMode } from "@
 import { addTip } from "@/server/tips";
 import { disconnectAccount, startOAuth } from "@/server/platforms/accounts";
 import { newTelegramLinkUrl, registerWebhook, unlinkTelegram } from "@/server/telegram";
-import { requestFillNow, requestRefresh, runForUser, tick } from "@/server/tick";
+import { requestFillNow, requestRefresh, requestReplacement, runForUser, tick } from "@/server/tick";
 import { addEvent } from "@/server/events";
 import { publishDue } from "@/server/publisher";
-import { fillNowDays, recheckPost, refillSlot, rejectAndReplace, rewordPost, swapToAlternative, writeLesson } from "@/server/generate";
+import { declinePost, fillNowDays, recheckPost, refillSlot, rewordPost, swapToAlternative, writeLesson } from "@/server/generate";
 import { warnOnError } from "@/server/log";
 import { redrawPostImage } from "@/server/post-images";
 import { isPublicHttpUrl } from "@/server/net";
@@ -93,15 +93,16 @@ export async function unapprovePostAction(form: FormData) {
 }
 export async function rejectPostAction(form: FormData) {
   const id = String(form.get("id"));
-  await requireActiveUser();
-  let r: Awaited<ReturnType<typeof rejectAndReplace>>;
+  const user = await requireActiveUser();
   try {
-    r = await rejectAndReplace(id);
+    await declinePost(id);
   } catch (err) {
     back(`/posts/${id}`, "error", (err as Error).message);
   }
+  // The replacement takes longer than a page may wait, so it is written in the background.
+  await requestReplacement(user.id, id, (job) => after(job));
   revalidatePath("/", "layout");
-  back(r.replacementId ? `/posts/${r.replacementId}` : "/calendar", "ok", r.message);
+  back("/calendar", "ok", "Rejected. Writing a different story for the same slot; it appears here in a minute or two, and on Telegram if you linked it.");
 }
 export async function rewordPostAction(form: FormData) {
   const id = String(form.get("id"));
