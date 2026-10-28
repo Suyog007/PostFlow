@@ -308,3 +308,17 @@ h1, h2, h3 { text-wrap: balance; }
 @media (prefers-reduced-motion: reduce) {
   .desk .film-scene .film-pop, .desk .film-scene .film-stamp, .desk .film-scene .film-press, .desk .film-scene .film-out, .desk .film-scene .film-keep, .desk .film-fill.is-running { animation: none !important; }
 }
+
+/* ---------- calendar: first posts loader ---------- */
+.first-spinner { width: 22px; height: 22px; border-radius: 999px; border: 2.5px solid var(--line); border-top-color: var(--accent); animation: spin 0.9s linear infinite; }
+.first-dot { width: 8px; height: 8px; border-radius: 999px; background: var(--line-strong); flex: none; }
+.first-step { color: var(--muted); animation: first-step 4.8s ease-in-out infinite both; }
+.first-step .first-dot { animation: first-dot 4.8s ease-in-out infinite both; animation-delay: inherit; }
+.first-skeleton { animation: first-shimmer 1.6s ease-in-out infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes first-step { 0%, 100% { color: var(--muted); } 15%, 40% { color: var(--ink); } }
+@keyframes first-dot { 0%, 100% { background: var(--line-strong); } 15%, 40% { background: var(--accent); } }
+@keyframes first-shimmer { 50% { opacity: .55; } }
+@media (prefers-reduced-motion: reduce) {
+  .first-spinner, .first-step, .first-step .first-dot, .first-skeleton { animation: none; }
+}

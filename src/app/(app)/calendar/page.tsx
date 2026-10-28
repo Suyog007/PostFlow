@@ -69,7 +69,47 @@ function DayCard({ p, tz, needsOk, thumb }: { p: Post; tz: string; needsOk: bool
   );
 }
 
-function OpenCard({ e, tz }: { e: OpenSlot; tz: string }) {
+/** The calendar's first-run loader: shown until the account's very first posts are written. */
+function FirstRun({ mins }: { mins: number }) {
+  const late = mins >= 25;
+  const steps = ["Reading the news in your field", "Picking the stories worth posting", "Writing and fact-checking each post"];
+  return (
+    <section className="panel mb-5 p-5" role="status" aria-live="polite">
+      <div className="flex items-start gap-4">
+        <span aria-hidden="true" className="first-spinner mt-1 flex-none" />
+        <div className="min-w-0">
+          <h2 className="display text-[24px]">{late ? "Still looking for the right stories." : "Writing your first posts…"}</h2>
+          <p className="mt-1 max-w-2xl text-[14px] text-[var(--muted)]">
+            {late
+              ? "It is a quiet news day in your field, so nothing has cleared the bar yet. PostFlow keeps looking every few minutes; you can add a note about your own work, or add a source in Settings, to get a first post sooner."
+              : "This usually takes 5 to 15 minutes: every post is researched, written and checked twice before it lands here. You can close this page; we'll message you on Telegram if it's linked."}
+          </p>
+          {!late && (
+            <ol className="mt-4 space-y-2 text-[13px]">
+              {steps.map((t, n) => (
+                <li key={t} className="first-step flex items-center gap-2.5" style={{ animationDelay: `${n * 1.6}s` }}>
+                  <span aria-hidden="true" className="first-dot" />
+                  {t}
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function OpenCard({ e, tz, loading }: { e: OpenSlot; tz: string; loading?: boolean }) {
+  if (loading)
+    return (
+      <div className="first-skeleton rounded-[6px] border border-[var(--line)] p-2 text-[11px] text-[var(--subtle)]">
+        <div className="flex items-center gap-1.5"><PlatformGlyph platform={e.platform} size={12} /><span className="mono">{DateTime.fromJSDate(e.scheduledAt, { zone: tz }).toFormat("HH:mm")}</span></div>
+        <span aria-hidden="true" className="mt-2 block h-2 w-11/12 rounded bg-[var(--line)]" />
+        <span aria-hidden="true" className="mt-1.5 block h-2 w-2/3 rounded bg-[var(--line)]" />
+        <span className="sr-only">Writing a post for this slot</span>
+      </div>
+    );
   return (
     <div className="rounded-[6px] border border-dashed border-[var(--line-strong)] p-2 text-[11px] text-[var(--subtle)]" title="Open slot: PostFlow fills it automatically when a story worth posting comes in. You don\u2019t need to do anything.">
       <div className="flex items-center gap-1.5"><PlatformGlyph platform={e.platform} size={12} /><span className="mono">{DateTime.fromJSDate(e.scheduledAt, { zone: tz }).toFormat("HH:mm")}</span></div>
@@ -129,8 +169,14 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const openSlots: OpenSlot[] = openFrom < openTo
     ? slotsBetween(s, openFrom, openTo).filter((sl) => active.includes(sl.platform) && !liveKeys.has(`${sl.platform}@${sl.at.getTime()}`)).map((sl) => ({ open: true, id: `open-${sl.platform}-${sl.at.getTime()}`, platform: sl.platform, scheduledAt: sl.at }))
     : [];
+  // First run: an account with a connected platform and no posts at all yet. The calendar shows a loader
+  // and refreshes itself until the first posts arrive.
+  const [{ n: everPosts }] = await db().select({ n: count() }).from(schema.posts).where(mine);
+  const connectedAt = accounts.filter((x) => x.status === "connected").map((x) => x.updatedAt.getTime()).sort()[0] ?? null;
+  const firstRun = Number(everPosts) === 0 && active.length > 0 && offset === 0;
+  const firstRunMins = connectedAt ? Math.round((Date.now() - connectedAt) / 60_000) : 0;
   // Shown while slots are open, so an empty calendar reads as "being worked on", not "waiting for you".
-  const status = !filling && openSlots.length && offset >= 0 ? await newsroomStatus(user.id, s, { beat: await lastHeartbeat() }) : null;
+  const status = !firstRun && !filling && openSlots.length && offset >= 0 ? await newsroomStatus(user.id, s, { beat: await lastHeartbeat() }) : null;
   const entries: Entry[] = [...week, ...openSlots].sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime());
   const postedCount = week.filter((p) => p.status === "published").length;
   const thumbFor = (p: Post) => (withPicture.has(p.id) && wantsImage(p, s) ? cardUrl(p) : undefined);
@@ -139,8 +185,10 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     <div>
       {/* While "Fill now" runs, reload every 20 s so new posts show up without a manual refresh. */}
       {filling && <meta httpEquiv="refresh" content={`20;url=/calendar${offset ? `?w=${offset}` : ""}`} />}
+      {firstRun && !filling && <meta httpEquiv="refresh" content="30;url=/calendar" />}
+      {firstRun && <FirstRun mins={firstRunMins} />}
       {!filling && <Flash ok={sp.ok} error={sp.error} />}
-      {filling && (
+      {filling && !firstRun && (
         <div className="panel mb-4 flex items-center gap-2 px-4 py-3 text-[13px]" role="status">
           {/* Pulses only while a fill is running, and only for people who have not asked for reduced motion. */}
           <span className="h-2 w-2 rounded-full bg-[var(--warn)] motion-safe:animate-pulse" />
@@ -225,7 +273,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                 <span className={`flex h-7 min-w-7 items-center justify-center rounded-full px-1 text-[14px] font-semibold tnum ${isToday ? "bg-[var(--mark)] text-[var(--mark-ink)]" : ""}`}>{d.day}</span>
               </header>
               <div className="flex flex-1 flex-col gap-2 p-2">
-                {dayPosts.length ? dayPosts.map((p) => (isOpen(p) ? <OpenCard key={p.id} e={p} tz={tz} /> : <DayCard key={p.id} p={p} tz={tz} needsOk={needsOk(p)} thumb={thumbFor(p)} />)) : <p className="px-1 pt-1 text-[12px] text-[var(--subtle)]">Nothing planned</p>}
+                {dayPosts.length ? dayPosts.map((p) => (isOpen(p) ? <OpenCard key={p.id} e={p} tz={tz} loading={firstRun} /> : <DayCard key={p.id} p={p} tz={tz} needsOk={needsOk(p)} thumb={thumbFor(p)} />)) : <p className="px-1 pt-1 text-[12px] text-[var(--subtle)]">Nothing planned</p>}
               </div>
             </section>
           );
@@ -244,7 +292,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                   {dayPosts.map((p) => isOpen(p) ? (
                     <div key={p.id} className="flex gap-3 px-3 py-2.5 text-[var(--subtle)]">
                       <div className="w-11 flex-none pt-0.5 text-[12px] mono">{DateTime.fromJSDate(p.scheduledAt, { zone: tz }).toFormat("HH:mm")}</div>
-                      <div className="flex min-w-0 flex-1 items-center gap-1.5 text-[13px]"><PlatformGlyph platform={p.platform} size={13} />Open slot, waiting for a story that will still be fresh</div>
+                      <div className="flex min-w-0 flex-1 items-center gap-1.5 text-[13px]"><PlatformGlyph platform={p.platform} size={13} />{firstRun ? "Writing a post for this slot…" : "Open slot · fills by itself"}</div>
                     </div>
                   ) : (
                     <Link key={p.id} href={`/posts/${p.id}`} className="flex gap-3 border-l-[3px] px-3 py-2.5" style={{ borderLeftColor: platformTone(p.platform), background: platformWash(p.platform) }}>
