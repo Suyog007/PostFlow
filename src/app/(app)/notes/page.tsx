@@ -1,4 +1,3 @@
-import { fieldOf } from "@/lib/fields";
 import { DateTime } from "luxon";
 import { desc, eq } from "drizzle-orm";
 import { requireActiveUser } from "@/server/auth";
@@ -27,10 +26,11 @@ export default async function NotesPage({ searchParams }: { searchParams: Promis
         <textarea name="text" rows={4} required placeholder="e.g. Moved our invoice PDF generation to a background job. Page load dropped from 4s to 1.2s. Mistake: I first cached it, which hid the real problem." className="textarea" />
         <div className="flex items-center gap-3">
           <select name="pillar" aria-label="What the note is about" className="input w-auto" defaultValue="own_work">
-            {["own_work", "learning", "local"].map((p) => <option key={p} value={p}>{p === "local" && s.profile.region ? `${s.profile.region} ${fieldOf(s.profile.field).community} scene` : PILLAR_LABEL[p]}</option>)}
+            {["own_work", "learning", "local"].map((p) => <option key={p} value={p}>{p === "local" ? `Something happening in ${s.profile.region || "my city"} (an event, meetup or local company)` : PILLAR_LABEL[p]}</option>)}
           </select>
           <button className="btn-primary">Save note</button>
         </div>
+        <p className="hint">Pick what the note is about, so the post is framed right: your own work, a lesson, or local news{s.profile.region ? ` from ${s.profile.region}` : ""}. Posts about yourself only ever come from notes.</p>
       </form>
       <ul className="space-y-2">
         {notes.map((n) => (

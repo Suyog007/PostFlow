@@ -13,10 +13,11 @@ const NOW = new Date("2026-10-21T03:00:00Z");
 const BOTH = [{ platform: "x" as const, days: [1, 2, 3, 4, 5, 6, 7], time: "09:30" }, { platform: "linkedin" as const, days: [1, 2, 3, 4, 5, 6, 7], time: "09:30" }];
 const FAST_OFF = { enabled: false, minRelevance: 9, maxPerDay: 1, leadMinutes: 45, platforms: ["x" as const], quietStart: "23:00", quietEnd: "07:00" };
 
-async function addItem(title: string, relevance: number, urgency = "evergreen") {
+/** `at` is the moment the test runs at: the fixed NOW, or the real clock for tests that call the scheduler without a time. */
+async function addItem(title: string, relevance: number, urgency = "evergreen", at: Date = NOW) {
   const [it] = await db()
     .insert(schema.items)
-    .values({ userId: me(), url: `https://example.com/${encodeURIComponent(title)}`, title, summary: `${title} summary text`, pillar: "news", publishedAt: new Date(NOW.getTime() - 3_600_000), relevance, urgency, analyzedAt: NOW })
+    .values({ userId: me(), url: `https://example.com/${encodeURIComponent(title)}`, title, summary: `${title} summary text`, pillar: "news", publishedAt: new Date(at.getTime() - 3_600_000), relevance, urgency, analyzedAt: at })
     .returning();
   return it;
 }
@@ -53,7 +54,7 @@ describe("skipping weak stories", () => {
 
   it("with no 'my work' notes and no learning share, posts come from news only", async () => {
     await saveSettings({ pillars: { own_work: 3, news: 3, local: 0, learning: 0 } });
-    await addItem("A strong story about a database release for developers", 9);
+    await addItem("A strong story about a database release for developers", 9, "evergreen", new Date());
     await addItem("Payments provider opens its fraud API to small teams", 9);
     const calls = fakeLLM((req) => (req.schemaName === "write_post" ? { text: "A database release landed today. According to the notes, it speeds up backups for small teams." } : GOOD_REVIEW));
     await fillCalendar({ now: NOW, max: 3 });
@@ -82,7 +83,7 @@ describe("skipping weak stories", () => {
     const { fillNowForUser } = await import("../src/server/tick");
     await saveSettings({ slots: [BOTH[0]], horizonDays: 3 });
     await addItem("A strong story about a database release for developers", 9);
-    await addItem("Another strong story about a new open source CI runner", 9);
+    await addItem("Another strong story about a new open source CI runner", 9, "evergreen", new Date());
     const soon = await db().select().from(schema.posts);
     expect(soon).toHaveLength(0);
     // Three fresh rejections for the next slot would normally block it for hours.
@@ -142,7 +143,7 @@ describe("fill now", () => {
   it("fills at least 5 days ahead even when autopilot plans 3", async () => {
     const { fillNowForUser } = await import("../src/server/tick");
     await saveSettings({ slots: [BOTH[0]], horizonDays: 3 });
-    for (const t of ["Acme ships Postgres backups in seconds", "Bolt open-sources its CI runner", "Cinder cuts edge cold starts to 8ms", "Relay queues reach general availability", "Keyring moves auth sessions into signed cookies", "Vectorly indexes now update in place"]) await addItem(t, 9);
+    for (const t of ["Acme ships Postgres backups in seconds", "Bolt open-sources its CI runner", "Cinder cuts edge cold starts to 8ms", "Relay queues reach general availability", "Keyring moves auth sessions into signed cookies", "Vectorly indexes now update in place"]) await addItem(t, 9, "evergreen", new Date());
     const lines = ["Acme shipped a database release; nightly backup jobs get much shorter.", "Bolt opened its CI runner source, which matters most to teams paying per minute.", "Edge runtimes got cold starts under ten milliseconds, per the Cinder team.", "Queues without a broker to babysit: Relay made its service generally available.", "Keyring moved auth sessions into signed cookies, so small apps drop a whole table.", "Vectorly indexes now update in place, no more nightly rebuilds for search apps."];
     let n = 0;
     fakeLLM((req) => (req.schemaName === "write_post" ? { text: lines[n++ % lines.length] } : GOOD_REVIEW));
@@ -339,8 +340,8 @@ describe("hooks for reach", () => {
 describe("hashtags", () => {
   it("X gets one or two specific hashtags by default, LinkedIn none, and the reviewer is told which", async () => {
     await saveSettings({ slots: BOTH.map((b) => ({ ...b, time: "00:30" })), horizonDays: 2 });
-    await addItem("Acme ships Postgres backups in seconds", 9);
-    await addItem("Globex opens its maps API to hobby developers for free", 9);
+    await addItem("Acme ships Postgres backups in seconds", 9, "evergreen", new Date());
+    await addItem("Globex opens its maps API to hobby developers for free", 9, "evergreen", new Date());
     const calls = fakeLLM((req) => (req.schemaName === "write_post" ? { text: "Acme says Postgres backups now take seconds. Small teams with big nightly jobs should look first. #postgres" } : GOOD_REVIEW));
     await fillCalendar({ max: 4 });
     const writes = calls.filter((c) => c.schemaName === "write_post");

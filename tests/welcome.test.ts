@@ -81,7 +81,8 @@ describe("welcome step", () => {
     const s = await getSettings();
     expect(s.profile).toMatchObject({ role: "Backend engineer", expertise: ["Go", "payments", "Postgres"], region: "Kathmandu" });
     const feeds = await db().select().from(schema.sources).where(eq(schema.sources.userId, me()));
-    expect(feeds).toHaveLength(DEFAULT_SOURCES.length + 1);
+    // The defaults, the user's own feed, and a news search for each of the three topics.
+    expect(feeds).toHaveLength(DEFAULT_SOURCES.length + 1 + 3);
     expect(feeds.some((f) => f.url === "https://go.dev/blog/feed.atom")).toBe(true);
   });
 

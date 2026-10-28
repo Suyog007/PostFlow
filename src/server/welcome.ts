@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { db, schema } from "./db/client";
 import { uid } from "./context";
 import { getSettings, saveSettings, type Settings } from "./settings";
-import { seedSourcesIfEmpty } from "./collect";
+import { seedSourcesIfEmpty, syncTopicFeeds } from "./collect";
 import { discoverFeed } from "./feed-discover";
 import { fieldOf } from "../lib/fields";
 import { assertFeedQuota, LimitError } from "./billing/plans";
@@ -56,6 +56,7 @@ export async function completeWelcome(input: WelcomeInput): Promise<WelcomeResul
 
   // The default feeds are only added to an account with no feeds, so add them before the user's own.
   await seedSourcesIfEmpty();
+  await syncTopicFeeds();
   const userId = await uid();
   const added: string[] = [];
   for (const f of found) {

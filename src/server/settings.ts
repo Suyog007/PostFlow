@@ -21,6 +21,8 @@ export const settingsSchema = z.object({
   requireApproval: z.boolean().default(true),
   /** Wording preferences the owner gave when asking for a reword. Fed to the writer on every post. */
   styleNotes: z.array(z.string()).default([]),
+  /** Topics that already got a news search feed, so a feed the owner deleted is never added back. */
+  topicFeedsFor: z.array(z.string()).default([]),
   /** IANA timezone; set from the browser at sign-up. */
   timezone: z.string().default("UTC"),
   profile: z

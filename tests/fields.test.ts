@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { db, schema } from "../src/server/db/client";
-import { settingsSchema, getSettings } from "../src/server/settings";
+import { settingsSchema, getSettings, saveSettings } from "../src/server/settings";
 import { analystSystem, reviewerSystem, writerSystem, profileBlock } from "../src/server/prompts";
 import { gate, moveText } from "../src/server/generate";
-import { starterSources } from "../src/server/collect";
+import { starterSources, syncTopicFeeds } from "../src/server/collect";
 import { completeWelcome } from "../src/server/welcome";
 import { normalizeUrl } from "../src/server/net";
 import { DEFAULT_SOURCES } from "../src/server/sources-default";
@@ -69,12 +69,26 @@ describe("fields other than tech", () => {
 describe("starting feeds by field", () => {
   beforeEach(resetDb);
 
-  it("tech gets the curated list; other fields get their feeds plus news on each topic", () => {
+  it("tech gets the curated list; other fields get their own known feeds", () => {
     expect(starterSources(settingsSchema.parse({}))).toBe(DEFAULT_SOURCES);
     const health = starterSources(as("health"));
     expect(health.some((f) => f.name === "STAT News")).toBe(true);
-    expect(health.filter((f) => f.url.startsWith("https://www.bing.com/news/search?q=glaucoma"))).toHaveLength(1);
     expect(health.some((f) => /hnrss|techcrunch/.test(f.url))).toBe(false);
+  });
+
+  it("every field, tech included, gets a news search for each topic, once", async () => {
+    await saveSettings({ profile: { ...(await getSettings()).profile, field: "tech", role: "Blockchain engineer", expertise: ["Solidity", "Ethereum", "Rust"] } });
+    expect(await syncTopicFeeds()).toBe(3);
+    const names = async () => (await db().select().from(schema.sources).where(eq(schema.sources.userId, me()))).map((f) => f.name);
+    expect(await names()).toEqual(expect.arrayContaining(["News: Solidity", "News: Ethereum", "News: Rust"]));
+    // Deleted by the owner: never added back.
+    await db().delete(schema.sources).where(eq(schema.sources.name, "News: Rust"));
+    expect(await syncTopicFeeds()).toBe(0);
+    expect(await names()).not.toContain("News: Rust");
+    // A new topic gets its own feed.
+    await saveSettings({ profile: { ...(await getSettings()).profile, expertise: ["Solidity", "Ethereum", "Rust", "zero-knowledge proofs"] } });
+    expect(await syncTopicFeeds()).toBe(1);
+    expect(await names()).toContain("News: zero-knowledge proofs");
   });
 
   it("the welcome step saves the field and seeds that field's feeds", async () => {

@@ -3,7 +3,7 @@ import { and, desc, eq, gt, inArray, isNull, lt } from "drizzle-orm";
 import { db, schema } from "./db/client";
 import { acquireLease, withLease } from "./lease";
 import { pruneRateLimits } from "./rate-limit";
-import { collectFeeds, seedSourcesIfEmpty } from "./collect";
+import { collectFeeds, seedSourcesIfEmpty, syncTopicFeeds } from "./collect";
 import { analyzeBatch } from "./analyze";
 import { fillCalendar, fillNowDays, extraQueuedLessons, rejectAndReplace, replaceDeclined, repeatedQueuedPosts, rewriteFresh, weakQueuedPosts, type FillResult } from "./generate";
 import { env } from "./env";
@@ -76,6 +76,7 @@ async function pipelinePhase(out: TickResult, deadline: number) {
     }
   }
   await seedSourcesIfEmpty().catch(warnOnError("seed_sources_failed"));
+  await syncTopicFeeds().catch(warnOnError("topic_feeds_failed"));
   if (Date.now() < deadline) {
     try {
       out.collected += (await collectFeeds()).inserted;
