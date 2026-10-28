@@ -175,13 +175,22 @@ export async function runTask<T extends z.ZodType>(spec: TaskSpec<T>): Promise<z
   } catch (err) {
     // A model that is missing, rejects the request or returns broken JSON should not stop posting: try the fallback once.
     const code = err instanceof LLMError ? err.code : "provider";
-    if (!fallback || fallback === model || (code !== "provider" && code !== "invalid_output")) throw err;
+    if (!fallback || fallback === model || (code !== "provider" && code !== "invalid_output" && code !== "truncated")) throw err;
     log.warn("llm_fallback", { task: spec.task, model, fallback, error: (err as Error).message.slice(0, 200) });
     return runTaskWith(spec, fallback);
   }
 }
 
+/**
+ * Models that think before answering spend output tokens on it, so a task's own limit (sized for the answer)
+ * is raised by this much. Only tokens actually used are billed.
+ */
+function thinkingRoom(effort: string | undefined): number {
+  return effort === "high" ? 8000 : effort === "medium" ? 4000 : effort === "low" ? 1500 : 0;
+}
+
 async function runTaskWith<T extends z.ZodType>(spec: TaskSpec<T>, model: string): Promise<z.infer<T>> {
+  const effort = spec.reasoningEffort && env().FIREWORKS_REASONING_EFFORT !== "off" ? spec.reasoningEffort : effortFor(spec.role);
   const userId = await currentUserId();
   await checkBudget(userId);
 
@@ -196,9 +205,9 @@ async function runTaskWith<T extends z.ZodType>(spec: TaskSpec<T>, model: string
       user: spec.user,
       jsonSchema,
       schemaName: spec.task.replace(/[^a-zA-Z0-9_]/g, "_"),
-      maxTokens: spec.maxTokens,
+      maxTokens: spec.maxTokens + thinkingRoom(effort),
       temperature: spec.temperature ?? 0.4,
-      reasoningEffort: spec.reasoningEffort && env().FIREWORKS_REASONING_EFFORT !== "off" ? spec.reasoningEffort : effortFor(spec.role),
+      reasoningEffort: effort,
     });
   } catch (err) {
     await db().insert(schema.llmCalls).values({ userId, task: spec.task, model, status: "error", error: String((err as Error).message).slice(0, 400) });

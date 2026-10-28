@@ -88,3 +88,23 @@ describe("fallback model", () => {
     expect(seen.at(-1)).toBe("backup-model");
   });
 });
+
+describe("room to think", () => {
+  afterEach(() => setEnv({ FIREWORKS_REASONING_EFFORT: undefined, FIREWORKS_FALLBACK_MODEL: undefined }));
+
+  it("raises the output limit when the model thinks first, and falls back when it still runs out", async () => {
+    await resetDb();
+    setEnv({ FIREWORKS_REASONING_EFFORT: "medium", FIREWORKS_FALLBACK_MODEL: "backup-model" });
+    const seen: { model: string; max: number }[] = [];
+    setLLMProviderForTests({
+      async complete(req) {
+        seen.push({ model: req.model, max: req.maxTokens });
+        return req.model === "backup-model" ? { text: JSON.stringify({ ok: true }), inputTokens: 1, outputTokens: 1 } : { text: "", inputTokens: 1, outputTokens: 1, finishReason: "length" };
+      },
+    });
+    const out = await runTask({ task: "t", role: "writer", system: "s", user: "u", output: z.object({ ok: z.boolean() }), maxTokens: 400 });
+    expect(out.ok).toBe(true);
+    expect(seen[0].max).toBe(4400);
+    expect(seen.at(-1)?.model).toBe("backup-model");
+  });
+});
