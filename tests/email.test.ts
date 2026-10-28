@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type nodemailer from "nodemailer";
+import type { Transporter } from "nodemailer";
 import { resetEnvCache } from "../src/server/env";
 import { emailProvider, outbox, sendEmail, setGmailTransportForTests } from "../src/server/email";
 
@@ -31,7 +31,7 @@ describe("sending email", () => {
   it("sends through Gmail when an app password is set, even if Resend is set too", async () => {
     setEnv({ GMAIL_USER: "me@gmail.com", GMAIL_APP_PASSWORD: "abcd efgh ijkl mnop", GMAIL_FROM_NAME: "PostFlow", RESEND_API_KEY: "re_x" });
     const sendMail = vi.fn().mockResolvedValue({ messageId: "1" });
-    setGmailTransportForTests({ sendMail } as unknown as nodemailer.Transporter);
+    setGmailTransportForTests({ sendMail } as unknown as Transporter);
     const fetchSpy = vi.fn();
     vi.stubGlobal("fetch", fetchSpy);
 
@@ -49,7 +49,7 @@ describe("sending email", () => {
 
   it("shows a friendly error when Gmail refuses", async () => {
     setEnv({ GMAIL_USER: "me@gmail.com", GMAIL_APP_PASSWORD: "wrong" });
-    setGmailTransportForTests({ sendMail: vi.fn().mockRejectedValue(new Error("535 bad credentials")) } as unknown as nodemailer.Transporter);
+    setGmailTransportForTests({ sendMail: vi.fn().mockRejectedValue(new Error("535 bad credentials")) } as unknown as Transporter);
     await expect(sendEmail({ to: "a@example.com", subject: "Hi", text: "Hello" })).rejects.toThrow(/could not send/);
   });
 

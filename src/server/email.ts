@@ -1,4 +1,4 @@
-import nodemailer from "nodemailer";
+import nodemailer, { type Transporter } from "nodemailer";
 import { env } from "./env";
 import { log } from "./log";
 
@@ -35,7 +35,7 @@ function html(e: Email) {
   </div></body></html>`;
 }
 
-let gmail: nodemailer.Transporter | null = null;
+let gmail: Transporter | null = null;
 function gmailTransport() {
   if (!gmail) {
     gmail = nodemailer.createTransport({
@@ -50,7 +50,7 @@ function gmailTransport() {
 }
 
 /** Test hook: replace the Gmail transport. */
-export function setGmailTransportForTests(t: nodemailer.Transporter | null) {
+export function setGmailTransportForTests(t: Transporter | null) {
   gmail = t;
 }
 
