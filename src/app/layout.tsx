@@ -16,8 +16,15 @@ export const metadata: Metadata = {
 };
 export const viewport: Viewport = { width: "device-width", initialScale: 1 };
 
-/** Light, dark or the device's setting (no attribute), as picked with the theme toggle. */
-const THEME_SCRIPT = `try{var t=localStorage.getItem("postflow-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}`;
+/**
+ * Runs while <head> is parsed, before React hydrates:
+ * 1. Light, dark or the device's setting (no attribute), as picked with the theme toggle.
+ * 2. Removes whitespace text and comments that a host inserted into <head> (Netlify adds a
+ *    "This site is hosted on Netlify" comment plus a newline on *.netlify.app). React 19 skips stray
+ *    tags in <head> but not stray text, so without this every page failed hydration (error #418),
+ *    was re-rendered from scratch, and lost the chosen theme.
+ */
+const HEAD_SCRIPT = `try{var t=localStorage.getItem("postflow-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}try{for(var n=document.head.firstChild;n;){var x=n.nextSibling;if(n.nodeType===8||(n.nodeType===3&&!/\\S/.test(n.nodeValue)))n.parentNode.removeChild(n);n=x}}catch(e){}`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const cfToken = env().CF_ANALYTICS_TOKEN;
@@ -25,7 +32,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     // The theme script sets data-theme before the first paint, so a chosen theme never flashes the other one.
     <html lang="en" suppressHydrationWarning className={`${display.variable} ${body.variable} ${typed.variable}`}>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: HEAD_SCRIPT }} />
         {/* Cloudflare Web Analytics: free visitor counts without cookies. Only loads when the token is set. */}
         {cfToken && <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon={JSON.stringify({ token: cfToken })} />}
       </head>
