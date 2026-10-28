@@ -8,6 +8,7 @@ import { verifyPassword } from "@/server/crypto";
 import { passwordSchema, sendPasswordReset, setPassword } from "@/server/users";
 import { cancelSubscriptionNow } from "@/server/billing/stripe";
 import { log } from "@/server/log";
+import { revokeAllAccounts } from "@/server/platforms/accounts";
 
 const back = (kind: "ok" | "error", msg: string): never => redirect(`/account?${kind}=${encodeURIComponent(msg)}`);
 
@@ -50,6 +51,7 @@ export async function deleteAccountAction(form: FormData) {
     log.error("delete_account_cancel_failed", { userId: user.id, error: (err as Error).message });
     back("error", "We could not cancel your subscription, so nothing was deleted. Please try again or contact support.");
   }
+  await revokeAllAccounts(); // cancel LinkedIn and X access before the stored tokens are deleted
   await db().delete(schema.settings).where(eq(schema.settings.id, user.id));
   await db().delete(schema.users).where(eq(schema.users.id, user.id)); // everything else is removed by ON DELETE CASCADE
   await endSession();

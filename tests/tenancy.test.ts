@@ -1,12 +1,13 @@
-import { beforeEach, describe, expect, it } from "vitest";
-import { eq } from "drizzle-orm";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { resetEnvCache } from "../src/server/env";
+import { and, eq } from "drizzle-orm";
 import { db, schema } from "../src/server/db/client";
 import { approvePost, editPost, loadPost, PostError, removePost, upcoming } from "../src/server/posts";
 import { getSettings, saveSettings } from "../src/server/settings";
 import { publishDue } from "../src/server/publisher";
 import { handleTelegramUpdate } from "../src/server/telegram-inbound";
 import { recentEvents, addEvent } from "../src/server/events";
-import { startOAuth, completeOAuth } from "../src/server/platforms/accounts";
+import { startOAuth, completeOAuth, disconnectAccount } from "../src/server/platforms/accounts";
 import { tick } from "../src/server/tick";
 import { actAs, addUser, connectAccount, fakePlatform, me, resetDb } from "./helpers";
 
@@ -67,10 +68,10 @@ describe("one account cannot reach another's data", () => {
   it("a Telegram chat can only act on its own account's posts", async () => {
     const p = await postFor(alice, { scheduledAt: new Date(Date.now() + 3_600_000) });
     // Bob's chat (77) presses a Remove button carrying Alice's post id.
-    await handleTelegramUpdate({ callback_query: { id: "1", data: `rm:${p.id}`, message: { chat: { id: 77 } } } });
+    await handleTelegramUpdate({ callback_query: { id: "1", data: `rm:${p.id}`, message: { chat: { id: 77, type: "private" } } } });
     expect((await db().query.posts.findFirst({ where: eq(schema.posts.id, p.id) }))!.status).toBe("scheduled");
     // Notes from Bob's chat land in Bob's account.
-    await handleTelegramUpdate({ message: { chat: { id: 77 }, text: "Bob shipped a new onboarding flow that cut drop-off in half." } });
+    await handleTelegramUpdate({ message: { chat: { id: 77, type: "private" }, text: "Bob shipped a new onboarding flow that cut drop-off in half." } });
     const notes = await db().select().from(schema.notes);
     expect(notes.map((n) => n.userId)).toEqual([bob]);
   });
@@ -107,5 +108,41 @@ describe("one account cannot reach another's data", () => {
     expect(sent).toHaveLength(2);
     const carolPost = (await db().select().from(schema.posts).where(eq(schema.posts.userId, carol)))[0];
     expect(carolPost.status).toBe("scheduled");
+  });
+
+  describe("disconnecting cancels access at the platform", () => {
+    afterEach(() => {
+      for (const k of ["X_CLIENT_ID", "X_CLIENT_SECRET", "LINKEDIN_CLIENT_ID", "LINKEDIN_CLIENT_SECRET"]) delete process.env[k];
+      resetEnvCache();
+      vi.unstubAllGlobals();
+    });
+
+    it("forgets the tokens and asks X to revoke them", async () => {
+      process.env.X_CLIENT_ID = "cid";
+      process.env.X_CLIENT_SECRET = "csecret";
+      resetEnvCache();
+      await connectAccount("x");
+      const fetchSpy = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+      vi.stubGlobal("fetch", fetchSpy);
+      await disconnectAccount("x");
+      const acct = await db().query.platformAccounts.findFirst({ where: and(eq(schema.platformAccounts.userId, me()), eq(schema.platformAccounts.platform, "x")) });
+      expect(acct).toMatchObject({ status: "disconnected", accessTokenEnc: null, refreshTokenEnc: null });
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      const [url, init] = fetchSpy.mock.calls[0];
+      expect(url).toBe("https://api.x.com/2/oauth2/revoke");
+      expect(String(init.body)).toContain("token=tok");
+      expect(init.headers.Authorization).toBe(`Basic ${Buffer.from("cid:csecret").toString("base64")}`);
+    });
+
+    it("still disconnects when the platform cannot be reached", async () => {
+      process.env.LINKEDIN_CLIENT_ID = "lid";
+      process.env.LINKEDIN_CLIENT_SECRET = "lsecret";
+      resetEnvCache();
+      await connectAccount("linkedin");
+      vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network down")));
+      await disconnectAccount("linkedin");
+      const acct = await db().query.platformAccounts.findFirst({ where: and(eq(schema.platformAccounts.userId, me()), eq(schema.platformAccounts.platform, "linkedin")) });
+      expect(acct).toMatchObject({ status: "disconnected", accessTokenEnc: null });
+    });
   });
 });

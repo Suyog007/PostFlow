@@ -5,8 +5,9 @@ import { env } from "../env";
 import { decryptSecret, encryptSecret, randomToken } from "../crypto";
 import { uid } from "../context";
 import type { AccountCredentials, Platform, PlatformClient } from "./types";
-import { xClient, xFetchMe, X_AUTHORIZE_URL, X_SCOPES, X_TOKEN_URL } from "./x";
-import { linkedinClient, linkedinFetchMe, LINKEDIN_AUTHORIZE_URL, LINKEDIN_SCOPES, LINKEDIN_TOKEN_URL } from "./linkedin";
+import { xClient, xFetchMe, X_AUTHORIZE_URL, X_REVOKE_URL, X_SCOPES, X_TOKEN_URL } from "./x";
+import { linkedinClient, linkedinFetchMe, LINKEDIN_AUTHORIZE_URL, LINKEDIN_REVOKE_URL, LINKEDIN_SCOPES, LINKEDIN_TOKEN_URL } from "./linkedin";
+import { log } from "../log";
 
 // ---------------------------------------------------------------------------
 // Client registry (tests swap in fakes)
@@ -76,7 +77,8 @@ interface TokenResponse {
   scope?: string;
 }
 
-async function tokenRequest(platform: Platform, params: Record<string, string>): Promise<TokenResponse> {
+/** A form POST to the platform's OAuth server, authenticated as this app. */
+function oauthPost(platform: Platform, url: string, params: Record<string, string>): Promise<Response> {
   const e = env();
   const headers: Record<string, string> = { "Content-Type": "application/x-www-form-urlencoded" };
   const body = new URLSearchParams(params);
@@ -90,12 +92,11 @@ async function tokenRequest(platform: Platform, params: Record<string, string>):
     body.set("client_id", e.LINKEDIN_CLIENT_ID!);
     body.set("client_secret", e.LINKEDIN_CLIENT_SECRET!);
   }
-  const res = await fetch(platform === "x" ? X_TOKEN_URL : LINKEDIN_TOKEN_URL, {
-    method: "POST",
-    headers,
-    body,
-    signal: AbortSignal.timeout(15_000),
-  });
+  return fetch(url, { method: "POST", headers, body, signal: AbortSignal.timeout(15_000) });
+}
+
+async function tokenRequest(platform: Platform, params: Record<string, string>): Promise<TokenResponse> {
+  const res = await oauthPost(platform, platform === "x" ? X_TOKEN_URL : LINKEDIN_TOKEN_URL, params);
   const json = (await res.json().catch(() => ({}))) as TokenResponse & { error?: string; error_description?: string };
   if (!res.ok || !json.access_token) {
     throw new Error(`Token exchange failed: ${json.error_description ?? json.error ?? `HTTP ${res.status}`}`);
@@ -136,11 +137,44 @@ export async function completeOAuth(platform: Platform, state: string, code: str
     .onConflictDoUpdate({ target: [schema.platformAccounts.userId, schema.platformAccounts.platform], set: values });
 }
 
+const REVOKE_URL: Record<Platform, string> = { x: X_REVOKE_URL, linkedin: LINKEDIN_REVOKE_URL };
+
+/**
+ * Asks the platform to cancel our tokens, so a copy taken earlier stops working too.
+ * Best effort: a failure is logged and never blocks disconnecting or deleting the account.
+ */
+async function revokeTokens(platform: Platform, acct: { accessTokenEnc: string | null; refreshTokenEnc: string | null }) {
+  if (!isPlatformConfigured(platform)) return;
+  const tokens: [string | null, "access_token" | "refresh_token"][] = [[acct.refreshTokenEnc, "refresh_token"], [acct.accessTokenEnc, "access_token"]];
+  for (const [enc, hint] of tokens) {
+    if (!enc) continue;
+    try {
+      const token = decryptSecret(enc);
+      const res = await oauthPost(platform, REVOKE_URL[platform], platform === "x" ? { token, token_type_hint: hint } : { token });
+      if (!res.ok) log.warn("token_revoke_failed", { platform, hint, status: res.status });
+    } catch (err) {
+      log.warn("token_revoke_failed", { platform, hint, error: (err as Error).message });
+    }
+  }
+}
+
+/** Forgets the tokens here first, then cancels them at the platform. */
 export async function disconnectAccount(platform: Platform) {
+  const userId = await uid();
+  const [before] = await db()
+    .select({ accessTokenEnc: schema.platformAccounts.accessTokenEnc, refreshTokenEnc: schema.platformAccounts.refreshTokenEnc })
+    .from(schema.platformAccounts)
+    .where(and(eq(schema.platformAccounts.userId, userId), eq(schema.platformAccounts.platform, platform)));
   await db()
     .update(schema.platformAccounts)
     .set({ status: "disconnected", accessTokenEnc: null, refreshTokenEnc: null, expiresAt: null, updatedAt: new Date() })
-    .where(and(eq(schema.platformAccounts.userId, await uid()), eq(schema.platformAccounts.platform, platform)));
+    .where(and(eq(schema.platformAccounts.userId, userId), eq(schema.platformAccounts.platform, platform)));
+  if (before) await revokeTokens(platform, before);
+}
+
+/** Before an account is deleted: cancel every platform token it holds. */
+export async function revokeAllAccounts() {
+  for (const acct of await myAccounts()) await revokeTokens(acct.platform as Platform, acct);
 }
 
 export async function markAccountError(platform: Platform, message: string) {

@@ -4,6 +4,7 @@ import { ReconcileNotSupported, classifyNetworkError } from "./types";
 
 export const LINKEDIN_AUTHORIZE_URL = "https://www.linkedin.com/oauth/v2/authorization";
 export const LINKEDIN_TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken";
+export const LINKEDIN_REVOKE_URL = "https://www.linkedin.com/oauth/v2/revoke";
 /**
  * "Sign In with LinkedIn using OpenID Connect" (openid, profile) gives the member id;
  * "Share on LinkedIn" grants w_member_social for posting. Both are self-serve products.

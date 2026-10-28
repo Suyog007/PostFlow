@@ -4,6 +4,7 @@ import { classifyNetworkError } from "./types";
 const API = "https://api.x.com/2";
 export const X_AUTHORIZE_URL = "https://x.com/i/oauth2/authorize";
 export const X_TOKEN_URL = "https://api.x.com/2/oauth2/token";
+export const X_REVOKE_URL = "https://api.x.com/2/oauth2/revoke";
 /** Minimum scopes: post, media upload, read own posts (reconciliation + metrics), identity, refresh tokens. */
 export const X_SCOPES = ["tweet.read", "tweet.write", "media.write", "users.read", "offline.access"];
 
