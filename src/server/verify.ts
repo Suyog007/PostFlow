@@ -29,7 +29,14 @@ export interface Verification {
 const PRIMARY = ["openai.com", "anthropic.com", "deepmind.google", "google", "google.com", "microsoft.com", "github.blog", "github.com", "cloudflare.com", "huggingface.co", "nvidia.com", "amazon.com", "meta.com", "mistral.ai", "vercel.com", "supabase.com", "stripe.com", "ycombinator.com", "x.ai", "ollama.com"];
 
 /** Claims that spread scams or hype: promotions, prices, money, security, law. These always need two independent sources. */
-const RISKY = /\b(free|giveaway|gives? away|discount|\d+% off|price|pricing|cheaper|coupon|promo|acquir\w*|raises?|raised|funding|valuation|breach|hack\w*|vulnerab\w*|leak\w*|ban(ned|s)?|law|regulat\w*|shut(s|ting)? down|deprecat\w*|lawsuit)\b/i;
+const RISKY = /\b(free|giveaway|gives? away|discount|\d+% off|price|pricing|cheaper|coupon|promo|acquir\w*|raises?|raised|funding|valuation|breach|hack\w*|vulnerab\w*|leak\w*|ban(ned|s)?|law|regulat\w*|shut(s|ting)? down|deprecat\w*|lawsuit|bug|flaw|exploit\w*|attack\w*|outage|recall\w*|scam|fraud|stak(e|ing)|deposit\w*|wallet|tax(es)?|deadline)\b/i;
+
+/** Sites that republish other outlets' articles. A copy on MSN is not a second publisher. */
+const AGGREGATORS = ["msn.com", "yahoo.com", "aol.com", "news.google.com", "flipboard.com", "newsbreak.com", "ground.news", "bing.com", "smartnews.com", "inkl.com"];
+export function isAggregator(domain: string): boolean {
+  const d = domain.toLowerCase();
+  return AGGREGATORS.some((a) => d === a || d.endsWith(`.${a}`) || publisherKey(d) === a.split(".")[0]);
+}
 
 const STOP = new Set("the a an and or of to in on for with is are was were be been it its this that these those at by from as new how why what when who will can could would about after over into out up more most than then they their them you your our not but has have had says said just".split(" "));
 
@@ -129,7 +136,9 @@ export function evaluate(item: Pick<ItemRow, "url" | "title" | "summary">, found
     if (!key || samePublisher(key, originKey) || [...others.keys()].some((k) => samePublisher(k, key)) || (!known && !sameStory(item.title, m.title))) continue;
     others.set(key, m);
   }
-  const independent = 1 + others.size;
+  // A story found on an aggregator counts only the publishers behind it, not the aggregator itself.
+  for (const k of [...others.keys()]) if (isAggregator(k)) others.delete(k);
+  const independent = (isAggregator(origin) ? 0 : 1) + others.size;
   const needed = primary && !risky ? 1 : 2;
   const ok = independent >= needed;
   const reason = ok

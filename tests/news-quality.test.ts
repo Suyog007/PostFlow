@@ -179,7 +179,7 @@ describe("must-know stories", () => {
   it("are labelled by the scorer and get two versions: a normal take and a plain explainer you can switch to", async () => {
     // Slots at a fixed small hour and two days of window: some slot always falls inside, whatever time the test runs.
     await saveSettings({ slots: BOTH.map((b) => ({ ...b, time: "00:30" })), horizonDays: 2 });
-    await db().insert(schema.items).values({ userId: me(), url: "https://theregister.com/php2shell", title: "PHP2Shell lets attackers run code on unpatched PHP servers", summary: "A flaw in PHP lets attackers run code. Patch to 8.4.9.", pillar: "news", publishedAt: new Date(Date.now() - 3_600_000) });
+    await db().insert(schema.items).values({ userId: me(), url: "https://theregister.com/php2shell", title: "PHP2Shell lets attackers run code on unpatched PHP servers", summary: "A flaw in PHP lets attackers run code. Patch to 8.4.9.", body: "A flaw in PHP, called PHP2Shell, lets attackers run their own code on servers that run unpatched PHP. The PHP team released version 8.4.9 to fix it and asks everyone to patch to 8.4.9 now.", pillar: "news", publishedAt: new Date(Date.now() - 3_600_000) });
     let calls = fakeLLM(() => ({ items: [{ id: "0", relevance: 9, urgency: "week", angle: "PHP servers can be taken over; patch now", kind: "must_know" }] }));
     await analyzeBatch();
     expect((await db().select().from(schema.items))[0].kind).toBe("must_know");
@@ -216,7 +216,7 @@ describe("must-know stories", () => {
 
   it("when only the explainer passes review, it is the one scheduled", async () => {
     await saveSettings({ slots: [{ ...BOTH[0], time: "00:30" }], horizonDays: 2 });
-    await db().insert(schema.items).values({ userId: me(), url: "https://theregister.com/php2shell", title: "PHP2Shell lets attackers run code on unpatched PHP servers", summary: "A flaw in PHP lets attackers run code. Patch to 8.4.9.", pillar: "news", publishedAt: new Date(Date.now() - 3_600_000), relevance: 9, urgency: "week", kind: "must_know", analyzedAt: new Date() });
+    await db().insert(schema.items).values({ userId: me(), url: "https://theregister.com/php2shell", title: "PHP2Shell lets attackers run code on unpatched PHP servers", summary: "A flaw in PHP lets attackers run code. Patch to 8.4.9.", body: "A flaw in PHP, called PHP2Shell, lets attackers run their own code on servers that run unpatched PHP. The PHP team released version 8.4.9 to fix it and asks everyone to patch to 8.4.9 now.", pillar: "news", publishedAt: new Date(Date.now() - 3_600_000), relevance: 9, urgency: "week", kind: "must_know", analyzedAt: new Date() });
     fakeLLM((req) =>
       req.schemaName === "write_post"
         ? { text: req.user.includes("Explain it simply") ? "PHP had a bug that let a stranger run their own code on your server, per The Register. Update to 8.4.9 today." : "PHP2Shell is bad, per The Register. Patch to 8.4.9 soon." }
@@ -238,7 +238,7 @@ describe("must-know stories and a full calendar", () => {
     // Every slot before the story goes stale is taken: the first by an approved post, the rest by unapproved ones.
     for (const [i, sl] of slots.entries())
       await db().insert(schema.posts).values({ userId: me(), platform: "x", pillar: "news", text: `Ordinary news post ${i} about a tooling release with a take.`, status: "scheduled", scheduledAt: sl.at, approvedAt: i === 0 ? new Date() : null, expiresAt: new Date(Date.now() + 6 * 86_400_000) });
-    await db().insert(schema.items).values({ userId: me(), url: "https://theregister.com/php2shell", title: "PHP2Shell lets attackers run code on unpatched PHP servers", summary: "A flaw in PHP lets attackers run code. Patch to 8.4.9.", pillar: "news", publishedAt: new Date(Date.now() - 3_600_000), relevance: 9, urgency: "breaking", kind: "must_know", analyzedAt: new Date() });
+    await db().insert(schema.items).values({ userId: me(), url: "https://theregister.com/php2shell", title: "PHP2Shell lets attackers run code on unpatched PHP servers", summary: "A flaw in PHP lets attackers run code. Patch to 8.4.9.", body: "A flaw in PHP, called PHP2Shell, lets attackers run their own code on servers that run unpatched PHP. The PHP team released version 8.4.9 to fix it and asks everyone to patch to 8.4.9 now.", pillar: "news", publishedAt: new Date(Date.now() - 3_600_000), relevance: 9, urgency: "breaking", kind: "must_know", analyzedAt: new Date() });
     let n = 0;
     const texts = ["PHP2Shell is a reminder that old runtimes are attack surface too, per The Register. Patch to 8.4.9.", "PHP had a bug that let a stranger run their own code on your server, per The Register. Update to 8.4.9 today."];
     fakeLLM((req) => (req.schemaName === "write_post" ? { text: texts[n++ % 2] } : GOOD_REVIEW));
@@ -342,7 +342,7 @@ describe("hashtags", () => {
     await saveSettings({ slots: BOTH.map((b) => ({ ...b, time: "00:30" })), horizonDays: 2 });
     await addItem("Acme ships Postgres backups in seconds", 9, "evergreen", new Date());
     await addItem("Globex opens its maps API to hobby developers for free", 9, "evergreen", new Date());
-    const calls = fakeLLM((req) => (req.schemaName === "write_post" ? { text: "Acme says Postgres backups now take seconds. Small teams with big nightly jobs should look first. #postgres" } : GOOD_REVIEW));
+    const calls = fakeLLM((req) => (req.schemaName === "write_post" ? { text: "Acme says Postgres backups now take seconds. Small teams with big nightly jobs gain the most. #postgres" } : GOOD_REVIEW));
     await fillCalendar({ max: 4 });
     const writes = calls.filter((c) => c.schemaName === "write_post");
     expect(writes.find((w) => w.system.includes("Platform: X"))!.system).toMatch(/Finish with 1 or 2 hashtags/);

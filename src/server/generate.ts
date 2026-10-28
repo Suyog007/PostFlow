@@ -13,14 +13,15 @@ async function mine<T extends { userId: unknown }>(t: T) {
 }
 import { getSettings, saveSettings, type Settings } from "./settings";
 import { fieldFor, profileBlock, reviewerSystem, writerSystem } from "./prompts";
-import { runChecks, type Check } from "./checks";
+import { adviceCheck, runChecks, type Check } from "./checks";
 import { afterQuietHours, slotsBetween, formatLocal, nextFreeSlot } from "./slots";
-import { warnOnError } from "./log";
+import { log, warnOnError } from "./log";
 import { sameStory, storyIndex } from "./stories";
 import { fetchArticleText } from "./net";
+import { readOtherCoverage } from "./research";
 import { addEvent } from "./events";
 import { notifyScheduled, notifyText } from "./telegram";
-import { ensureVerification, type Verification } from "./verify";
+import { ensureVerification, registrableDomain, type Verification } from "./verify";
 
 type Platform = "x" | "linkedin";
 const LIVE = ["scheduled", "publishing", "published", "unconfirmed", "failed", "cancelled", "expired"] as const;
@@ -71,6 +72,13 @@ async function usedIds(_platform?: Platform) {
 }
 
 type ItemRow = typeof schema.items.$inferSelect;
+
+/** News posts only pass on advice their source gives (see adviceCheck). Notes and lessons are the owner's own voice. */
+function newsAdvice(text: string, m: Material): Check[] {
+  // The suggested angle is the assistant's idea, not the source's, so it cannot license advice.
+  const source = m.source.split("\n").filter((l) => !l.startsWith("Suggested angle")).join("\n");
+  return m.kind === "news" ? adviceCheck(text, source) : [];
+}
 
 function itemExpiry(it: ItemRow): Date | undefined {
   if (it.urgency === "breaking" || it.urgency === "week") return new Date(it.publishedAt.getTime() + URGENCY_WINDOW_MS[it.urgency]);
@@ -184,9 +192,35 @@ async function pickVerified(items: ItemRow[], maxChecks = 4): Promise<{ it: Item
     const cached = it.verification as unknown as Verification | null;
     if (!cached && ++checks > maxChecks) break;
     const v = await ensureVerification(it);
-    if (v.ok) return { it, v };
+    if (!v.ok) continue;
+    // Security, money and must-know stories are only written from a full article, never from a feed's
+    // two-line summary: a summary said "a fix was merged" for a flaw that was in fact left unfixed.
+    if ((v.risky || it.kind === "must_know") && !(await ensureReadable(it))) continue;
+    return { it, v };
   }
   return null;
+}
+
+/**
+ * Makes sure the story's full text is on hand: the article itself, or, when it cannot be read (MSN and
+ * some publishers block readers), another outlet's report of the same story. False when neither works;
+ * the story is then skipped for good.
+ */
+async function ensureReadable(it: ItemRow): Promise<boolean> {
+  if (it.body) return true;
+  let body = await fetchArticleText(it.url);
+  if (!body) {
+    const others = await readOtherCoverage(it.title, [registrableDomain(it.url)], 1).catch(() => []);
+    if (others[0]) body = `(The original article could not be read. This is another publisher's report of the same story: ${new URL(others[0].url).hostname.replace(/^www\./, "")}.)\n${others[0].text}`;
+  }
+  if (!body) {
+    await db().update(schema.items).set({ status: "skipped" }).where(eq(schema.items.id, it.id));
+    log.info("item_unreadable", { itemId: it.id, title: it.title.slice(0, 120) });
+    return false;
+  }
+  await db().update(schema.items).set({ body }).where(eq(schema.items.id, it.id));
+  it.body = body;
+  return true;
 }
 
 async function pickNote(platform: Platform, pillar: Pillar) {
@@ -395,7 +429,7 @@ export const MOVES = {
   guess: "A guess about what builders will do next, worded freshly and clearly as a guess (no stock phrases).",
   // Only for must-know events; never picked by rotation.
   explain:
-    "Explain it simply, like to a smart friend who is not a security or infrastructure expert: what went wrong, what that lets an attacker (or the outage) do, who is exposed, and the one thing to do now. An everyday analogy is welcome if it is accurate. Plain words, no jargon without a short explanation. No fear-mongering.",
+    "Explain it simply, like to a smart friend who is not a security or infrastructure expert: what went wrong, what that lets an attacker (or the outage) do, and who is exposed. Pass on what to do only if the material itself says it, in its words; never invent a fix or tell readers to upgrade, patch or check something the material does not mention. An everyday analogy is welcome if it is accurate. Plain words, no jargon without a short explanation. No fear-mongering.",
 } as const;
 export type Move = keyof typeof MOVES;
 
@@ -582,7 +616,7 @@ export async function produceForSlot(platform: Platform, at: Date, m: Material, 
     let checks: Check[] = [];
     const log: { text: string; reasons: string[] }[] = [];
     for (let round = 0; round < rounds; round++) {
-      checks = runChecks(compose(text), platform, recent);
+      checks = [...runChecks(compose(text), platform, recent), ...newsAdvice(text, m)];
       lastReview = await review(m, compose(text), platform, recent, s, { evidence: w.evidence });
       verdict = gate(lastReview, checks, m);
       log.push({ text, reasons: verdict.reasons });
@@ -774,7 +808,7 @@ export async function rewordPost(id: string, feedback: string, remember: boolean
     previous: p.text,
     notes: [`The owner says the content is fine but the wording does not sound like them: "${note}"`, "Keep the same story, facts and point. Change only the wording."],
   }, (p.review as { move?: Move } | null)?.move);
-  const checks = runChecks(text, platform, recent);
+  const checks = [...runChecks(text, platform, recent), ...newsAdvice(text, m)];
   const block = checks.find((c) => c.severity === "block" && (c.code === "too_long" || c.code === "empty"));
   if (block) throw new Error(`The rewrite came out unusable (${block.message}) Try again.`);
   const r = await review(m, text, platform, recent, s, { evidence });
@@ -811,7 +845,7 @@ export async function recheckPost(id: string): Promise<{ approved: boolean; mess
   const platform = p.platform as Platform;
   const m = await materialForPost(p);
   const recent = (await recentTexts(platform)).filter((t) => t !== p.text);
-  const checks = runChecks(p.text, platform, recent);
+  const checks = [...runChecks(p.text, platform, recent), ...newsAdvice(p.text, m)];
   const r = await review(m, p.text, platform, recent, s, { evidence: prev.evidence, earlier: prev.verdict?.reasons ?? [], effort: "high" });
   const verdict = gate(r, checks, m);
   const review_ = { ...(p.review ?? {}), ...r, checks, verdict, rechecked: (prev.rechecked ?? 0) + 1, reviewedAt: new Date().toISOString() };

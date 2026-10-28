@@ -143,6 +143,11 @@ export function setArticleFinderForTests(fn: ((q: string) => Promise<string[]>) 
 }
 
 /** Up to `n` readable articles about the topic, from publishers other than `exclude`. */
+/** Readable articles about the same story from other publishers (aggregator copies are skipped). */
+export function readOtherCoverage(query: string, exclude: string[], n = 2) {
+  return readCoverage(query, [...exclude, "msn.com", "yahoo.com", "aol.com"], n);
+}
+
 async function readCoverage(query: string, exclude: string[], n = 2): Promise<{ url: string; title: string; text: string }[]> {
   const out: { url: string; title: string; text: string }[] = [];
   for (const url of await articleFinder(query)) {

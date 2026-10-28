@@ -87,6 +87,59 @@ export function runChecks(text: string, platform: "x" | "linkedin", recent: stri
   return checks;
 }
 
+/** Words that tell the reader to do something, in groups that mean the same ("patch" and "update"). A group is allowed when the source uses any of its words. */
+const ADVICE: { re: RegExp; same: string[] }[] = [
+  { re: /\b(upgrad\w*|updat\w*|patch\w*|install\w*)\b/i, same: ["upgrad", "updat", "patch", "install", "fixed version", "latest version"] },
+  { re: /\b(rotat\w*|reset\w*|chang\w* (?:your )?(?:password|keys?|credentials))\b/i, same: ["rotat", "reset", "change your password", "new password", "revok"] },
+  { re: /\b(migrat\w*|switch\w*|mov(?:e|ing) (?:to|off|away))\b/i, same: ["migrat", "switch", "move to", "moving to", "move off"] },
+  { re: /\b(audit\w*|revok\w*|disabl\w*|withdraw\w*|avoid\w*)\b/i, same: ["audit", "revok", "disabl", "withdraw", "avoid"] },
+  { re: /\b(stop (?:using|taking)|start taking|sell|buy|invest)\b/i, same: [] },
+];
+/** A sentence that addresses the reader with advice: "you should", "consider…", "make sure", "your …", or a bare command. */
+const ADDRESSES_READER = /\b(you|your|you're|you'll)\b|\bconsider\b|\bmake sure\b|\bbe sure to\b|\bremember to\b|\bdon'?t forget\b|^\s*(?:now\s+)?(?:upgrade|update|patch|rotate|migrate|switch|audit|revoke|withdraw|disable|avoid|check|review|stop|start|sell|buy|invest)\b/i;
+
+/**
+ * News posts may only pass on advice the source itself gives. The writer is told this, and the reviewer is
+ * told to flag it, but both have let "consider upgrading your contracts" through when no source said so.
+ * Checked in code: a sentence that tells the reader to act needs the same action word in the material.
+ */
+/** "X should…", "consider…", "make sure…": telling someone what to do, whatever the verb. */
+const GENERAL_ADVICE = /\b(should|ought to|consider(?:ing)?|make sure|be sure to|remember to|don'?t forget|it'?s (?:wise|smart|best) to|you (?:need|have) to|better to)\b/i;
+
+const STOP = new Set("the a an and or but if then than that this these those with without from into onto for of to in on at by as is are was were be been being it its it's their they them you your we our not no so do does did can could will would should may might must have has had about over under while until".split(" "));
+/** Key words of a sentence, cut to five letters so "licensing" meets "license". */
+function stems(sentence: string): Set<string> {
+  return new Set((sentence.toLowerCase().match(/[a-z0-9_.]{3,}/g) ?? []).filter((w) => !STOP.has(w)).map((w) => w.slice(0, 5)));
+}
+
+/** A source sentence written as a command, the way advisories list steps ("Review SSH access policies."). */
+const SOURCE_COMMAND = /^\s*(?:[-*•]\s*)?(review|disable|enable|set|apply|update|upgrade|patch|install|check|rotate|reset|revoke|restart|prepare|avoid|remove|turn|use|switch|migrate|back up|limit|restrict)\b/i;
+
+/** A source sentence that tells someone to act ("users should update", "asks everyone to patch now"). */
+const SOURCE_ADVISES = /\b(should|must|urg\w*|recommend\w*|advis\w*|asks?|asked|encourag\w*|need to|needs to|have to|has to|immediately|as soon as possible|right away|now|you|your|users|operators|customers|everyone)\b/i;
+
+export function adviceCheck(text: string, source: string): Check[] {
+  // Only sentences in the source that give advice count: "the Glamsterdam upgrade" names an event, it advises nothing.
+  const src = source
+    .split(/(?<=[.!?])\s+|\n+/)
+    .filter((x) => SOURCE_ADVISES.test(x) || SOURCE_COMMAND.test(x))
+    .join(" ")
+    .toLowerCase();
+  const adviceStems = stems(src);
+  const out: string[] = [];
+  for (const sentence of text.split(/(?<=[.!?])\s+|\n+/).map((x) => x.trim()).filter(Boolean)) {
+    if (!ADDRESSES_READER.test(sentence) && !GENERAL_ADVICE.test(sentence)) continue;
+    // Passed on from the source: at least three key words shared with what the source advises.
+    const mine = stems(sentence);
+    if ([...mine].filter((w) => adviceStems.has(w)).length >= 3) continue;
+    const group = ADVICE.find(({ re }) => re.test(sentence));
+    if (group ? !group.same.some((w) => src.includes(w)) : GENERAL_ADVICE.test(sentence)) out.push(sentence);
+  }
+  return out.length
+    ? [{ code: "invented_advice", severity: "block", message: `Tells readers to act in a way the source does not: "${out[0].slice(0, 140)}". Report what happened and who is affected; only pass on advice the source gives.` }]
+    : [];
+}
+
 /** Bigram Jaccard similarity over word tokens: cheap and good enough for near-duplicate detection. */
 export function textSimilarity(a: string, b: string): number {
   const toks = (s: string) =>
