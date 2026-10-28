@@ -266,3 +266,45 @@ h1, h2, h3 { text-wrap: balance; }
 .typed { font-family: var(--font-type), var(--mono); }
 /* Masthead rule: one thick line over one thin line, like the top of a newspaper. */
 .press-stripe { height: 6px; background: linear-gradient(var(--ink) 0 3px, transparent 3px 5px, var(--ink) 5px 6px); }
+
+/* ---------- "Watch it work" motion piece on the landing page ---------- */
+.desk .film-stage { display: flex; align-items: center; position: relative; min-height: 400px; border: 1.5px solid var(--ink); border-radius: 6px; background: var(--surface); padding: 28px; overflow: hidden; box-shadow: 0 6px 0 var(--d-sky-line); }
+.desk .film-scene { width: 100%; }
+@media (max-width: 640px) {
+  .desk .film-stage { min-height: 520px; padding: 18px; }
+  /* Four headlines on a phone, so every scene fits the same frame. */
+  .desk .film-sources > :nth-child(n + 5) { display: none; }
+}
+.desk .film-card { position: relative; border: 1px solid var(--line-strong); border-radius: 4px; background: var(--bg); padding: 12px 14px; }
+.desk .film-chip { display: inline-flex; align-items: center; border: 1px solid var(--line-strong); border-radius: 999px; padding: 3px 12px; font-size: 13px; background: var(--surface); }
+.desk .film-score { position: absolute; top: 10px; right: 10px; font-family: var(--font-type), var(--mono); font-size: 12px; font-weight: 600; padding: 1px 7px; border-radius: 3px; background: var(--side); color: var(--d-muted); }
+.desk .film-score.is-high { background: var(--mark); color: var(--mark-ink); }
+.desk .film-tick { flex: none; display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center; border-radius: 999px; background: var(--good-soft); color: var(--good); font-weight: 700; font-size: 13px; }
+.desk .film-caret { display: inline-block; width: 2px; height: 1.05em; margin-left: 2px; vertical-align: -2px; background: var(--ink); animation: caret 1s steps(1) infinite; }
+.desk .film-phone { border: 1.5px solid var(--ink); border-radius: 22px; padding: 16px; background: var(--surface); }
+.desk .film-bubble { border-radius: 12px 12px 12px 4px; background: var(--side); padding: 10px 12px; }
+.desk .film-tg { display: flex; align-items: center; justify-content: center; height: 36px; border-radius: 8px; border: 1px solid var(--line-strong); font-size: 13px; font-weight: 600; background: var(--bg); }
+.desk .film-toast { align-self: center; border-radius: 999px; background: var(--ink); color: var(--bg); padding: 8px 16px; font-size: 13px; font-weight: 600; }
+.desk .film-bar { display: block; height: 4px; border-radius: 999px; background: var(--d-sky-line); overflow: hidden; }
+.desk .film-fill { display: block; height: 100%; width: 0; background: var(--accent); }
+.desk .film-fill.is-done { width: 100%; }
+.desk .film-fill.is-running { animation: film-grow linear forwards; }
+
+@keyframes film-grow { from { width: 0; } to { width: 100%; } }
+@keyframes film-fade { to { opacity: .28; filter: grayscale(1); text-decoration: line-through; text-decoration-color: var(--d-muted); } }
+@keyframes film-glow { to { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); } }
+@keyframes film-stamp-in { from { opacity: 0; transform: rotate(-6deg) scale(1.8); } 60% { opacity: 1; transform: rotate(-6deg) scale(.95); } to { opacity: 1; transform: rotate(-6deg) scale(1); } }
+@keyframes film-tap { 0%, 55% { transform: none; background: var(--bg); } 65% { transform: scale(.94); } 80%, 100% { transform: none; background: var(--good-soft); border-color: var(--good); color: var(--good); } }
+
+.desk .film-scene.is-playing .film-pop { animation: pop-in .55s cubic-bezier(.2, .7, .2, 1) both; }
+.desk .film-scene.is-playing .film-out { animation: film-fade .5s ease forwards; }
+.desk .film-scene.is-playing .film-keep { animation: film-glow .5s ease forwards; }
+.desk .film-scene.is-playing .film-stamp { animation: film-stamp-in .55s cubic-bezier(.2, .7, .2, 1) both; }
+.desk .film-scene.is-playing .film-press { animation: film-tap 2.2s ease forwards; }
+/* Paused, off screen or reduced motion: every scene shows its finished state. */
+.desk .film-scene.is-still .film-out { opacity: .28; text-decoration: line-through; }
+.desk .film-scene.is-still .film-keep { border-color: var(--accent); }
+.desk .film-scene.is-still .film-press { background: var(--good-soft); border-color: var(--good); color: var(--good); }
+@media (prefers-reduced-motion: reduce) {
+  .desk .film-scene .film-pop, .desk .film-scene .film-stamp, .desk .film-scene .film-press, .desk .film-scene .film-out, .desk .film-scene .film-keep, .desk .film-fill.is-running { animation: none !important; }
+}

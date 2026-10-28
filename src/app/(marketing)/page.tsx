@@ -8,6 +8,7 @@ import { Pricing } from "@/components/landing/pricing";
 import { WaitlistForm } from "@/components/landing/waitlist-form";
 import { LandingMotion } from "@/components/landing/motion";
 import { DeskNav, DeskTabs, HeroDemo } from "@/components/landing/desk";
+import { NewsFilm } from "@/components/landing/film";
 import { BETA, TRIAL_DAYS } from "@/lib/pricing";
 import { env } from "@/server/env";
 
@@ -152,6 +153,19 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
             </p>
           </div>
           <HeroDemo />
+        </section>
+
+        <Rule />
+
+        {/* ---------- watch it work ---------- */}
+        <section id="watch" className="mx-auto max-w-[1200px] scroll-mt-24 px-4 py-20 sm:px-6 sm:py-24">
+          <div className="mb-10 grid gap-6 lg:grid-cols-2 lg:items-end">
+            <Headline a="Watch it work." b="In thirty seconds." className="text-[46px] sm:text-[68px]" />
+            <p className="max-w-[520px] text-[19px] leading-relaxed text-[var(--d-muted)] lg:justify-self-end">
+              From a story breaking to a post your readers see, without you writing a word. You only tap approve.
+            </p>
+          </div>
+          <NewsFilm />
         </section>
 
         <Rule />
