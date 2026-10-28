@@ -6,6 +6,8 @@ import { requireUser } from "@/server/auth";
 import { logoutAction } from "@/app/auth-actions";
 
 export const metadata: Metadata = { title: "Confirm your email · PostFlow" };
+// Reads the session cookie: must never be prerendered at build time (it would bake in a redirect).
+export const dynamic = "force-dynamic";
 
 export default async function VerifyEmailPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const user = await requireUser();

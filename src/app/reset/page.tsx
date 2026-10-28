@@ -5,6 +5,8 @@ import { ResetForm } from "@/components/auth-forms";
 import { peekToken } from "@/server/users";
 
 export const metadata: Metadata = { title: "Choose a new password · PostFlow" };
+// Reads the session cookie: must never be prerendered at build time (it would bake in a redirect).
+export const dynamic = "force-dynamic";
 
 export default async function ResetPage({ searchParams }: { searchParams: Promise<{ token?: string; confirmed?: string }> }) {
   const sp = await searchParams;
