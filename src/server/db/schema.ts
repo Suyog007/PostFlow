@@ -43,6 +43,7 @@ export const users = pgTable("users", {
   trialUsed: boolean("trial_used").notNull().default(false),
   // Telegram
   telegramChatId: text("telegram_chat_id").unique(),
+  /** No longer read: link codes are now 15-minute tokens in email_tokens. Cleared when a chat links. */
   telegramLinkCode: text("telegram_link_code").unique(),
   /** When the scheduler last ran the writing pipeline for this user (fair round-robin). */
   lastPipelineAt: timestamp("last_pipeline_at", { withTimezone: true }),
@@ -50,13 +51,13 @@ export const users = pgTable("users", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-/** Single-use links sent by email (verify address, reset password). Only the hash is stored. */
+/** Single-use links (verify address, reset password, link a Telegram chat). Only the hash is stored. */
 export const emailTokens = pgTable(
   "email_tokens",
   {
     tokenHash: text("token_hash").primaryKey(),
     userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-    purpose: text("purpose").notNull(), // verify | reset
+    purpose: text("purpose").notNull(), // verify | reset | telegram
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     usedAt: timestamp("used_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

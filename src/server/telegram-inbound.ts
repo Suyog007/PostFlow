@@ -3,7 +3,7 @@ import { db, schema } from "./db/client";
 import { uid, withUser } from "./context";
 import { approvalGate, entitlementFor, entitlementOf } from "./billing/plans";
 import { DateTime } from "luxon";
-import { sendPhotoTo, sendTo, telegramApi } from "./telegram";
+import { isPrivateChatId, sendPhotoTo, sendTo, telegramApi } from "./telegram";
 import { cardUrl, ensurePostImage, redrawPostImage, wantsImage } from "./post-images";
 import { getSettings, saveSettings } from "./settings";
 import { approvePost, postNow, removePost, PostError, upcoming } from "./posts";
@@ -11,14 +11,24 @@ import { publishDue } from "./publisher";
 import { refillSlot, rejectAndReplace, rewordPost, writeLesson } from "./generate";
 import { requestFillNow, requestRefresh } from "./tick";
 import { formatLocal } from "./slots";
+import { consumeToken } from "./users";
+import { sendEmail } from "./email";
+import { env } from "./env";
+import { warnOnError } from "./log";
 import { storyLine } from "./story-date";
 import type { Pillar } from "./db/schema";
 import { after } from "next/server";
 import { createRequest, processRequests, retryAnyway, type RequestMode } from "./requests";
 
+interface Chat {
+  id: number;
+  /** "private" for a one-to-one chat with the bot; "group", "supergroup" or "channel" otherwise. */
+  type?: string;
+}
+
 interface Update {
-  message?: { chat: { id: number }; text?: string };
-  callback_query?: { id: string; data?: string; message?: { chat: { id: number } } };
+  message?: { chat: Chat; text?: string };
+  callback_query?: { id: string; data?: string; message?: { chat: Chat } };
 }
 
 const HELP = `Make a post from something:
@@ -162,32 +172,49 @@ function parseNote(text: string): { pillar: Pillar; text: string } {
 
 const NOT_LINKED = "This chat is not linked to a PostFlow account. In PostFlow, open Settings and press Connect Telegram.";
 
-/** Links a chat to the account whose one-time code it presents (from the Connect Telegram link). */
+const PRIVATE_ONLY = "PostFlow only works in a private chat with this bot, so nobody else can approve or publish your posts. Open the bot directly and press Start there.";
+
+/** Links a private chat to the account whose 15-minute, single-use code it presents (from Connect Telegram). */
 async function linkChat(chat: number, code: string): Promise<boolean> {
-  if (!/^[A-Za-z0-9_-]{8,64}$/.test(code)) return false;
-  const user = await db().query.users.findFirst({ where: eq(schema.users.telegramLinkCode, code) });
+  const user = await consumeToken(code, "telegram");
   if (!user) return false;
   // A chat belongs to one account at a time.
   await db().update(schema.users).set({ telegramChatId: null }).where(eq(schema.users.telegramChatId, String(chat)));
   await db().update(schema.users).set({ telegramChatId: String(chat), telegramLinkCode: null, updatedAt: new Date() }).where(eq(schema.users.id, user.id));
+  // Tell the account holder, so a link they did not make does not go unnoticed.
+  await sendEmail({
+    to: user.email,
+    subject: `Telegram connected to your ${env().COMPANY_NAME} account`,
+    text: `A Telegram chat was just connected to your account. It can approve, remove and publish your posts.\n\nIf this was not you, disconnect it in Settings right away and change your password.`,
+    action: { label: "Open Settings", url: `${env().APP_URL.replace(/\/$/, "")}/settings#telegram` },
+  }).catch(warnOnError("telegram_link_email_failed", { userId: user.id }));
   return true;
 }
 
-/** Handles one Telegram update. A chat only ever acts for the one account it is linked to. */
+/** Handles one Telegram update. A chat only ever acts for the one account it is linked to, and only in private. */
 export async function handleTelegramUpdate(u: Update): Promise<void> {
-  const chat = u.message?.chat.id ?? u.callback_query?.message?.chat.id;
-  if (!chat) return;
+  const from = u.message?.chat ?? u.callback_query?.message?.chat;
+  if (!from) return;
+  const chat = from.id;
+  const isPrivate = from.type === "private" && isPrivateChatId(chat);
 
   const start = u.message?.text?.trim().match(/^\/start(?:@\w+)?\s+(\S+)$/);
   if (start) {
+    if (!isPrivate) return void (await sendTo(chat, PRIVATE_ONLY));
     const ok = await linkChat(chat, start[1]);
-    await sendTo(chat, ok ? `✅ Linked to PostFlow. New posts will arrive here with buttons.\n\n${HELP}` : "That link has expired or was already used. Open Settings in PostFlow and press Connect Telegram again.");
+    await sendTo(chat, ok ? `✅ Linked to PostFlow. New posts will arrive here with buttons.\n\n${HELP}` : "That link has expired or was already used. Links work for 15 minutes. Open Settings in PostFlow and press Connect Telegram again.");
     return;
   }
 
   const user = await db().query.users.findFirst({ where: eq(schema.users.telegramChatId, String(chat)) });
   if (!user) {
     if (u.message) await sendTo(chat, NOT_LINKED);
+    return;
+  }
+  if (!isPrivate) {
+    // Linked before group chats were refused: unlink it rather than let every member act for the account.
+    await db().update(schema.users).set({ telegramChatId: null, updatedAt: new Date() }).where(eq(schema.users.id, user.id));
+    await sendTo(chat, `Unlinked. ${PRIVATE_ONLY}`);
     return;
   }
   if (u.message?.text?.trim() === "/unlink") {

@@ -1,4 +1,4 @@
-import { and, count, eq, gte, isNull } from "drizzle-orm";
+import { and, count, eq, gte, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "./db/client";
 import { env } from "./env";
@@ -132,19 +132,22 @@ export async function userFromGoogle(g: { sub: string; email: string; emailVerif
 }
 
 // ---------------------------------------------------------------------------
-// Email links (verify address, reset password)
+// One-time links (verify address, reset password, link a Telegram chat)
 // ---------------------------------------------------------------------------
 
-type Purpose = "verify" | "reset";
-const TTL_MS: Record<Purpose, number> = { verify: 48 * 3_600_000, reset: 60 * 60_000 };
+type Purpose = "verify" | "reset" | "telegram";
+const TTL_MS: Record<Purpose, number> = { verify: 48 * 3_600_000, reset: 60 * 60_000, telegram: 15 * 60_000 };
+const EMAIL_PURPOSES: Purpose[] = ["verify", "reset"];
 const MAX_EMAILS_PER_HOUR = 5;
 
 async function issueToken(userId: string, purpose: Purpose): Promise<string> {
-  const [recent] = await db()
-    .select({ n: count() })
-    .from(schema.emailTokens)
-    .where(and(eq(schema.emailTokens.userId, userId), gte(schema.emailTokens.createdAt, new Date(Date.now() - 3_600_000))));
-  if (Number(recent.n) >= MAX_EMAILS_PER_HOUR) throw new AuthError("Too many emails requested. Try again in an hour.");
+  if (EMAIL_PURPOSES.includes(purpose)) {
+    const [recent] = await db()
+      .select({ n: count() })
+      .from(schema.emailTokens)
+      .where(and(eq(schema.emailTokens.userId, userId), inArray(schema.emailTokens.purpose, EMAIL_PURPOSES), gte(schema.emailTokens.createdAt, new Date(Date.now() - 3_600_000))));
+    if (Number(recent.n) >= MAX_EMAILS_PER_HOUR) throw new AuthError("Too many emails requested. Try again in an hour.");
+  }
   const raw = randomToken(32);
   await db().insert(schema.emailTokens).values({ tokenHash: sha256(raw), userId, purpose, expiresAt: new Date(Date.now() + TTL_MS[purpose]) });
   return raw;
@@ -221,6 +224,15 @@ export async function markVerified(userId: string, opts: { clearPassword?: boole
     .where(eq(schema.users.id, userId))
     .returning();
   return syncOwnerFlag(u);
+}
+
+/**
+ * A fresh 15-minute code for linking a Telegram chat (the Start payload of the bot link).
+ * Older unused codes stop working, so only the latest link is ever valid.
+ */
+export async function issueTelegramLinkToken(userId: string) {
+  await db().delete(schema.emailTokens).where(and(eq(schema.emailTokens.userId, userId), eq(schema.emailTokens.purpose, "telegram"), isNull(schema.emailTokens.usedAt)));
+  return issueToken(userId, "telegram");
 }
 
 /** A one-hour link to choose a password, for someone who just proved they own the inbox. */

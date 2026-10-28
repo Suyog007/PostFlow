@@ -9,7 +9,7 @@ import { saveSettings } from "../src/server/settings";
 import { GOOD_ASSESSMENT, GOOD_REVIEW, fakeLLM, resetDb } from "./helpers";
 
 const JACK = "https://x.com/jack/status/1981234567890123456";
-const msg = (text: string) => ({ message: { chat: { id: 42 }, text } });
+const msg = (text: string) => ({ message: { chat: { id: 42, type: "private" }, text } });
 
 type Sent = { text: string; buttons?: { text: string; callback_data: string }[][] };
 async function telegram<T>(fn: (sent: Sent[]) => Promise<T>) {
@@ -147,7 +147,7 @@ describe("going deeper before writing", () => {
       expect(why.buttons![0][0]).toMatchObject({ text: "✍️ Write it anyway", callback_data: `fw:${req.id}` });
       expect(await db().select().from(schema.posts)).toHaveLength(0);
 
-      await handleTelegramUpdate({ callback_query: { id: "1", data: `fw:${req.id}`, message: { chat: { id: 42 } } } });
+      await handleTelegramUpdate({ callback_query: { id: "1", data: `fw:${req.id}`, message: { chat: { id: 42, type: "private" } } } });
       expect(sent.filter((m) => m.text.startsWith("✍️ Ready")).length).toBe(2);
     });
     expect((await db().select().from(schema.posts)).length).toBe(2);

@@ -8,9 +8,10 @@ import { formatSlots } from "@/server/slots-parse";
 import { myChecks } from "@/server/health";
 import { requireActiveUser } from "@/server/auth";
 import { approvalGate, entitlementOf } from "@/server/billing/plans";
-import { telegramConfigured, telegramLinkUrl } from "@/server/telegram";
+import { telegramConfigured } from "@/server/telegram";
+import { env } from "@/server/env";
 import { isPlatformConfigured } from "@/server/platforms/accounts";
-import { addSourceAction, connectAction, deleteSourceAction, disconnectAction, runTickAction, saveFastLaneAction, saveProfileAction, saveSlotsAction, unlinkTelegramAction, toggleSourceAction, togglePauseAction, toggleApprovalAction, removeStyleNoteAction } from "@/app/actions";
+import { addSourceAction, connectAction, deleteSourceAction, disconnectAction, runTickAction, saveFastLaneAction, saveProfileAction, saveSlotsAction, unlinkTelegramAction, toggleSourceAction, togglePauseAction, toggleApprovalAction, removeStyleNoteAction, connectTelegramAction } from "@/app/actions";
 import { Flash } from "../flash";
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ ok?: string; error?: string; connected?: string }> }) {
@@ -23,7 +24,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const checks = await myChecks();
   const accounts = await db().select().from(schema.platformAccounts).where(eq(schema.platformAccounts.userId, user.id));
   const sources = await db().select().from(schema.sources).where(eq(schema.sources.userId, user.id)).orderBy(asc(schema.sources.pillar), asc(schema.sources.name));
-  const tgLink = user.telegramChatId ? null : await telegramLinkUrl();
+  const tgReady = telegramConfigured() && Boolean(env().TELEGRAM_BOT_USERNAME);
   const gate = approvalGate(s, ent.features.autoMode);
   const approvalOn = gate.blocks;
   const acct = (p: string) => accounts.find((a) => a.platform === p && a.status !== "disconnected");
@@ -203,10 +204,10 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               <span className="flex-1 font-medium text-good">✓ Linked</span>
               <form action={unlinkTelegramAction}><button className="btn-ghost">Disconnect</button></form>
             </div>
-          ) : tgLink ? (
+          ) : tgReady ? (
             <div className="flex flex-wrap items-center gap-3">
-              <span className="flex-1 text-muted">Open the link, press <strong>Start</strong> in Telegram, then come back.</span>
-              <a href={tgLink} target="_blank" rel="noopener noreferrer" className="btn btn-primary">Connect Telegram</a>
+              <span className="flex-1 text-muted">Opens the bot: press <strong>Start</strong> in a private chat within 15 minutes, then come back.</span>
+              <form action={connectTelegramAction}><button className="btn btn-primary">Connect Telegram</button></form>
             </div>
           ) : (
             <p className="text-muted">{telegramConfigured() ? "Telegram linking is being set up." : "Telegram is not available yet."}</p>

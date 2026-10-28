@@ -109,7 +109,7 @@ describe("a link to someone else's story", () => {
 });
 
 describe("telegram", () => {
-  const say = (text: string) => handleTelegramUpdate({ message: { chat: { id: 42 }, text } });
+  const say = (text: string) => handleTelegramUpdate({ message: { chat: { id: 42, type: "private" }, text } });
   it("/post, /draft and /mine create requests with the right mode", async () => {
     await say("/post An idea about measuring before caching anything at all");
     await say("/draft Another idea about retries and idempotency keys here");

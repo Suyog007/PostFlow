@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { cardUrl } from "./post-images";
 import { storyLine } from "./story-date";
 import { env } from "./env";
@@ -6,7 +6,7 @@ import { log } from "./log";
 import { formatLocal } from "./slots";
 import { db, schema } from "./db/client";
 import { currentUserId, uid } from "./context";
-import { randomToken } from "./crypto";
+import { issueTelegramLinkToken } from "./users";
 
 type PostRow = typeof import("./db/schema").posts.$inferSelect;
 
@@ -15,30 +15,34 @@ export function telegramConfigured() {
   return Boolean(env().TELEGRAM_BOT_TOKEN);
 }
 
-/** The current user's linked chat id, if any. */
+/**
+ * Telegram gives private chats positive ids and groups and channels negative ones.
+ * PostFlow acts only through a private chat with the account holder: in a group, every member could press Approve.
+ */
+export function isPrivateChatId(chatId: string | number) {
+  return Number(chatId) > 0;
+}
+
+/** The current user's linked private chat id, if any. */
 export async function myTelegramChat(): Promise<string | null> {
   const id = await currentUserId();
   if (!id) return null;
   const u = await db().query.users.findFirst({ where: eq(schema.users.id, id), columns: { telegramChatId: true } });
-  return u?.telegramChatId ?? null;
+  return u?.telegramChatId && isPrivateChatId(u.telegramChatId) ? u.telegramChatId : null;
 }
 
-/** A t.me deep link that links the current user's Telegram chat when they press Start. */
-export async function telegramLinkUrl(): Promise<string | null> {
+/** A t.me deep link with a fresh 15-minute code that links the current user's chat when they press Start. */
+export async function newTelegramLinkUrl(): Promise<string | null> {
   const username = env().TELEGRAM_BOT_USERNAME?.replace(/^@/, "");
   if (!username || !env().TELEGRAM_BOT_TOKEN) return null;
-  const userId = await uid();
-  const u = await db().query.users.findFirst({ where: eq(schema.users.id, userId), columns: { telegramLinkCode: true } });
-  let code = u?.telegramLinkCode;
-  if (!code) {
-    code = randomToken(18); // base64url: allowed in Telegram start payloads
-    await db().update(schema.users).set({ telegramLinkCode: code, updatedAt: new Date() }).where(eq(schema.users.id, userId));
-  }
+  const code = await issueTelegramLinkToken(await uid()); // base64url: allowed in Telegram start payloads
   return `https://t.me/${username}?start=${code}`;
 }
 
 export async function unlinkTelegram() {
-  await db().update(schema.users).set({ telegramChatId: null, telegramLinkCode: null, updatedAt: new Date() }).where(eq(schema.users.id, await uid()));
+  const userId = await uid();
+  await db().update(schema.users).set({ telegramChatId: null, telegramLinkCode: null, updatedAt: new Date() }).where(eq(schema.users.id, userId));
+  await db().delete(schema.emailTokens).where(and(eq(schema.emailTokens.userId, userId), eq(schema.emailTokens.purpose, "telegram")));
 }
 
 async function api(method: string, body: Record<string, unknown>) {

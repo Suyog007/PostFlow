@@ -238,12 +238,12 @@ describe("logo buttons in Telegram", () => {
       return new Response(JSON.stringify({ ok: true }));
     }) as typeof fetch;
     try {
-      await handleTelegramUpdate({ callback_query: { id: "1", data: `ni:${p.id}`, message: { chat: { id: 42 } } } });
+      await handleTelegramUpdate({ callback_query: { id: "1", data: `ni:${p.id}`, message: { chat: { id: 42, type: "private" } } } });
       const msg = sent.find((m) => m.method === "sendPhoto")!;
       expect(msg.body.caption).toMatch(/^🔁 Other logo/);
       expect(JSON.stringify(msg.body.reply_markup)).toContain(`xi:${p.id}`);
       expect((await db().select().from(schema.postImages))[0].source).toBe(logo(2).source);
-      await handleTelegramUpdate({ callback_query: { id: "2", data: `xi:${p.id}`, message: { chat: { id: 42 } } } });
+      await handleTelegramUpdate({ callback_query: { id: "2", data: `xi:${p.id}`, message: { chat: { id: 42, type: "private" } } } });
       expect((await db().select().from(schema.posts).where(eq(schema.posts.id, p.id)))[0].review).toMatchObject({ noImage: true });
     } finally {
       globalThis.fetch = realFetch;

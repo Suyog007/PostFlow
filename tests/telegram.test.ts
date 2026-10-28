@@ -1,14 +1,15 @@
 import { DateTime } from "luxon";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { db, schema } from "../src/server/db/client";
 import { handleTelegramUpdate } from "../src/server/telegram-inbound";
 import { getSettings } from "../src/server/settings";
 import { actAs, addUser, fakeLLM, resetDb, me } from "./helpers";
 import { resetEnvCache } from "../src/server/env";
-import { telegramLinkUrl } from "../src/server/telegram";
+import { newTelegramLinkUrl } from "../src/server/telegram";
+import { outbox } from "../src/server/email";
 
-const msg = (text: string, chat = 42) => ({ message: { chat: { id: chat }, text } });
+const msg = (text: string, chat = 42) => ({ message: { chat: { id: chat, type: "private" }, text } });
 
 describe("telegram inbound", () => {
   beforeEach(resetDb);
@@ -98,17 +99,17 @@ describe("telegram inbound", () => {
       const [p] = await db().insert(schema.posts).values({ userId: me(), platform: "x", pillar: "news", text: "Ship this one early.", status: "scheduled", scheduledAt: slot }).returning();
 
       // Step 1: tapping 🚀 Now only asks. Nothing is published yet.
-      await handleTelegramUpdate({ callback_query: { id: "1", data: `pn:${p.id}`, message: { chat: { id: 42 } } } });
+      await handleTelegramUpdate({ callback_query: { id: "1", data: `pn:${p.id}`, message: { chat: { id: 42, type: "private" } } } });
       expect(out).toHaveLength(0);
       const ask = sent.find((m) => m.text.includes("right now, ahead of its schedule"))!;
       expect(ask.buttons![0].map((b) => b.callback_data)).toEqual([`py:${p.id}`, "no:"]);
 
       // Cancel does nothing.
-      await handleTelegramUpdate({ callback_query: { id: "2", data: "no:", message: { chat: { id: 42 } } } });
+      await handleTelegramUpdate({ callback_query: { id: "2", data: "no:", message: { chat: { id: 42, type: "private" } } } });
       expect(out).toHaveLength(0);
 
       // Step 2: confirming publishes it, even though approval mode is on (asking is an approval).
-      await handleTelegramUpdate({ callback_query: { id: "3", data: `py:${p.id}`, message: { chat: { id: 42 } } } });
+      await handleTelegramUpdate({ callback_query: { id: "3", data: `py:${p.id}`, message: { chat: { id: 42, type: "private" } } } });
       expect(out).toHaveLength(1);
       const after = (await db().select().from(schema.posts).where(eq(schema.posts.id, p.id)))[0];
       expect(after.status).toBe("published");
@@ -200,7 +201,7 @@ describe("telegram inbound", () => {
         expect(lesson.buttons!.flat().map((b) => b.text)).toEqual(["✅ Approve", "🗑 Remove", "🔁 Another story", "✍️ New wording"]);
 
         const [p] = await db().select().from(schema.posts);
-        await handleTelegramUpdate({ callback_query: { id: "5", data: `rm:${p.id}`, message: { chat: { id: 42 } } } });
+        await handleTelegramUpdate({ callback_query: { id: "5", data: `rm:${p.id}`, message: { chat: { id: 42, type: "private" } } } });
         const offer = sent.find((m) => m.text.includes("Want to put something else in that slot?"))!;
         expect(offer.buttons!.flat().map((b) => b.text)).toEqual(["🎓 Fill with a lesson", "📰 Fill with news"]);
       });
@@ -211,7 +212,7 @@ describe("telegram inbound", () => {
       const [p] = await db().insert(schema.posts).values({ userId: me(), platform: "x", pillar: "own_work", text: "Cut CI from 14 minutes to 4. The cache did most of it.", status: "scheduled", scheduledAt: new Date(Date.now() + 3_600_000) }).returning();
       fakeLLM((req) => (req.schemaName === "write_post" ? { text: "Our CI used to take 14 minutes and now takes 4, mostly thanks to the dependency cache. #devops" } : GOOD_REVIEW));
       await capture(async (sent) => {
-        await handleTelegramUpdate({ callback_query: { id: "9", data: `rw:${p.id}`, message: { chat: { id: 42 } } } });
+        await handleTelegramUpdate({ callback_query: { id: "9", data: `rw:${p.id}`, message: { chat: { id: 42, type: "private" } } } });
         const reply = sent.find((m) => m.text.includes("New wording"))!;
         expect(reply.text).toContain("takes 4, mostly thanks to the dependency cache");
         expect(reply.buttons!.flat().map((b) => b.callback_data)).toEqual([`ok:${p.id}`, `rm:${p.id}`, `rj:${p.id}`, `rw:${p.id}`]);
@@ -224,36 +225,86 @@ describe("telegram inbound", () => {
 
   it("the Remove button cancels a scheduled post", async () => {
     const [p] = await db().insert(schema.posts).values({ userId: me(), platform: "x", pillar: "own_work", text: "t", status: "scheduled", scheduledAt: new Date(Date.now() + 3_600_000) }).returning();
-    await handleTelegramUpdate({ callback_query: { id: "1", data: `rm:${p.id}`, message: { chat: { id: 42 } } } });
+    await handleTelegramUpdate({ callback_query: { id: "1", data: `rm:${p.id}`, message: { chat: { id: 42, type: "private" } } } });
     expect((await db().query.posts.findFirst({ where: eq(schema.posts.id, p.id) }))!.status).toBe("cancelled");
   });
 
-  it("links a chat with the one-time code from Settings", async () => {
-    process.env.TELEGRAM_BOT_TOKEN = "123:abc";
-    process.env.TELEGRAM_BOT_USERNAME = "PostFlowBot";
-    resetEnvCache();
-    try {
-      const bob = await addUser({ email: "bob@example.com" });
+  describe("linking a chat", () => {
+    const group = (text: string, chat = -1001) => ({ message: { chat: { id: chat, type: "group" }, text } });
+    const codeOf = (link: string | null) => new URL(link!).searchParams.get("start")!;
+    let bob: { id: string };
+
+    beforeEach(async () => {
+      process.env.TELEGRAM_BOT_TOKEN = "123:abc";
+      process.env.TELEGRAM_BOT_USERNAME = "PostFlowBot";
+      resetEnvCache();
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }))));
+      outbox.length = 0;
+      bob = await addUser({ email: "bob@example.com" });
       actAs(bob.id);
-      const link = await telegramLinkUrl();
+      return () => {
+        delete process.env.TELEGRAM_BOT_TOKEN;
+        delete process.env.TELEGRAM_BOT_USERNAME;
+        resetEnvCache();
+        vi.unstubAllGlobals();
+      };
+    });
+
+    const chatOf = async () => (await db().query.users.findFirst({ where: eq(schema.users.id, bob.id) }))!.telegramChatId;
+
+    it("links a private chat with the one-time code, once, and emails the account holder", async () => {
+      const link = await newTelegramLinkUrl();
       expect(link).toMatch(/^https:\/\/t\.me\/PostFlowBot\?start=/);
-      const code = new URL(link!).searchParams.get("start")!;
       // Before linking, a chat cannot do anything.
       await handleTelegramUpdate(msg("A note from a chat that is not linked yet, should be ignored.", 555));
       expect(await db().select().from(schema.notes)).toHaveLength(0);
-      await handleTelegramUpdate(msg(`/start ${code}`, 555));
-      const linked = await db().query.users.findFirst({ where: eq(schema.users.id, bob.id) });
-      expect(linked).toMatchObject({ telegramChatId: "555", telegramLinkCode: null });
+      await handleTelegramUpdate(msg(`/start ${codeOf(link)}`, 555));
+      expect(await chatOf()).toBe("555");
+      expect(outbox.map((e) => [e.to, e.subject])).toEqual([["bob@example.com", "Telegram connected to your PostFlow account"]]);
       // The code works once.
-      await handleTelegramUpdate(msg(`/start ${code}`, 556));
-      expect((await db().query.users.findFirst({ where: eq(schema.users.id, bob.id) }))!.telegramChatId).toBe("555");
+      await handleTelegramUpdate(msg(`/start ${codeOf(link)}`, 556));
+      expect(await chatOf()).toBe("555");
       await handleTelegramUpdate(msg("Bob wrote about shipping the new billing page today.", 555));
       expect((await db().select().from(schema.notes)).map((n) => n.userId)).toEqual([bob.id]);
-    } finally {
-      delete process.env.TELEGRAM_BOT_TOKEN;
-      delete process.env.TELEGRAM_BOT_USERNAME;
-      resetEnvCache();
-    }
+    });
+
+    it("a code stops working after 15 minutes", async () => {
+      const code = codeOf(await newTelegramLinkUrl());
+      await db().update(schema.emailTokens).set({ expiresAt: new Date(Date.now() - 1000) });
+      await handleTelegramUpdate(msg(`/start ${code}`, 555));
+      expect(await chatOf()).toBeNull();
+    });
+
+    it("only the latest link works", async () => {
+      const first = codeOf(await newTelegramLinkUrl());
+      const second = codeOf(await newTelegramLinkUrl());
+      await handleTelegramUpdate(msg(`/start ${first}`, 555));
+      expect(await chatOf()).toBeNull();
+      await handleTelegramUpdate(msg(`/start ${second}`, 555));
+      expect(await chatOf()).toBe("555");
+    });
+
+    it("a group chat cannot link, and the code still works in private afterwards", async () => {
+      const code = codeOf(await newTelegramLinkUrl());
+      await handleTelegramUpdate(group(`/start ${code}`));
+      expect(await chatOf()).toBeNull();
+      await handleTelegramUpdate(msg(`/start ${code}`, 555));
+      expect(await chatOf()).toBe("555");
+    });
+
+    it("a group linked before the rule is unlinked instead of obeyed", async () => {
+      const [p] = await db().insert(schema.posts).values({ userId: bob.id, platform: "x", pillar: "own_work", text: "t", status: "scheduled", scheduledAt: new Date(Date.now() + 3_600_000) }).returning();
+      await db().update(schema.users).set({ telegramChatId: "-1001" }).where(eq(schema.users.id, bob.id));
+      await handleTelegramUpdate({ callback_query: { id: "1", data: `rm:${p.id}`, message: { chat: { id: -1001, type: "group" } } } });
+      expect((await db().query.posts.findFirst({ where: eq(schema.posts.id, p.id) }))!.status).toBe("scheduled");
+      expect(await chatOf()).toBeNull();
+    });
+
+    it("making link codes never uses up the password-reset email allowance", async () => {
+      for (let i = 0; i < 8; i++) await newTelegramLinkUrl();
+      const { sendPasswordReset } = await import("../src/server/users");
+      await expect(sendPasswordReset("bob@example.com")).resolves.toBeUndefined();
+    });
   });
 
   it("a lapsed subscription cannot act through Telegram", async () => {

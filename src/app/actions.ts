@@ -17,7 +17,7 @@ import { approvePost, editPost, postNow, PostError, removePost, unapprovePost, r
 import { createRequest, processRequests, retryAnyway, type RequestMode } from "@/server/requests";
 import { addTip } from "@/server/tips";
 import { disconnectAccount, startOAuth } from "@/server/platforms/accounts";
-import { registerWebhook, unlinkTelegram } from "@/server/telegram";
+import { newTelegramLinkUrl, registerWebhook, unlinkTelegram } from "@/server/telegram";
 import { requestFillNow, requestRefresh, runForUser, tick } from "@/server/tick";
 import { addEvent } from "@/server/events";
 import { publishDue } from "@/server/publisher";
@@ -354,6 +354,13 @@ export async function connectAction(form: FormData) {
 export async function disconnectAction(form: FormData) {
   const platform = String(form.get("platform"));
   await guarded("/settings", () => disconnectAccount(platform as "x" | "linkedin"), "Disconnected.");
+}
+/** Makes a fresh 15-minute link code only when the user asks for it, then opens the bot. */
+export async function connectTelegramAction() {
+  await requireActiveUser();
+  const url = await newTelegramLinkUrl();
+  if (!url) back("/settings", "error", "Telegram is not available yet.");
+  redirect(url!);
 }
 export async function unlinkTelegramAction() {
   await guarded("/settings", () => unlinkTelegram(), "Telegram disconnected.");
