@@ -26,7 +26,12 @@ const schema = z.object({
     .transform((v) => v === "true" || v === "1"),
   /** Shown on the legal pages and in emails. */
   COMPANY_NAME: z.string().default("PostFlow"),
-  CONTACT_EMAIL: optional,
+  /** A real address only: a placeholder such as "REPLACE_ME" is ignored rather than shown on the legal pages. */
+  CONTACT_EMAIL: optional.transform((v) => (v && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v) ? v : undefined)),
+  /** The legal entity behind the service, e.g. "Jane Doe" or "Acme Pvt. Ltd., Kathmandu". Shown in the Terms. */
+  LEGAL_ENTITY: optional,
+  /** Governing law for the Terms, e.g. "Nepal" or "England and Wales". */
+  LEGAL_JURISDICTION: optional,
   TOKEN_ENCRYPTION_KEY: optional,
   /** Bearer secret the external scheduler sends to /api/cron/tick. */
   CRON_SECRET: optional,
