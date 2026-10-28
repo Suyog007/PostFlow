@@ -13,6 +13,8 @@ import { Flash } from "../flash";
 import { fillCalendarAction, refreshQueuedAction, writeLessonAction } from "@/app/actions";
 import { fillNowDays } from "@/server/generate";
 import { slotsBetween } from "@/server/slots";
+import { newsroomStatus } from "@/server/newsroom";
+import { lastHeartbeat } from "@/server/health";
 import { cardUrl, wantsImage } from "@/server/post-images";
 
 type Post = typeof schema.posts.$inferSelect;
@@ -69,9 +71,9 @@ function DayCard({ p, tz, needsOk, thumb }: { p: Post; tz: string; needsOk: bool
 
 function OpenCard({ e, tz }: { e: OpenSlot; tz: string }) {
   return (
-    <div className="rounded-[6px] border border-dashed border-[var(--line-strong)] p-2 text-[11px] text-[var(--subtle)]" title="Open slot: no story that will still be fresh by then yet. Autopilot fills it as new stories come in.">
+    <div className="rounded-[6px] border border-dashed border-[var(--line-strong)] p-2 text-[11px] text-[var(--subtle)]" title="Open slot: PostFlow fills it automatically when a story worth posting comes in. You don\u2019t need to do anything.">
       <div className="flex items-center gap-1.5"><PlatformGlyph platform={e.platform} size={12} /><span className="mono">{DateTime.fromJSDate(e.scheduledAt, { zone: tz }).toFormat("HH:mm")}</span></div>
-      <p className="mt-1">Open, waiting for news</p>
+      <p className="mt-1">Open · fills by itself</p>
     </div>
   );
 }
@@ -108,10 +110,10 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const steps = [
     { done: accounts.some((a) => a.status === "connected"), label: "Connect LinkedIn or X", hint: "So posts can be published for you.", href: "/settings#accounts" },
     { done: !!(s.profile.role || s.profile.expertise.length), label: "Tell PostFlow who you are", hint: "Your role, what you know well, and how you sound.", href: "/settings#profile" },
-    { done: Number(noteCount) > 0, label: "Add your first note", hint: "Something you built, fixed or learned this week.", href: "/notes" },
+    { done: Number(noteCount) > 0, label: "Add a note (optional)", hint: "News posts need nothing from you. Posts about your own work come only from notes.", href: "/notes" },
     { done: !!user.telegramChatId, label: "Link Telegram (optional)", hint: "Approve posts and send notes from your phone.", href: "/settings#telegram" },
   ];
-  const showSteps = steps.slice(0, 3).some((x) => !x.done);
+  const showSteps = steps.slice(0, 2).some((x) => !x.done) || (!!sp.welcome && steps.some((x) => !x.done));
   const events = await recentEvents(10);
   const [lastFill] = await db().select().from(schema.events).where(and(eq(schema.events.userId, user.id), inArray(schema.events.kind, ["fill", "fill_done"]))).orderBy(desc(schema.events.at)).limit(1);
   const filling = lastFill?.kind === "fill" && Date.now() - lastFill.at.getTime() < 15 * 60_000;
@@ -120,13 +122,15 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const days = Array.from({ length: 7 }, (_, i) => weekStart.plus({ days: i }));
   const active = await activePlatforms(user.id);
   const scheduledCount = week.filter((p) => p.status === "scheduled").length;
-  // Open slots in the "Fill now" window, so an empty day reads as "waiting for news", not "broken".
+  // Open slots in the "Fill now" window, so an empty day reads as "being filled", not "broken".
   const liveKeys = new Set(week.filter((p) => ["scheduled", "publishing", "published", "unconfirmed"].includes(p.status)).map((p) => `${p.platform}@${p.scheduledAt.getTime()}`));
   const openFrom = new Date(Math.max(Date.now() + 20 * 60_000, weekStart.toMillis()));
   const openTo = new Date(Math.min(Date.now() + fillNowDays(s) * 86_400_000, weekEnd.toMillis() - 1));
   const openSlots: OpenSlot[] = openFrom < openTo
     ? slotsBetween(s, openFrom, openTo).filter((sl) => active.includes(sl.platform) && !liveKeys.has(`${sl.platform}@${sl.at.getTime()}`)).map((sl) => ({ open: true, id: `open-${sl.platform}-${sl.at.getTime()}`, platform: sl.platform, scheduledAt: sl.at }))
     : [];
+  // Shown while slots are open, so an empty calendar reads as "being worked on", not "waiting for you".
+  const status = !filling && openSlots.length && offset >= 0 ? await newsroomStatus(user.id, s, { beat: await lastHeartbeat() }) : null;
   const entries: Entry[] = [...week, ...openSlots].sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime());
   const postedCount = week.filter((p) => p.status === "published").length;
   const thumbFor = (p: Post) => (withPicture.has(p.id) && wantsImage(p, s) ? cardUrl(p) : undefined);
@@ -143,10 +147,22 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
           Filling the next {fillNowDays(s)} days. Each post is written and reviewed, so this takes a few minutes. This page refreshes by itself.
         </div>
       )}
+      {status && (
+        <div className="panel mb-4 flex items-start gap-3 px-4 py-3 text-[13px]" role="status">
+          <span
+            aria-hidden="true"
+            className={`mt-1.5 h-2 w-2 flex-none rounded-full ${status.state === "working" || status.state === "starting" ? "bg-[var(--good)] motion-safe:animate-pulse" : status.state === "paused" ? "bg-[var(--warn)]" : "bg-[var(--bad)]"}`}
+          />
+          <div>
+            <p className="font-semibold">{status.headline}</p>
+            <p className="mt-0.5 text-[var(--muted)]">{status.detail}</p>
+          </div>
+        </div>
+      )}
       {showSteps && (
         <section className="panel mb-5 p-4" aria-label="Getting started">
           <div className="flex items-baseline justify-between gap-3">
-            <h2 className="text-[15px] font-semibold">{sp.welcome ? "Welcome to PostFlow. Three steps and autopilot takes over." : "Finish setting up"}</h2>
+            <h2 className="text-[15px] font-semibold">{sp.welcome ? "Welcome to PostFlow. Connect an account and autopilot takes over." : "Finish setting up"}</h2>
             <span className="text-[12px] text-[var(--subtle)]">{steps.filter((x) => x.done).length} of {steps.length} done</span>
           </div>
           <ol className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -173,7 +189,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
           upcoming[0] ? (
             <>Next up: <span className="inline-block align-[-1px]"><PlatformGlyph platform={upcoming[0].platform} size={12} /></span> {DateTime.fromJSDate(upcoming[0].scheduledAt, { zone: tz }).toFormat("ccc HH:mm")}. {scheduledCount} scheduled and {postedCount} posted in these 7 days. {approvalOn ? "Posts go out only once you approve them; the rest are skipped." : "Everything scheduled goes out unless you remove it."}</>
           ) : (
-            <>Nothing scheduled yet. Autopilot fills open slots up to {s.horizonDays} days ahead.</>
+            <>Nothing scheduled yet. PostFlow fills the open slots below by itself, up to {s.horizonDays} days ahead.</>
           )
         }
         actions={
