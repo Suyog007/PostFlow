@@ -41,6 +41,12 @@ const schema = z.object({
   /** Optional stronger model for the reviewer. Defaults to FIREWORKS_MODEL. */
   FIREWORKS_REVIEW_MODEL: optional,
   FIREWORKS_REASONING_EFFORT: optional,
+  /** A different model that gives every draft that passed review a last, independent check before it is scheduled. */
+  FIREWORKS_FINAL_MODEL: optional,
+  /** Reasoning effort for that final check. Defaults to "high". */
+  FIREWORKS_FINAL_REASONING_EFFORT: optional,
+  /** Used for a call when the configured model fails outright (missing, unsupported or returning broken JSON). */
+  FIREWORKS_FALLBACK_MODEL: optional,
   /** Reasoning effort for the reviewer. Defaults to "medium" when FIREWORKS_REASONING_EFFORT is set. */
   FIREWORKS_REVIEW_REASONING_EFFORT: optional,
   FIREWORKS_BASE_URL: z.string().default("https://api.fireworks.ai/inference/v1"),

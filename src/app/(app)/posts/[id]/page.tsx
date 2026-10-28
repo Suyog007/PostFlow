@@ -22,6 +22,7 @@ interface ReviewData {
   worth_posting?: number; factual?: number; clarity?: number; slop?: number; claims?: Claim[]; issues?: string[]; rounds?: number;
   checks?: { severity: string; message: string }[]; material?: { kind: string; label: string }; verdict?: { approved: boolean; reasons: string[] };
   verification?: Verif | null;
+  finalCheck?: { approved: boolean; reasons: string[]; issues: string[] } | null;
   evidence?: { claim: string; quote: string; found: boolean }[];
   rechecked?: number;
   move?: string;
@@ -286,6 +287,11 @@ export default async function PostPage({ params, searchParams }: { params: Promi
               {r.verdict && !r.verdict.approved && <p className="text-[var(--bad)]">Concerns: {r.verdict.reasons.join(" · ")}</p>}
               {r.checks && r.checks.length > 0 && <ul className="text-[12px] text-[var(--subtle)]">{r.checks.map((c, i) => <li key={i}>{c.severity}: {c.message}</li>)}</ul>}
               <p className="text-[12px] text-[var(--subtle)]">Reviewed in {r.rounds ?? 1} round{(r.rounds ?? 1) === 1 ? "" : "s"}.</p>
+              {r.finalCheck && (
+                <p className={`rounded-md px-3 py-2 text-[12px] ${r.finalCheck.approved ? "bg-[var(--good-soft)] text-[var(--good)]" : "bg-[var(--bad-soft)] text-[var(--bad)]"}`}>
+                  {r.finalCheck.approved ? "Passed a final check by a second, independent model." : `Held back by the final check: ${r.finalCheck.reasons.join(" · ").replace(/Final check: /g, "")}`}
+                </p>
+              )}
             </div>
           </section>
         )}

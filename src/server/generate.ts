@@ -5,7 +5,7 @@ import { db, schema } from "./db/client";
 import { uid } from "./context";
 import { activePlatforms, approvalGate, assertPostQuota, entitlementFor, LimitError } from "./billing/plans";
 import type { Pillar } from "./db/schema";
-import { runTask, untrusted, LLMError } from "./llm";
+import { finalCheckConfigured, runTask, untrusted, LLMError } from "./llm";
 
 /** Filter: rows that belong to the current user. */
 async function mine<T extends { userId: unknown }>(t: T) {
@@ -536,7 +536,17 @@ const reviewOut = z.object({
 });
 export type Review = z.infer<typeof reviewOut>;
 
-async function review(m: Material, text: string, platform: Platform, recent: string[], s: Settings, extra: { evidence?: Evidence[]; earlier?: string[]; effort?: string } = {}): Promise<Review> {
+/** Extra instructions for the second, independent check that runs on drafts the first reviewer approved. */
+const FINAL_CHECK = `
+YOU ARE THE FINAL, INDEPENDENT CHECK. A different model wrote this draft and another already approved it; you are the last step before it goes on the owner's calendar under their name. Read it with fresh eyes and assume nothing the first reviewer concluded.
+Be strictest about what slips past a first review:
+- A claim stronger or more certain than the material: "fixed" when the material says a fix was proposed, "ruled" when it was alleged, "everyone" when it was some users, a number without its condition.
+- Context left out that changes the meaning (a catch, a limit, a condition, "only during the upgrade", "still in preview").
+- Any advice, warning or instruction to the reader that the material does not give itself.
+- A headline-only story written as if the full article was read.
+Mark such claims "unsupported" and explain the fix in revision_instructions. If the post is accurate and fair, approve it; do not invent problems.`;
+
+async function review(m: Material, text: string, platform: Platform, recent: string[], s: Settings, extra: { evidence?: Evidence[]; earlier?: string[]; effort?: string; final?: boolean } = {}): Promise<Review> {
   const user = [
     `Platform: ${platform === "x" ? "X" : "LinkedIn"}. Hashtags allowed here: ${s.hashtags[platform] ? "yes" : "no"}.`,
     describeMaterial(m),
@@ -550,6 +560,9 @@ async function review(m: Material, text: string, platform: Platform, recent: str
     `RECENT POSTS (for duplicate detection):\n${recent.slice(0, 10).map((r) => `- ${r.replace(/\s+/g, " ").slice(0, 200)}`).join("\n") || "(none)"}`,
   ];
   // Room for the model's reasoning as well as the JSON answer.
+  if (extra.final) {
+    return runTask({ task: "final_check", role: "final", system: `${reviewerSystem(s)}\n${FINAL_CHECK}`, user: user.filter(Boolean).join("\n\n"), output: reviewOut, maxTokens: 6000, temperature: 0.1 });
+  }
   return runTask({ task: extra.earlier !== undefined ? "recheck_post" : "review_post", role: "reviewer", system: reviewerSystem(s), user: user.filter(Boolean).join("\n\n"), output: reviewOut, maxTokens: 4000, temperature: 0.1, reasoningEffort: extra.effort });
 }
 
@@ -633,14 +646,32 @@ export async function produceForSlot(platform: Platform, at: Date, m: Material, 
   // The one that passes review goes on the calendar; the other is offered on the post page as an alternative.
   const main = await attempt(m.kind === "news" ? await pickMove() : undefined, maxRounds);
   const other = m.mustKnow ? await attempt("explain", 2) : null;
-  const [chosen, alt] = other && !main.verdict.approved && other.verdict.approved ? [other, main] : [main, other];
+  let [chosen, alt] = other && !main.verdict.approved && other.verdict.approved ? [other, main] : [main, other];
+  // A different model checks every draft that passed, before it goes on the calendar (FIREWORKS_FINAL_MODEL).
+  let finalReview: { approved: boolean; reasons: string[]; review: Review } | null = null;
+  if (chosen.verdict.approved && finalCheckConfigured() && opts.requested !== "draft") {
+    const check = async (a: typeof chosen) => {
+      const r = await review(m, compose(a.text), platform, recent, s, { evidence: a.evidence, final: true });
+      const v = gate(r, a.checks, m);
+      return { approved: v.approved, reasons: v.reasons.map((x) => `Final check: ${x}`), review: r };
+    };
+    finalReview = await check(chosen).catch((err: Error) => ({ approved: false, reasons: [`Final check could not run: ${err.message}`], review: null as unknown as Review }));
+    if (!finalReview.approved && alt?.verdict.approved) {
+      const second = await check(alt).catch(() => null);
+      if (second?.approved) {
+        [chosen, alt] = [alt, chosen];
+        finalReview = second;
+      }
+    }
+    if (!finalReview.approved) chosen = { ...chosen, verdict: { approved: false, reasons: finalReview.reasons } };
+  }
   const { move, text, verdict, lastReview, checks } = chosen;
   const alternative = alt ? { text: m.ownUrl ? compose(alt.text) : withLink(alt.text, m, platform, s), move: alt.move, approved: alt.verdict.approved, reasons: alt.verdict.reasons, evidence: alt.evidence, review: alt.lastReview } : null;
 
   const finalText = m.ownUrl ? compose(text) : verdict.approved ? withLink(text, m, platform, s) : text;
   // Posts you asked for are never thrown away: if the reviewer is unhappy or you wanted a draft, you get a draft.
   const status: "scheduled" | "rejected" | "draft" = opts.requested ? (verdict.approved && opts.requested === "schedule" ? "scheduled" : "draft") : verdict.approved ? "scheduled" : "rejected";
-  const reviewJson = { ...lastReview, checks, verdict, evidence: chosen.evidence, move, alternative, rounds: chosen.rounds, material: { kind: m.kind, label: m.label, publishedAt: m.publishedAt?.toISOString() ?? null, publisher: m.publisher ?? null }, verification: m.verification ?? null, reviewedAt: new Date().toISOString() } as Record<string, unknown>;
+  const reviewJson = { ...lastReview, checks, verdict, evidence: chosen.evidence, move, alternative, rounds: chosen.rounds, material: { kind: m.kind, label: m.label, publishedAt: m.publishedAt?.toISOString() ?? null, publisher: m.publisher ?? null }, verification: m.verification ?? null, finalCheck: finalReview ? { approved: finalReview.approved, reasons: finalReview.reasons, issues: finalReview.review?.issues ?? [], claims: finalReview.review?.claims ?? [] } : null, reviewedAt: new Date().toISOString() } as Record<string, unknown>;
   const [row] = await db()
     .insert(schema.posts)
     .values({
@@ -846,7 +877,8 @@ export async function recheckPost(id: string): Promise<{ approved: boolean; mess
   const m = await materialForPost(p);
   const recent = (await recentTexts(platform)).filter((t) => t !== p.text);
   const checks = [...runChecks(p.text, platform, recent), ...newsAdvice(p.text, m)];
-  const r = await review(m, p.text, platform, recent, s, { evidence: prev.evidence, earlier: prev.verdict?.reasons ?? [], effort: "high" });
+  // "Check again" uses the independent final-check model when one is set up, so it is a true second opinion.
+  const r = await review(m, p.text, platform, recent, s, { evidence: prev.evidence, earlier: prev.verdict?.reasons ?? [], effort: "high", final: finalCheckConfigured() });
   const verdict = gate(r, checks, m);
   const review_ = { ...(p.review ?? {}), ...r, checks, verdict, rechecked: (prev.rechecked ?? 0) + 1, reviewedAt: new Date().toISOString() };
 

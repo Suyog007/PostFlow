@@ -98,18 +98,25 @@ export function llmConfigured() {
   return Boolean(env().FIREWORKS_API_KEY && env().FIREWORKS_MODEL);
 }
 
-export type Role = "writer" | "reviewer" | "analyst";
+export type Role = "writer" | "reviewer" | "analyst" | "final";
 
 /** The reviewer thinks a bit longer by default: on low effort it misread "I'd expect..." as a claim of fact. */
 function effortFor(role: Role): string | undefined {
   const e = env();
+  if (role === "final") return e.FIREWORKS_FINAL_REASONING_EFFORT === "off" ? undefined : e.FIREWORKS_FINAL_REASONING_EFFORT ?? "high";
   const v = role === "reviewer" ? e.FIREWORKS_REVIEW_REASONING_EFFORT ?? (e.FIREWORKS_REASONING_EFFORT ? "medium" : undefined) ?? "none" : e.FIREWORKS_REASONING_EFFORT ?? "none";
   return v === "off" ? undefined : v;
 }
 
 function modelFor(role: Role): string | undefined {
   const e = env();
+  if (role === "final") return e.FIREWORKS_FINAL_MODEL;
   return role === "reviewer" ? e.FIREWORKS_REVIEW_MODEL ?? e.FIREWORKS_MODEL : e.FIREWORKS_MODEL;
+}
+
+/** Whether a separate final-check model is set up (see FIREWORKS_FINAL_MODEL). */
+export function finalCheckConfigured(): boolean {
+  return Boolean(env().FIREWORKS_API_KEY && env().FIREWORKS_FINAL_MODEL);
 }
 
 async function checkBudget(userId: string | null) {
@@ -162,6 +169,19 @@ export interface TaskSpec<T extends z.ZodType> {
 export async function runTask<T extends z.ZodType>(spec: TaskSpec<T>): Promise<z.infer<T>> {
   const model = modelFor(spec.role);
   if (!model || !env().FIREWORKS_API_KEY) throw new LLMError("Set FIREWORKS_API_KEY and FIREWORKS_MODEL.", "not_configured");
+  const fallback = env().FIREWORKS_FALLBACK_MODEL;
+  try {
+    return await runTaskWith(spec, model);
+  } catch (err) {
+    // A model that is missing, rejects the request or returns broken JSON should not stop posting: try the fallback once.
+    const code = err instanceof LLMError ? err.code : "provider";
+    if (!fallback || fallback === model || (code !== "provider" && code !== "invalid_output")) throw err;
+    log.warn("llm_fallback", { task: spec.task, model, fallback, error: (err as Error).message.slice(0, 200) });
+    return runTaskWith(spec, fallback);
+  }
+}
+
+async function runTaskWith<T extends z.ZodType>(spec: TaskSpec<T>, model: string): Promise<z.infer<T>> {
   const userId = await currentUserId();
   await checkBudget(userId);
 
