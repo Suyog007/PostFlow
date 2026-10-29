@@ -186,7 +186,9 @@ export async function runTask<T extends z.ZodType>(spec: TaskSpec<T>): Promise<z
  * is raised by this much. Only tokens actually used are billed.
  */
 function thinkingRoom(effort: string | undefined): number {
-  return effort === "high" ? 8000 : effort === "medium" ? 4000 : effort === "low" ? 1500 : 0;
+  // Measured in production: DeepSeek V4.1 Flash at "medium" regularly used all of 5,200 tokens on a post
+  // before writing it, and half the drafts were cut off. These limits leave room for the longest seen.
+  return effort === "high" ? 16000 : effort === "medium" ? 10000 : effort === "low" ? 3000 : 0;
 }
 
 async function runTaskWith<T extends z.ZodType>(spec: TaskSpec<T>, model: string): Promise<z.infer<T>> {

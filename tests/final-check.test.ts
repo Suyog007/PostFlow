@@ -104,7 +104,7 @@ describe("room to think", () => {
     });
     const out = await runTask({ task: "t", role: "writer", system: "s", user: "u", output: z.object({ ok: z.boolean() }), maxTokens: 400 });
     expect(out.ok).toBe(true);
-    expect(seen[0].max).toBe(4400);
+    expect(seen[0].max).toBe(10400);
     expect(seen.at(-1)?.model).toBe("backup-model");
   });
 });
