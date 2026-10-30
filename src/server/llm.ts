@@ -104,6 +104,9 @@ export type Role = "writer" | "reviewer" | "analyst" | "final";
 function effortFor(role: Role): string | undefined {
   const e = env();
   if (role === "final") return e.FIREWORKS_FINAL_REASONING_EFFORT === "off" ? undefined : e.FIREWORKS_FINAL_REASONING_EFFORT ?? "high";
+  // Writing a short post needs little thinking: on "medium" DeepSeek often spent 11,000 tokens on one draft and was cut off.
+  if (role === "writer" && e.FIREWORKS_WRITER_REASONING_EFFORT) return e.FIREWORKS_WRITER_REASONING_EFFORT === "off" ? undefined : e.FIREWORKS_WRITER_REASONING_EFFORT;
+  if (role === "writer" && e.FIREWORKS_REASONING_EFFORT && e.FIREWORKS_REASONING_EFFORT !== "off") return "low";
   const v = role === "reviewer" ? e.FIREWORKS_REVIEW_REASONING_EFFORT ?? (e.FIREWORKS_REASONING_EFFORT ? "medium" : undefined) ?? "none" : e.FIREWORKS_REASONING_EFFORT ?? "none";
   return v === "off" ? undefined : v;
 }
@@ -119,6 +122,17 @@ export function finalCheckConfigured(): boolean {
   return Boolean(env().FIREWORKS_API_KEY && env().FIREWORKS_FINAL_MODEL);
 }
 
+/** Model calls this account made in the last 24 hours, and its daily cap. */
+export async function aiUsage(userId: string): Promise<{ used: number; cap: number }> {
+  const since = new Date(Date.now() - 24 * 3_600_000);
+  const cap = (await entitlementFor(userId)).quota.llmCallsPerDay;
+  const [mine] = await db().select({ n: count() }).from(schema.llmCalls).where(and(eq(schema.llmCalls.userId, userId), gte(schema.llmCalls.createdAt, since)));
+  return { used: Number(mine.n), cap };
+}
+
+/** Autopilot stops at this share of the daily cap; the rest is kept for what the owner asks for (Telegram, "Find another story", "Fill now"). */
+export const AUTOPILOT_SHARE = 0.7;
+
 async function checkBudget(userId: string | null) {
   const since = new Date(Date.now() - 24 * 3_600_000);
   const [all] = await db().select({ n: count() }).from(schema.llmCalls).where(gte(schema.llmCalls.createdAt, since));
@@ -132,7 +146,7 @@ async function checkBudget(userId: string | null) {
     .from(schema.llmCalls)
     .where(and(eq(schema.llmCalls.userId, userId), gte(schema.llmCalls.createdAt, since)));
   if (Number(mine.n) >= cap) {
-    throw new LLMError(`Daily writing limit reached (${cap} model calls). It resets on a rolling 24h window.`, "budget");
+    throw new LLMError(`You have used today's AI allowance (${cap} calls in the last 24 hours). It frees up gradually over the next few hours, so try again a little later.`, "budget");
   }
 }
 

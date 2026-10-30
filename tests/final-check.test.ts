@@ -102,9 +102,29 @@ describe("room to think", () => {
         return req.model === "backup-model" ? { text: JSON.stringify({ ok: true }), inputTokens: 1, outputTokens: 1 } : { text: "", inputTokens: 1, outputTokens: 1, finishReason: "length" };
       },
     });
-    const out = await runTask({ task: "t", role: "writer", system: "s", user: "u", output: z.object({ ok: z.boolean() }), maxTokens: 400 });
+    const out = await runTask({ task: "t", role: "reviewer", system: "s", user: "u", output: z.object({ ok: z.boolean() }), maxTokens: 400 });
     expect(out.ok).toBe(true);
     expect(seen[0].max).toBe(10400);
+    // Writing thinks less ("low") once an effort is set, so it gets a smaller allowance.
+    seen.length = 0;
+    await runTask({ task: "t", role: "writer", system: "s", user: "u", output: z.object({ ok: z.boolean() }), maxTokens: 400 });
+    expect(seen[0].max).toBe(3400);
     expect(seen.at(-1)?.model).toBe("backup-model");
+  });
+});
+
+describe("autopilot leaves room for what you ask for", () => {
+  it("stops filling at 70% of the daily allowance; Fill now still runs", async () => {
+    await resetDb();
+    await saveSettings({ slots: SLOT, horizonDays: 3, pillars: { own_work: 0, news: 1, local: 0, learning: 0 } });
+    await addStory();
+    // The test account is on Pro: 200 calls a day, so 140 is the autopilot's share.
+    await db().insert(schema.llmCalls).values(Array.from({ length: 140 }, () => ({ userId: me(), task: "write_post", model: "m", status: "ok" })));
+    const calls = fakeLLM((req) => (req.schemaName === "write_post" ? { text: "Acme says Postgres backups now take seconds, not an hour." } : GOOD_REVIEW));
+    const auto = await fillCalendar({ max: 1 });
+    expect(auto.idle).toMatch(/saving the rest of today's AI budget/);
+    expect(calls).toHaveLength(0);
+    const asked = await fillCalendar({ max: 1, retryFailedSince: new Date() });
+    expect(asked.produced).toBe(1);
   });
 });

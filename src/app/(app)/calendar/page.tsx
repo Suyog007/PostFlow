@@ -199,7 +199,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
         <div className="panel mb-4 flex items-start gap-3 px-4 py-3 text-[13px]" role="status">
           <span
             aria-hidden="true"
-            className={`mt-1.5 h-2 w-2 flex-none rounded-full ${status.state === "working" || status.state === "starting" ? "bg-[var(--good)] motion-safe:animate-pulse" : status.state === "paused" ? "bg-[var(--warn)]" : "bg-[var(--bad)]"}`}
+            className={`mt-1.5 h-2 w-2 flex-none rounded-full ${status.state === "working" || status.state === "starting" ? "bg-[var(--good)] motion-safe:animate-pulse" : status.state === "paused" || status.state === "resting" ? "bg-[var(--warn)]" : "bg-[var(--bad)]"}`}
           />
           <div>
             <p className="font-semibold">{status.headline}</p>

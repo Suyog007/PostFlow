@@ -1,9 +1,10 @@
 import { and, count, eq, gte, isNotNull, max } from "drizzle-orm";
 import { db, schema } from "./db/client";
 import type { Settings } from "./settings";
+import { aiUsage, AUTOPILOT_SHARE } from "./llm";
 
 export interface NewsroomStatus {
-  state: "paused" | "starting" | "working" | "stalled";
+  state: "paused" | "starting" | "working" | "stalled" | "resting";
   headline: string;
   detail: string;
 }
@@ -15,6 +16,14 @@ export interface NewsroomStatus {
 export async function newsroomStatus(userId: string, s: Settings, opts: { beat: Date | null; now?: Date } = { beat: null }): Promise<NewsroomStatus> {
   const now = opts.now ?? new Date();
   const dayAgo = new Date(now.getTime() - 86_400_000);
+  const usage = await aiUsage(userId);
+  if (!s.paused && usage.used >= Math.floor(usage.cap * AUTOPILOT_SHARE)) {
+    return {
+      state: "resting",
+      headline: "Autopilot is resting until more of today's AI allowance frees up.",
+      detail: `${usage.used} of ${usage.cap} AI calls used in the last 24 hours. The rest is kept for what you ask for, so Telegram commands, "Find another story" and "Fill now" still work. Writing restarts by itself as older calls drop out of the 24-hour window.`,
+    };
+  }
   if (s.paused) return { state: "paused", headline: "Autopilot is paused.", detail: "Nothing new is read or written until you resume it from the sidebar." };
 
   const [feeds] = await db()

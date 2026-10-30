@@ -5,7 +5,7 @@ import { db, schema } from "./db/client";
 import { uid } from "./context";
 import { activePlatforms, approvalGate, assertPostQuota, entitlementFor, LimitError } from "./billing/plans";
 import type { Pillar } from "./db/schema";
-import { finalCheckConfigured, runTask, untrusted, LLMError } from "./llm";
+import { aiUsage, AUTOPILOT_SHARE, finalCheckConfigured, runTask, untrusted, LLMError } from "./llm";
 
 /** Filter: rows that belong to the current user. */
 async function mine<T extends { userId: unknown }>(t: T) {
@@ -1067,6 +1067,12 @@ export async function fillCalendar(opts: { max?: number; now?: Date; deadline?: 
   const s = await getSettings();
   const res: FillResult = { produced: 0, rejected: 0, idle: null };
   if (s.paused) return { ...res, idle: "paused" };
+  // "Fill now" passes retryFailedSince; without it this is the autopilot, which leaves part of the day's budget free.
+  const autopilot = !opts.retryFailedSince;
+  if (autopilot) {
+    const u = await aiUsage(await uid());
+    if (u.used >= Math.floor(u.cap * AUTOPILOT_SHARE)) return { ...res, idle: `saving the rest of today's AI budget (${u.used} of ${u.cap} calls used) for what you ask for` };
+  }
   // Only write for platforms that can publish (the owner is exempt).
   const active = await activePlatforms();
   if (!active.length) return { ...res, idle: "connect LinkedIn or X first" };
@@ -1128,7 +1134,8 @@ export async function fillCalendar(opts: { max?: number; now?: Date; deadline?: 
       continue;
     }
     try {
-      const out = await produceForSlot(target.platform, target.at, material, s);
+      // Autopilot gets one rewrite; a draft that fails twice rarely passes on a third try, and each try costs two calls.
+      const out = await produceForSlot(target.platform, target.at, material, s, autopilot ? 2 : 3);
       if (out.status === "scheduled") res.produced++;
       else {
         res.rejected++;

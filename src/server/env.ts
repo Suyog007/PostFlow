@@ -41,6 +41,8 @@ const schema = z.object({
   /** Optional stronger model for the reviewer. Defaults to FIREWORKS_MODEL. */
   FIREWORKS_REVIEW_MODEL: optional,
   FIREWORKS_REASONING_EFFORT: optional,
+  /** Reasoning effort for writing. Defaults to "low" when FIREWORKS_REASONING_EFFORT is set (writing needs little thinking). */
+  FIREWORKS_WRITER_REASONING_EFFORT: optional,
   /** A different model that gives every draft that passed review a last, independent check before it is scheduled. */
   FIREWORKS_FINAL_MODEL: optional,
   /** Reasoning effort for that final check. Defaults to "high". */
