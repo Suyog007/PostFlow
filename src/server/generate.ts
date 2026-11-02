@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { DateTime } from "luxon";
-import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lte, notInArray, sql } from "drizzle-orm";
+import { getTableColumns, and, asc, desc, eq, gte, inArray, isNotNull, isNull, lte, notInArray, sql } from "drizzle-orm";
 import { db, schema } from "./db/client";
 import { uid } from "./context";
 import { activePlatforms, approvalGate, assertPostQuota, entitlementFor, LimitError } from "./billing/plans";
@@ -86,7 +86,7 @@ function itemExpiry(it: ItemRow): Date | undefined {
 }
 
 async function itemMaterial(it: ItemRow, v?: Verification): Promise<Material> {
-  let body = it.body;
+  let body = it.body ?? (await itemBody(it.id));
   if (!body) {
     body = await fetchArticleText(it.url);
     if (body) await db().update(schema.items).set({ body }).where(eq(schema.items.id, it.id));
@@ -102,10 +102,21 @@ function noteMaterial(n: typeof schema.notes.$inferSelect): Material {
   return { kind: "note", pillar: n.pillar, source: n.text, label: n.text.slice(0, 80), noteId: n.id, firstPerson: true };
 }
 
+/** Every item column except the article text, which is large and only needed for the one story chosen. */
+const { body: _body, ...ITEM_LIGHT } = getTableColumns(schema.items);
+
+/** The article text for one item, read only when that story is actually written up. */
+async function itemBody(id: string): Promise<string | null> {
+  const [row] = await db().select({ body: schema.items.body }).from(schema.items).where(eq(schema.items.id, id));
+  return row?.body ?? null;
+}
+
 async function candidateItems(platform: Platform, s: Settings, pillar: Pillar | "any", now: Date, slotAt: Date = now) {
   const used = await usedIds(platform);
-  const rows = await db()
-    .select()
+  // Runs several times per scheduler pass: without the article text, a pass reads kilobytes instead of megabytes
+  // (the full rows used up the database's whole monthly transfer allowance).
+  const rows = (await db()
+    .select(ITEM_LIGHT)
     .from(schema.items)
     .where(
       and(
@@ -118,7 +129,7 @@ async function candidateItems(platform: Platform, s: Settings, pillar: Pillar | 
       ),
     )
     .orderBy(desc(schema.items.relevance), desc(schema.items.publishedAt))
-    .limit(60);
+    .limit(60)).map((r): ItemRow => ({ ...r, body: null }));
   // One post per story, across LinkedIn and X: twenty articles about the same event are still one story.
   const { index, titles } = await storiesTold(now);
   const covered = (title: string) => titles.some((t) => sameStory(index, title, t));
@@ -127,6 +138,9 @@ async function candidateItems(platform: Platform, s: Settings, pillar: Pillar | 
 }
 
 const STORY_MEMORY_DAYS = 14;
+
+/** Just what storyTitle needs from a post's review (the material's label), not the whole review with drafts and evidence. */
+const REVIEW_LABEL = sql<unknown>`jsonb_build_object('material', jsonb_build_object('label', ${schema.posts.review}->'material'->'label'))`;
 
 /** What a post is about, for spotting repeats: its article's title, or what it was written from. */
 function storyTitle(p: { itemTitle: string | null; review: unknown; topic: string | null }): string {
@@ -137,7 +151,7 @@ function storyTitle(p: { itemTitle: string | null; review: unknown; topic: strin
 async function storiesTold(now: Date, exceptPostId?: string) {
   const since = new Date(now.getTime() - STORY_MEMORY_DAYS * 86_400_000);
   const rows = await db()
-    .select({ id: schema.posts.id, itemTitle: schema.items.title, review: schema.posts.review, topic: schema.posts.topic })
+    .select({ id: schema.posts.id, itemTitle: schema.items.title, review: REVIEW_LABEL, topic: schema.posts.topic })
     .from(schema.posts)
     .leftJoin(schema.items, eq(schema.items.id, schema.posts.itemId))
     .where(and(await mine(schema.posts), inArray(schema.posts.status, ["scheduled", "publishing", "published", "unconfirmed"]), gte(schema.posts.scheduledAt, since), eq(schema.posts.pillar, "news")));
@@ -155,7 +169,7 @@ async function storiesTold(now: Date, exceptPostId?: string) {
 export async function repeatedQueuedPosts(now = new Date()): Promise<string[]> {
   const since = new Date(now.getTime() - STORY_MEMORY_DAYS * 86_400_000);
   const rows = await db()
-    .select({ id: schema.posts.id, itemId: schema.posts.itemId, itemTitle: schema.items.title, review: schema.posts.review, topic: schema.posts.topic, status: schema.posts.status, approvedAt: schema.posts.approvedAt, userEdited: schema.posts.userEdited })
+    .select({ id: schema.posts.id, itemId: schema.posts.itemId, itemTitle: schema.items.title, review: REVIEW_LABEL, topic: schema.posts.topic, status: schema.posts.status, approvedAt: schema.posts.approvedAt, userEdited: schema.posts.userEdited })
     .from(schema.posts)
     .leftJoin(schema.items, eq(schema.items.id, schema.posts.itemId))
     .where(and(await mine(schema.posts), inArray(schema.posts.status, ["scheduled", "publishing", "published", "unconfirmed"]), gte(schema.posts.scheduledAt, since), eq(schema.posts.pillar, "news")))
@@ -207,6 +221,7 @@ async function pickVerified(items: ItemRow[], maxChecks = 4): Promise<{ it: Item
  * the story is then skipped for good.
  */
 async function ensureReadable(it: ItemRow): Promise<boolean> {
+  if (!it.body) it.body = await itemBody(it.id);
   if (it.body) return true;
   let body = await fetchArticleText(it.url);
   if (!body) {
@@ -447,7 +462,7 @@ export function moveText(move: Move, s: Settings): string {
 /** A move not used by the last few posts, so consecutive posts take different shapes. */
 async function pickMove(): Promise<Move> {
   const rows = await db()
-    .select({ review: schema.posts.review })
+    .select({ review: sql<{ move?: string } | null>`jsonb_build_object('move', ${schema.posts.review}->'move')` })
     .from(schema.posts)
     .where(and(await mine(schema.posts), inArray(schema.posts.status, ["scheduled", "publishing", "published", "unconfirmed"])))
     .orderBy(desc(schema.posts.createdAt))
