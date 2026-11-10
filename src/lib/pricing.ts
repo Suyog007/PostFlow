@@ -45,7 +45,7 @@ export const TRIAL_DAYS = 7;
 
 /** What everyone gets while FREE_BETA is on: Pro features on LinkedIn only (X costs money per post), with limits that keep AI costs in check. */
 export const BETA = {
-  quota: { postsPerMonth: 60, feeds: 30, llmCallsPerDay: 120 } as PlanQuota,
+  quota: { postsPerMonth: 60, feeds: 30, llmCallsPerDay: 300 } as PlanQuota,
   features: { autoMode: true, fastLane: true, links: true, x: false } as PlanFeatures,
 };
 
@@ -74,7 +74,7 @@ export const PLANS: Plan[] = [
     monthly: 39,
     yearly: 31,
     popular: true,
-    quota: { postsPerMonth: 150, feeds: 100, llmCallsPerDay: 200 },
+    quota: { postsPerMonth: 150, feeds: 100, llmCallsPerDay: 300 },
     features: { autoMode: true, fastLane: true, links: true, x: true },
     limits: ["1 LinkedIn + 1 X account", "150 posts a month", "Up to 100 news feeds"],
     bullets: [
