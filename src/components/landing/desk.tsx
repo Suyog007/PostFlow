@@ -10,7 +10,6 @@ import { ThemeToggle } from "@/components/theme-toggle";
 const NAV = [
   { href: "#watch", label: "Watch it work" },
   { href: "#who", label: "Who it's for" },
-  { href: "#how", label: "How it works" },
   { href: "#desk", label: "What's inside" },
   { href: "#pricing", label: "Pricing" },
   { href: "#faq", label: "FAQ" },
@@ -151,97 +150,6 @@ export function HeroDemo({ name = "Your Name" }: { name?: string }) {
         {PICTURES[field] ?? null}
       </article>
       <p className="typed mt-4 text-right text-[13px] text-[var(--d-muted)]">Sample posts for illustration · pick a beat above</p>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Three ways a post starts.
-
-const TABS = [
-  {
-    id: "news",
-    label: "Today's news",
-    title: ["The reading is our job.", "The byline is yours."],
-    body: "PostFlow reads the news in your field all day, keeps the stories your audience will care about, and skips the version bumps.",
-    you: null as string | null,
-    bot: ["⏰ Going out in about 10 minutes", "LinkedIn · 09:15 · story from this morning, The Register"],
-    draft: "A bug in Pixelforge, a popular image library, lets a crafted picture run code on your server. If your app resizes uploads, update this week.",
-  },
-  {
-    id: "link",
-    label: "Send it a link",
-    title: ["Spotted something?", "Send the link."],
-    body: "An article, an X post, a launch page. PostFlow reads it, the page it points to and what others wrote, and tells you straight if it isn't worth a post.",
-    you: "x.com/someone/status/1981… this looks big",
-    bot: ["🔎 Looked into it: 8/10", "A new speech model small enough for a laptop. Two outlets confirm it."],
-    draft: "A speech model that listens and talks at the same time now fits on a laptop, per its launch page. Voice apps without a server bill just got real.",
-  },
-  {
-    id: "lesson",
-    label: "Teach something",
-    title: ["Explain the news.", "In plain words."],
-    body: "Once a day at most, a short lesson on the idea behind this week's story, so your feed teaches as well as reports.",
-    you: "/learn supply-chain attacks",
-    bot: ["🎓 Lesson ready", "For your 19:15 slot on LinkedIn"],
-    draft: "One bad package can reach your app without you touching a line of code. That is a supply-chain attack: someone poisons a tool you trust, and every install carries it in.",
-  },
-] as const;
-
-export function DeskTabs() {
-  const [tab, setTab] = useState(0);
-  const t = TABS[tab];
-  return (
-    <div>
-      <div role="tablist" aria-label="Ways to start a post" className="flex flex-wrap gap-x-7 gap-y-2 border-b border-[var(--line)]">
-        {TABS.map((x, i) => (
-          <button
-            key={x.id}
-            role="tab"
-            id={`tab-${x.id}`}
-            aria-selected={tab === i}
-            aria-controls={`panel-${x.id}`}
-            onClick={() => setTab(i)}
-            className={`-mb-px border-b-[3px] pb-3 text-[17px] font-semibold transition-colors ${tab === i ? "border-[var(--mark)] text-[var(--ink)]" : "border-transparent text-[var(--d-muted)] hover:text-[var(--ink)]"}`}
-          >
-            {x.label}
-          </button>
-        ))}
-      </div>
-      <div role="tabpanel" id={`panel-${t.id}`} aria-labelledby={`tab-${t.id}`} className="grid gap-8 py-10 lg:grid-cols-2 lg:gap-14">
-        <div>
-          <h3 className="display text-[38px] sm:text-[46px]">
-            {t.title[0]}
-            <br />
-            <span className="red">{t.title[1]}</span>
-          </h3>
-          <p className="mt-4 max-w-[460px] text-[18px] leading-relaxed text-[var(--d-muted)]">{t.body}</p>
-          <p className="mt-10 hidden lg:block"><span className="stamp text-[22px]">Approved</span></p>
-        </div>
-        <div className="rounded-[6px] border border-[var(--line-strong)] bg-[var(--surface)] p-5 shadow-[0_18px_40px_-24px_rgba(24,34,30,.4)] sm:p-7">
-          <div className="flex items-center justify-between border-b border-[var(--d-sky-line)] pb-4">
-            <p className="text-[18px] font-bold">PostFlow bot</p>
-            <p className="text-[13px] text-[var(--d-muted)]">Telegram · example</p>
-          </div>
-          {t.you && <p className="mt-5 ml-auto w-fit max-w-[90%] rounded-lg bg-[var(--d-sky)] px-4 py-3 text-[15px]">{t.you}</p>}
-          <div className="mt-5 flex gap-3">
-            <span className="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-[var(--ink)] text-[15px] font-bold text-[var(--bg)]" aria-hidden="true">P</span>
-            <div>
-              <p className="text-[16px] font-bold">{t.bot[0]}</p>
-              <p className="mt-0.5 text-[14px] text-[var(--d-muted)]">{t.bot[1]}</p>
-            </div>
-          </div>
-          <div className="mt-5 border-t-2 border-[var(--mark)] pt-4">
-            <p className="typed text-[12px] uppercase tracking-[.1em] text-[var(--d-muted)]">Draft</p>
-            <p className="mt-2 text-[15px] leading-relaxed">{t.draft}</p>
-          </div>
-          <div className="mt-5 flex flex-wrap gap-2 text-[14px] font-semibold">
-            <span className="rounded-md bg-[var(--d-ink)] px-3 py-2 text-[var(--d-paper)]">✅ Approve</span>
-            <span className="rounded-md border border-[var(--d-sky-line)] px-3 py-2">✍️ New wording</span>
-            <span className="rounded-md border border-[var(--d-sky-line)] px-3 py-2">🔁 Other story</span>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

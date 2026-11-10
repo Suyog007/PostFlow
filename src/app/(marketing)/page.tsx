@@ -7,14 +7,14 @@ import { Logo } from "@/components/ui";
 import { Pricing } from "@/components/landing/pricing";
 import { WaitlistForm } from "@/components/landing/waitlist-form";
 import { LandingMotion } from "@/components/landing/motion";
-import { DeskNav, DeskTabs, HeroDemo } from "@/components/landing/desk";
+import { DeskNav, HeroDemo } from "@/components/landing/desk";
 import { NewsFilm } from "@/components/landing/film";
 import { BETA, TRIAL_DAYS } from "@/lib/pricing";
 import { env } from "@/server/env";
 
 const TITLE = "PostFlow · The news breaks. Your post is ready.";
 const DESCRIPTION =
-  "For engineers, doctors, accountants, lawyers and anyone whose work is in the news. PostFlow reads the news in your field, writes a clear LinkedIn or X post, checks each claim against its source, and waits for your one-tap OK on Telegram.";
+  "PostFlow reads the news in your field, drafts a short LinkedIn post that names its source, and waits for your OK before it goes out.";
 
 export const metadata: Metadata = {
   title: TITLE,
@@ -35,40 +35,36 @@ export const metadata: Metadata = {
 const faqFor = (beta: boolean): { q: string; a: string }[] => [
   {
     q: "Will it post something I haven't seen?",
-    a: "Not unless you choose that. By default every post waits for your OK: approve it on the calendar, or with one tap on Telegram ten minutes before it goes out. A post you don't approve is skipped, never sent. Once you trust it, you can switch on auto mode in Settings, on the free beta and on Pro.",
+    a: "No, unless you turn on auto mode. Every post waits for your OK on the calendar; one you don't approve is skipped.",
   },
   {
     q: "Do I need Telegram?",
-    a: "No. You can see, edit and approve every post in the app. Telegram is optional and free: it sends each post to your phone ten minutes early so approving takes one tap. Either way, nothing you haven't approved goes out.",
+    a: "No. It's optional: it sends each post to your phone ten minutes early, so approving takes one tap.",
   },
   {
     q: "Does it make things up?",
-    a: "It is built not to. Every news post names its source, and a separate reviewer checks each claim against the article before it reaches you. Stories are only used once other publishers confirm them. First-person stories only come from notes you wrote. It can still get something wrong, which is why every post waits for your OK unless you turn on auto mode.",
+    a: "It's built not to. News posts name their source, each claim is checked against the article, and first-person posts only come from your own notes. It can still get something wrong, which is why you approve first.",
   },
   {
     q: "Do posts come with a picture?",
-    a: "When a post is about one named company or product, it gets that company's official logo from Wikimedia Commons, so people see at a glance what it is about. Posts about a general idea go out as text only, which is how most good posts look anyway. You can switch logos off per post or per platform.",
+    a: "Only when a post is about one named company or product: it gets that company's logo from Wikimedia Commons. Everything else is text.",
   },
   {
-    q: "Is it only for software engineers?",
-    a: "No. When you sign up you pick your field: software and tech, healthcare, finance and accounting, law, marketing, education or something else, plus the topics you know best. The news, what counts as important, and the rules each post follows all change with it. A doctor's posts never give medical advice, and an accountant's always say which country a tax rule is from.",
-  },
-  {
-    q: "What do I need to connect?",
-    a: `${beta ? "Your LinkedIn profile (X comes with Pro)" : "Your LinkedIn profile and your X account"}, through their official sign-in pages. PostFlow never sees your passwords. Telegram is optional and free: it's the fastest way to approve posts and send links from your phone.`,
+    q: "What do I connect?",
+    a: `${beta ? "Your LinkedIn profile (X comes with Pro)" : "Your LinkedIn profile and your X account"}, through their own sign-in pages. PostFlow never sees your password.`,
   },
   beta
     ? {
         q: "Is it really free?",
-        a: `Yes, on LinkedIn, while PostFlow is in beta: up to ${BETA.quota.postsPerMonth} posts a month, with no card. Posting to X comes with the Pro plan, because X charges for every post. Pro opens soon; join the waitlist and you will hear first.`,
+        a: `Yes, on LinkedIn during the beta: up to ${BETA.quota.postsPerMonth} posts a month, no card. X costs money per post, so it comes with Pro.`,
       }
     : {
         q: "Why is there no free plan?",
-        a: `Every post costs real money to make: several AI calls to write, check and draw it, and X charges per post. A free plan would mean cutting the fact-checking. Every plan starts with a ${TRIAL_DAYS}-day free trial instead.`,
+        a: `Every post costs real money to write and check, and X charges per post. Every plan starts with a ${TRIAL_DAYS}-day free trial instead.`,
       },
   {
     q: "Can I cancel?",
-    a: "Anytime, from your account. Disconnecting an account in Settings stops all posting to it immediately.",
+    a: "Anytime, from your account. Disconnecting LinkedIn or X stops all posting to it at once.",
   },
 ];
 
@@ -98,12 +94,10 @@ const PROFESSIONS = [
 ];
 
 const DESK = [
-  { t: "News desk", b: "Reads your field all day. Keeps what your audience will care about." },
-  { t: "Research", b: "Digs into any link, even an X post, before a word is written." },
-  { t: "Fact-checker", b: "Each claim is checked against the source, and weak drafts are held back. It can still miss things, so you approve first." },
-  { t: "Logo desk", b: "A story about Qwen gets the Qwen logo. A general idea stays text only." },
-  { t: "Approval", b: "Approve on the calendar, or in one tap on Telegram (optional) ten minutes before it goes out." },
-  { t: "Calendar", b: "Two posts a day, and never the same story twice." },
+  { t: "Sources named", b: "Every news post says where the story came from, and a story is only used once a second outlet or the company itself confirms it." },
+  { t: "Checked twice", b: "A reviewer compares each claim with the article, then a second model reads it again. Drafts that fail are held back." },
+  { t: "From a link", b: "Send a link or an X post and it reads the whole thing before writing." },
+  { t: "One story, once", b: "Posts land on your schedule, and the same story is never posted twice." },
 ];
 
 export default async function LandingPage({ searchParams }: { searchParams: Promise<{ plan?: string; deleted?: string }> }) {
@@ -145,16 +139,16 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
               className="text-[50px] sm:text-[72px] xl:text-[80px]"
             />
             <p className="mt-7 max-w-[560px] text-[19px] leading-[1.7] text-[var(--d-muted)] sm:text-[21px]">
-              Whatever you do, engineer, doctor, accountant or lawyer: PostFlow reads <span className="hl">the news in your field</span>, writes <span className="hl">a clear post anyone can follow</span> and checks each claim against its source. Ten minutes before it goes out, Telegram asks for your OK.
+              PostFlow reads <span className="hl">the news in your field</span> and drafts a short post about the stories worth sharing. Each one names its source, and nothing goes out until <span className="hl">you approve it</span>.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
               <a href={cta.href} className="btn-desk">{cta.label}</a>
-              <a href="#how" className="btn-outline">See how it works</a>
+              <a href="#watch" className="btn-outline">See how it works</a>
             </div>
             <p className="mt-3 text-[14px] text-[var(--d-muted)]">{beta ? "Free on LinkedIn during the beta. No card needed." : open ? "No charge during the trial. Cancel anytime." : `${TRIAL_DAYS}-day free trial at launch. No card to join.`}</p>
             {/* A byline strip: what every post comes with. */}
             <p className="typed mt-10 flex flex-wrap items-center gap-x-3 gap-y-1 border-y border-[var(--line)] py-3 text-[13px] uppercase tracking-[.12em] text-[var(--d-muted)]">
-              <span>Fact-checked</span><span aria-hidden="true">·</span><span>Plain words</span><span aria-hidden="true">·</span><span>You approve first</span>
+              <span>Names its source</span><span aria-hidden="true">·</span><span>Plain words</span><span aria-hidden="true">·</span><span>You approve first</span>
             </p>
           </div>
           <HeroDemo />
@@ -178,9 +172,9 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
         {/* ---------- who it's for ---------- */}
         <section id="who" className="mx-auto max-w-[1200px] scroll-mt-24 px-4 py-20 sm:px-6 sm:py-24">
           <div className="mb-12 grid gap-6 lg:grid-cols-2 lg:items-end">
-            <Headline a="Any profession." b="Your field's news." className="text-[46px] sm:text-[68px]" />
+            <Headline a="Pick your field." b="Get its news." className="text-[46px] sm:text-[68px]" />
             <p className="max-w-[520px] text-[19px] leading-relaxed text-[var(--d-muted)] lg:justify-self-end">
-              Pick your field and the topics you know when you sign up. What counts as news, who the posts are written for and the rules they follow all change with it.
+              Choose your field and topics at sign-up. The stories PostFlow picks, and the rules your posts follow, come from that.
             </p>
           </div>
           <div className="grid gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
@@ -193,21 +187,8 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
             ))}
           </div>
           <p className="mt-10 text-[16px] text-[var(--d-muted)]">
-            Something else? Architects, designers, consultants and researchers pick <span className="font-semibold text-[var(--d-ink)]">Something else</span> and name their topics. PostFlow follows the news on each one.
+            Not listed? Choose <span className="font-semibold text-[var(--d-ink)]">Something else</span> and name your topics.
           </p>
-        </section>
-
-        <Rule />
-
-        {/* ---------- how it works ---------- */}
-        <section id="how" className="mx-auto max-w-[1200px] scroll-mt-24 px-4 py-20 sm:px-6 sm:py-24">
-          <div className="mb-10 grid gap-6 lg:grid-cols-2 lg:items-end">
-            <Headline a="Bring a link, or nothing." b="It does the reading." className="text-[46px] sm:text-[68px]" />
-            <p className="max-w-[520px] text-[19px] leading-relaxed text-[var(--d-muted)] lg:justify-self-end">
-              A story you spotted, a launch you shipped, a lesson worth sharing. Start with whatever you have, or let the desk find the news.
-            </p>
-          </div>
-          <DeskTabs />
         </section>
 
         <Rule />
@@ -216,9 +197,8 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
         <section id="desk" className="mx-auto max-w-[1200px] scroll-mt-24 px-4 py-20 sm:px-6 sm:py-24">
           <div className="mb-12 grid gap-6 lg:grid-cols-2 lg:items-end">
             <Headline a="The whole newsroom." b="In one quiet tab." className="text-[46px] sm:text-[68px]" />
-            <p className="max-w-[520px] text-[19px] leading-relaxed text-[var(--d-muted)] lg:justify-self-end">You need more than a text box. So does your audience.</p>
           </div>
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {DESK.map((d, i) => (
               <div key={d.t} className="card-lift reveal p-7" style={{ "--d": `${(i % 3) * 80}ms` } as React.CSSProperties}>
                 <div className="flex items-center justify-between">
@@ -237,11 +217,11 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
         <section id="pricing" className="mx-auto max-w-[1200px] scroll-mt-24 px-4 py-20 sm:px-6 sm:py-24">
           <div className="mb-12 grid gap-6 lg:grid-cols-2 lg:items-end">
             <div>
-              <Headline a="One price a month." b="Every post checked." className="text-[46px] sm:text-[68px]" />
+              <Headline a={beta ? "Free on LinkedIn." : "One price a month."} b={beta ? "X when you need it." : "Every post checked."} className="text-[46px] sm:text-[68px]" />
             </div>
             <p className="max-w-[520px] text-[19px] leading-relaxed text-[var(--d-muted)] lg:justify-self-end">
               {beta
-                ? "LinkedIn is free while PostFlow is in beta. Pro adds X and opens soon. Every plan includes the fact-checker."
+                ? "Pro adds X and opens soon."
                 : `Every plan includes the fact-checker. No free plan, because checking costs real money. A ${TRIAL_DAYS}-day trial instead.`}
             </p>
           </div>
@@ -276,7 +256,7 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
                   ? `The ${plan === "agency" ? "Agency" : "Pro"} plan adds X and opens soon. Join the list and you will hear first. Until then, LinkedIn is free.`
                   : open
                   ? beta
-                    ? "Connect LinkedIn, pick your field, and your first posts arrive in Telegram today. Free during the beta."
+                    ? "Connect LinkedIn and pick your field. Your first drafts are on your calendar the same day."
                     : `Connect LinkedIn or X, pick your field, and your first posts arrive in Telegram today. ${TRIAL_DAYS} days free.`
                   : `PostFlow is opening to a small group first. Join the list for an invite${beta ? " to the free beta." : ` and a ${TRIAL_DAYS}-day free trial.`}`}
               </p>
@@ -303,7 +283,7 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
             <span className="display text-[22px]">PostFlow</span>
           </span>
           <nav aria-label="Footer" className="flex flex-wrap gap-x-6 gap-y-2">
-            <a href="#how" className="hover:text-[var(--d-ink)]">How it works</a>
+            <a href="#watch" className="hover:text-[var(--d-ink)]">How it works</a>
             <a href="#pricing" className="hover:text-[var(--d-ink)]">Pricing</a>
             <a href="#faq" className="hover:text-[var(--d-ink)]">FAQ</a>
             <Link href="/terms" className="hover:text-[var(--d-ink)]">Terms</Link>
