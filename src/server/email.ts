@@ -71,7 +71,9 @@ export async function sendEmail(e: Email): Promise<void> {
     return;
   }
   const text = e.action ? `${e.text}\n\n${e.action.label}: ${e.action.url}` : e.text;
-  const replyTo = env().CONTACT_EMAIL || undefined;
+  // Only a real address: a placeholder such as "REPLACE_ME" would make providers reject the email.
+  const contact = env().CONTACT_EMAIL ?? "";
+  const replyTo = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact) ? contact : undefined;
   if (provider === "gmail") {
     try {
       await gmailTransport().sendMail({
