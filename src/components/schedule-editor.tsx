@@ -67,7 +67,7 @@ export function ScheduleEditor({ initial, showX, timezone }: { initial: SlotRow[
                       aria-label={d.name}
                       title={d.name}
                       onClick={() => toggle(i, d.n)}
-                      className={`h-9 w-9 rounded-[6px] border text-[13px] font-medium transition-colors ${on ? "border-[var(--ink)] bg-[var(--ink)] text-[var(--bg)]" : "border-[var(--line-strong)] text-[var(--muted)] hover:border-[var(--ink)] hover:text-[var(--ink)]"}`}
+                      className={`h-10 w-10 rounded-full border text-[13px] font-semibold transition-colors ${on ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-ink)]" : "border-[var(--line-strong)] text-[var(--muted)] hover:border-[var(--accent)] hover:text-[var(--ink)]"}`}
                     >
                       {d.short}
                     </button>

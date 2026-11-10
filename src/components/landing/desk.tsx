@@ -140,7 +140,7 @@ export function HeroDemo() {
         </div>
         <div role="radiogroup" aria-label="Posted on" className="flex rounded-full border border-[var(--line-strong)] p-0.5">
           {(["linkedin", "x"] as const).map((pl) => (
-            <button key={pl} type="button" role="radio" aria-checked={platform === pl} aria-label={pl === "x" ? "X" : "LinkedIn"} onClick={() => setPlatform(pl)} className={`flex h-8 w-11 items-center justify-center rounded-full ${platform === pl ? "bg-[var(--ink)] text-[var(--bg)]" : ""}`}>
+            <button key={pl} type="button" role="radio" aria-checked={platform === pl} aria-label={pl === "x" ? "X" : "LinkedIn"} onClick={() => setPlatform(pl)} className={`flex h-8 w-11 items-center justify-center rounded-full ${platform === pl ? "bg-[var(--accent)] text-[var(--accent-ink)]" : ""}`}>
               {pl === "x" ? <span className="text-[14px] font-bold">𝕏</span> : <span className="text-[13px] font-bold">in</span>}
             </button>
           ))}

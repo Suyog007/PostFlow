@@ -15,7 +15,7 @@ export function BillingPlans({ initialPlan, initialInterval = "year", trialAvail
       <div className="mb-6 flex justify-center">
         <div role="radiogroup" aria-label="Billing period" className="inline-flex rounded-full border border-[var(--line)] bg-[var(--surface)] p-1 text-[13px] font-medium">
           {(["month", "year"] as const).map((v) => (
-            <button key={v} type="button" role="radio" aria-checked={interval === v} onClick={() => setInterval(v)} className={`flex h-8 items-center gap-2 rounded-full px-4 ${interval === v ? "bg-[var(--ink)] text-[var(--bg)]" : "text-[var(--muted)] hover:text-[var(--ink)]"}`}>
+            <button key={v} type="button" role="radio" aria-checked={interval === v} onClick={() => setInterval(v)} className={`flex h-8 items-center gap-2 rounded-full px-4 ${interval === v ? "bg-[var(--accent)] text-[var(--accent-ink)]" : "text-[var(--muted)] hover:text-[var(--ink)]"}`}>
               {v === "month" ? "Monthly" : "Yearly"}
               {v === "year" && <span className={`rounded-full px-1.5 py-px text-[11px] ${interval === "year" ? "bg-[var(--bg)]/15" : "bg-[var(--good-soft)] text-[var(--good)]"}`}>Save 20%</span>}
             </button>

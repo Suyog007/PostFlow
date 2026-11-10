@@ -38,7 +38,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         )}
         <div className="mt-auto space-y-3">
           {/* One plain line about whether PostFlow is working, with the switch in Settings. */}
-          <Link href="/settings?tab=accounts" className="flex items-center gap-2 rounded-[8px] px-3 py-2 text-[13px] text-[var(--muted)] hover:bg-[var(--surface)]">
+          <Link href="/settings/accounts" className="flex items-center gap-2 rounded-[8px] px-3 py-2 text-[13px] text-[var(--muted)] hover:bg-[var(--surface)]">
             <span className={`inline-block h-2 w-2 rounded-full ${s.paused ? "bg-[var(--warn)]" : alive ? "bg-[var(--good)]" : "bg-[var(--subtle)]"}`} />
             {s.paused ? "PostFlow is paused" : "PostFlow is on"}
           </Link>
@@ -64,7 +64,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </header>
         {s.paused && (
           <div className="border-b border-[var(--line)] bg-[var(--warn-soft)] px-4 py-2 text-[13px] text-[var(--warn)] md:px-8">
-            PostFlow is paused. Nothing is being written or posted. <Link href="/settings?tab=accounts" className="underline">Turn it back on</Link>
+            PostFlow is paused. Nothing is being written or posted. <Link href="/settings/accounts" className="underline">Turn it back on</Link>
           </div>
         )}
         <main className="mx-auto max-w-[1180px] px-4 pb-28 pt-6 md:px-10 md:pb-14 md:pt-10">{children}</main>

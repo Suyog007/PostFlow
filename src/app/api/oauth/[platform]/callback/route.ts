@@ -19,11 +19,11 @@ export async function GET(req: Request, ctx: { params: Promise<{ platform: strin
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
   const denied = url.searchParams.get("error_description") ?? url.searchParams.get("error");
-  if (denied || !code || !state) return NextResponse.redirect(`${base}/settings?tab=accounts&error=${encodeURIComponent(denied ?? "Missing authorization code")}`);
+  if (denied || !code || !state) return NextResponse.redirect(`${base}/settings/accounts?error=${encodeURIComponent(denied ?? "Missing authorization code")}`);
   try {
     await completeOAuth(platform, state, code);
   } catch (err) {
-    return NextResponse.redirect(`${base}/settings?tab=accounts&error=${encodeURIComponent((err as Error).message)}`);
+    return NextResponse.redirect(`${base}/settings/accounts?error=${encodeURIComponent((err as Error).message)}`);
   }
   // The first account connected: start writing straight away and show the calendar's "first posts" loader,
   // instead of leaving the person on Settings until the next scheduler run.
@@ -32,5 +32,5 @@ export async function GET(req: Request, ctx: { params: Promise<{ platform: strin
     await requestFillNow(user.id, (job) => after(job)).catch((err: Error) => log.info("first_fill_not_started", { reason: err.message }));
     return NextResponse.redirect(`${base}/calendar?first=1`);
   }
-  return NextResponse.redirect(`${base}/settings?connected=${platform}`);
+  return NextResponse.redirect(`${base}/settings/accounts?connected=${platform}`);
 }

@@ -20,7 +20,7 @@ export function Pricing({ signupsOpen = false, beta = false }: { signupsOpen?: b
               role="radio"
               aria-checked={yearly === o.v}
               onClick={() => setYearly(o.v)}
-              className={`flex h-8 items-center gap-2 rounded-full px-4 transition-colors ${yearly === o.v ? "bg-[var(--ink)] text-[var(--bg)]" : "text-[var(--muted)] hover:text-[var(--ink)]"}`}
+              className={`flex h-8 items-center gap-2 rounded-full px-4 transition-colors ${yearly === o.v ? "bg-[var(--accent)] text-[var(--accent-ink)]" : "text-[var(--muted)] hover:text-[var(--ink)]"}`}
             >
               {o.label}
               {o.v && <span className={`text-[12px] ${yearly ? "opacity-70" : "text-[var(--good)]"}`}>save 20%</span>}

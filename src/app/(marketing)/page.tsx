@@ -102,7 +102,7 @@ function Steps() {
       <li className="reveal flex flex-col rounded-[16px] border border-[var(--line-strong)] bg-[var(--surface)] p-6" style={{ "--d": "0ms" } as React.CSSProperties}>
         <div className="flex h-[150px] flex-wrap content-center items-center justify-center gap-2 rounded-[12px] bg-[var(--bg)] p-4" aria-hidden="true">
           {["Doctor", "Accountant", "Engineer", "Lawyer", "Teacher", "Marketer"].map((j, i) => (
-            <span key={j} className={`rounded-full border px-3 py-1 text-[13px] ${i === 1 ? "border-[var(--ink)] bg-[var(--ink)] text-[var(--bg)]" : "border-[var(--line-strong)] text-[var(--muted)]"}`}>{j}</span>
+            <span key={j} className={`rounded-full border px-3 py-1 text-[13px] ${i === 1 ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-ink)]" : "border-[var(--line-strong)] text-[var(--muted)]"}`}>{j}</span>
           ))}
         </div>
         <p className="mt-5 text-[13px] font-medium text-[var(--accent)]">Step 1</p>

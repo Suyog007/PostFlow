@@ -3,13 +3,8 @@
 // "How you sound": a few ready-made voices to start from, and a box to say it in your own words.
 
 import { useState } from "react";
+import { TONES as PRESETS } from "@/lib/tones";
 
-const PRESETS = [
-  { label: "Friendly and simple", text: "Friendly and simple. Short sentences, everyday words, like explaining it to a smart friend. No jargon, no hype." },
-  { label: "Expert and precise", text: "Expert and precise. Specific facts and numbers, a clear point of view, calm and confident. No hype." },
-  { label: "Short and punchy", text: "Short and punchy. One idea per line, strong first line, no filler words. No hype." },
-  { label: "Warm and personal", text: "Warm and personal. First person, a little story or feeling where it fits, kind and encouraging. No hype." },
-];
 
 export function ToneField({ name, defaultValue }: { name: string; defaultValue: string }) {
   const [value, setValue] = useState(defaultValue);
@@ -23,7 +18,7 @@ export function ToneField({ name, defaultValue }: { name: string; defaultValue: 
             type="button"
             aria-pressed={value === p.text}
             onClick={() => setValue(p.text)}
-            className={`rounded-full border px-3.5 py-1.5 text-[13px] transition-colors ${value === p.text ? "border-[var(--ink)] bg-[var(--ink)] text-[var(--bg)]" : "border-[var(--line-strong)] hover:border-[var(--ink)]"}`}
+            className={`rounded-full border px-3.5 py-1.5 text-[13px] transition-colors ${value === p.text ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-ink)]" : "border-[var(--line-strong)] hover:border-[var(--accent)]"}`}
           >
             {p.label}
           </button>

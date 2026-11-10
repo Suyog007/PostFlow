@@ -186,7 +186,7 @@ async function linkChat(chat: number, code: string): Promise<boolean> {
     to: user.email,
     subject: `Telegram connected to your ${env().COMPANY_NAME} account`,
     text: `A Telegram chat was just connected to your account. It can approve, remove and publish your posts.\n\nIf this was not you, disconnect it in Settings right away and change your password.`,
-    action: { label: "Open Settings", url: `${env().APP_URL.replace(/\/$/, "")}/settings?tab=accounts#telegram` },
+    action: { label: "Open Settings", url: `${env().APP_URL.replace(/\/$/, "")}/settings/accounts#telegram` },
   }).catch(warnOnError("telegram_link_email_failed", { userId: user.id }));
   return true;
 }

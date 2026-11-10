@@ -195,7 +195,7 @@ export async function recheckPostAction(form: FormData) {
 }
 export async function removeStyleNoteAction(form: FormData) {
   const i = Number(form.get("i"));
-  await guarded("/settings", async () => {
+  await guarded("/settings/you", async () => {
     const s = await getSettings();
     await saveSettings({ styleNotes: s.styleNotes.filter((_, j) => j !== i) });
   }, "Removed.");
@@ -279,7 +279,7 @@ export async function deleteNoteAction(form: FormData) {
 
 /** Settings > Voice: who you are and how you sound. */
 export async function saveVoiceAction(form: FormData) {
-  await guarded("/settings", async () => {
+  await guarded("/settings/you", async () => {
     const s = await getSettings();
     await saveSettings({
       profile: {
@@ -300,7 +300,7 @@ export async function saveVoiceAction(form: FormData) {
 
 /** Settings > About you > Post style: what goes into every post. */
 export async function savePostStyleAction(form: FormData) {
-  await guarded("/settings", async () => {
+  await guarded("/settings/you", async () => {
     const s = await getSettings();
     await saveSettings({
       hashtags: { ...s.hashtags, linkedin: form.get("tags_linkedin") === "on" },
@@ -312,7 +312,7 @@ export async function savePostStyleAction(form: FormData) {
 
 /** Settings > Advanced: content mix, thresholds and what goes into a post. */
 export async function saveAdvancedAction(form: FormData) {
-  await guarded("/settings?tab=more", async () => {
+  await guarded("/settings/more", async () => {
     const s = await getSettings();
     await saveSettings({
       horizonDays: Number(form.get("horizonDays") || s.horizonDays),
@@ -335,7 +335,7 @@ export async function saveAdvancedAction(form: FormData) {
 }
 
 export async function saveFastLaneAction(form: FormData) {
-  await guarded("/settings?tab=times", async () => {
+  await guarded("/settings/times", async () => {
     if (form.get("fl_enabled") === "on") await assertFeature("fastLane", "The fast lane");
     const platforms = (["x", "linkedin"] as const).filter((p) => form.get(`fl_${p}`) === "on");
     await saveSettings({
@@ -352,53 +352,56 @@ export async function saveFastLaneAction(form: FormData) {
   });
 }
 export async function saveSlotsAction(form: FormData) {
-  await guarded("/settings?tab=times", async () => {
+  await guarded("/settings/times", async () => {
     const timezone = String(form.get("timezone") ?? "").trim();
     if (timezone && !DateTime.local().setZone(timezone).isValid) throw new Error(`"${timezone}" is not a timezone PostFlow knows.`);
     await saveSettings({ slots: parseSlots(String(form.get("slots") ?? "")), ...(timezone ? { timezone } : {}) });
   });
 }
-export async function toggleApprovalAction() {
-  await guarded("/settings?tab=accounts", async () => {
+export async function toggleApprovalAction(form?: FormData) {
+  await guarded(switchBack(form), async () => {
     const s = await getSettings();
     if (s.requireApproval) await assertFeature("autoMode", "Auto mode");
     await saveSettings({ requireApproval: !s.requireApproval });
   });
 }
+/** Where an on/off switch returns to: the home list, the Settings list, or Connections. */
+const switchBack = (form?: FormData) => (form?.get("back") === "home" ? "/calendar" : form?.get("back") === "list" ? "/settings" : "/settings/accounts");
+
 export async function togglePauseAction(form?: FormData) {
-  await guarded(form?.get("back") === "home" ? "/calendar" : "/settings?tab=accounts", async () => saveSettings({ paused: !(await getSettings()).paused }));
+  await guarded(switchBack(form), async () => saveSettings({ paused: !(await getSettings()).paused }), (await getSettings()).paused ? "PostFlow is on again." : "PostFlow is paused.");
 }
 
 export async function connectAction(form: FormData) {
   const user = await requireActiveUser();
   const platform = String(form.get("platform"));
   if (platform !== "x" && platform !== "linkedin") return;
-  if (platform === "x" && !(await entitlementFor(user.id)).features.x) back("/settings?tab=accounts", "error", X_IS_PRO);
+  if (platform === "x" && !(await entitlementFor(user.id)).features.x) back("/settings/accounts", "error", X_IS_PRO);
   let url: string;
   try {
     url = await startOAuth(platform);
   } catch (err) {
-    back("/settings?tab=accounts", "error", (err as Error).message);
+    back("/settings/accounts", "error", (err as Error).message);
   }
   redirect(url);
 }
 export async function disconnectAction(form: FormData) {
   const platform = String(form.get("platform"));
-  await guarded("/settings?tab=accounts", () => disconnectAccount(platform as "x" | "linkedin"), "Disconnected.");
+  await guarded("/settings/accounts", () => disconnectAccount(platform as "x" | "linkedin"), "Disconnected.");
 }
 /** Makes a fresh 15-minute link code only when the user asks for it, then opens the bot. */
 export async function connectTelegramAction() {
   await requireActiveUser();
   const url = await newTelegramLinkUrl();
-  if (!url) back("/settings?tab=accounts", "error", "Telegram is not available yet.");
+  if (!url) back("/settings/accounts", "error", "Telegram is not available yet.");
   redirect(url!);
 }
 export async function unlinkTelegramAction() {
-  await guarded("/settings?tab=accounts", () => unlinkTelegram(), "Telegram disconnected.");
+  await guarded("/settings/accounts", () => unlinkTelegram(), "Telegram disconnected.");
 }
 /** Runs the pipeline for the signed-in user only. */
 export async function runTickAction() {
-  await guarded("/settings?tab=accounts", async () => {
+  await guarded("/settings/accounts", async () => {
     const user = await requireActiveUser();
     const r = await runForUser(user.id, { budgetMs: 45_000 });
     if (r.errors.length) throw new Error(r.errors[0]);
@@ -440,7 +443,7 @@ export async function adminTickAction() {
 // ---- sources --------------------------------------------------------------
 
 export async function addSourceAction(form: FormData) {
-  await guarded("/settings?tab=sources", async () => {
+  await guarded("/settings/sources", async () => {
     const url = String(form.get("url") ?? "").trim();
     if (!isPublicHttpUrl(url)) throw new Error("Enter a public http(s) feed URL.");
     const pillar = form.get("pillar") === "local" ? "local" : "news";
@@ -451,7 +454,7 @@ export async function addSourceAction(form: FormData) {
 }
 export async function toggleSourceAction(form: FormData) {
   const id = String(form.get("id"));
-  await guarded("/settings?tab=sources", async () => {
+  await guarded("/settings/sources", async () => {
     const user = await requireActiveUser();
     const s = await db().query.sources.findFirst({ where: and(eq(schema.sources.id, id), eq(schema.sources.userId, user.id)) });
     if (s && !s.enabled) await assertFeedQuota();
@@ -459,7 +462,7 @@ export async function toggleSourceAction(form: FormData) {
   });
 }
 export async function deleteSourceAction(form: FormData) {
-  await guarded("/settings?tab=sources", async () => {
+  await guarded("/settings/sources", async () => {
     const user = await requireActiveUser();
     await db().delete(schema.sources).where(and(eq(schema.sources.id, String(form.get("id"))), eq(schema.sources.userId, user.id)));
   }, "Feed removed.");

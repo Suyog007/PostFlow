@@ -145,10 +145,10 @@ export async function WeekView({ searchParams }: { searchParams: Promise<{ w?: s
   const accounts = await db().select().from(schema.platformAccounts).where(eq(schema.platformAccounts.userId, user.id));
   const [{ n: noteCount }] = await db().select({ n: count() }).from(schema.notes).where(eq(schema.notes.userId, user.id));
   const steps = [
-    { done: accounts.some((a) => a.status === "connected"), label: "Connect LinkedIn or X", hint: "So posts can be published for you.", href: "/settings?tab=accounts" },
+    { done: accounts.some((a) => a.status === "connected"), label: "Connect LinkedIn or X", hint: "So posts can be published for you.", href: "/settings/accounts" },
     { done: !!(s.profile.role || s.profile.expertise.length), label: "Tell PostFlow who you are", hint: "Your role, what you know well, and how you sound.", href: "/settings" },
     { done: Number(noteCount) > 0, label: "Add a note (optional)", hint: "News posts need nothing from you. Posts about your own work come only from notes.", href: "/notes" },
-    { done: !!user.telegramChatId, label: "Link Telegram (optional)", hint: "Approve posts and send notes from your phone.", href: "/settings?tab=accounts#telegram" },
+    { done: !!user.telegramChatId, label: "Link Telegram (optional)", hint: "Approve posts and send notes from your phone.", href: "/settings/accounts#telegram" },
   ];
   const showSteps = steps.slice(0, 2).some((x) => !x.done) || (!!sp.welcome && steps.some((x) => !x.done));
   const events = await recentEvents(10);
@@ -215,7 +215,7 @@ export async function WeekView({ searchParams }: { searchParams: Promise<{ w?: s
             {steps.map((st, i) => (
               <li key={st.label}>
                 <Link href={st.href} className={`flex h-full gap-3 rounded-lg border p-3 ${st.done ? "border-[var(--line)] opacity-60" : "border-[var(--line-strong)] hover:border-[var(--ink)]"}`}>
-                  <span className={`flex h-6 w-6 flex-none items-center justify-center rounded-full text-[12px] font-semibold ${st.done ? "bg-[var(--good-soft)] text-[var(--good)]" : "bg-[var(--ink)] text-[var(--bg)]"}`}>
+                  <span className={`flex h-6 w-6 flex-none items-center justify-center rounded-full text-[12px] font-semibold ${st.done ? "bg-[var(--good-soft)] text-[var(--good)]" : "bg-[var(--accent)] text-[var(--accent-ink)]"}`}>
                     {st.done ? <Icon name="check" size={13} /> : i + 1}
                   </span>
                   <span>

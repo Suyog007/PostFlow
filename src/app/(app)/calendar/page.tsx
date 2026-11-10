@@ -184,7 +184,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
       <div className="mt-10 grid gap-2 sm:grid-cols-3">
         <Link href="/create" className="flex items-center gap-2 rounded-[14px] bg-[var(--surface)] px-4 py-3.5 text-[14px] font-medium hover:bg-[var(--raised)]"><Icon name="create" size={18} className="text-[var(--accent)]" />Write your own</Link>
         <Link href="/calendar?view=week" className="flex items-center gap-2 rounded-[14px] bg-[var(--surface)] px-4 py-3.5 text-[14px] font-medium hover:bg-[var(--raised)]"><Icon name="calendar" size={18} className="text-[var(--accent)]" />Full calendar</Link>
-        <Link href="/settings?tab=times" className="flex items-center gap-2 rounded-[14px] bg-[var(--surface)] px-4 py-3.5 text-[14px] font-medium hover:bg-[var(--raised)]"><Icon name="clock" size={18} className="text-[var(--accent)]" />Posting times</Link>
+        <Link href="/settings/times" className="flex items-center gap-2 rounded-[14px] bg-[var(--surface)] px-4 py-3.5 text-[14px] font-medium hover:bg-[var(--raised)]"><Icon name="clock" size={18} className="text-[var(--accent)]" />Posting times</Link>
       </div>
     </div>
   );
