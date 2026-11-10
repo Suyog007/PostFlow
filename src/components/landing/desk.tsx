@@ -106,10 +106,11 @@ const SAMPLES: Record<Field, { linkedin: string; x: string; tags: string }> = {
     tags: "#eyehealth #paediatrics",
   },
   tax: {
-    linkedin: "Small businesses get two extra months to file this year's VAT return.\n\nPer the Revenue Office, the new deadline covers firms under the registration threshold, and late-filing penalties are waived until then. For anyone whose books are behind, that is a real window to catch up.",
-    x: "Small firms get two extra months for this year's VAT return, per the Revenue Office. Late-filing penalties are waived until the new date.",
-    tags: "#tax #smallbusiness",
+    linkedin: "UK small businesses can now earn up to £90,000 a year before they must register for VAT.\n\nThe threshold rose from £85,000 on 1 April 2024, HMRC says, the first rise since 2017. For a sole trader near the old limit, that is room to grow without adding VAT to every invoice.",
+    x: "UK VAT registration threshold: now £90,000, up from £85,000 since 1 April 2024, per HMRC. First rise since 2017.",
+    tags: "#UKtax #smallbusiness",
   },
+
 };
 
 /** Pick a field and a platform, see the kind of post PostFlow writes, with the logo of what it is about. */
@@ -142,14 +143,14 @@ export function HeroDemo({ name = "Your Name" }: { name?: string }) {
           <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--d-cream)] text-[14px] font-bold" aria-hidden="true">{name.split(" ").map((w) => w[0]).join("").slice(0, 2)}</span>
           <div className="min-w-0">
             <p className="text-[15px] font-bold">{name}</p>
-            <p className="truncate text-[12px] text-[var(--d-muted)]">{FIELDS.find((f) => f.id === field)?.role} · now</p>
+            <p className="truncate text-[13px] text-[var(--d-muted)]">{FIELDS.find((f) => f.id === field)?.role} · now</p>
           </div>
           <span className="ml-auto"><PlatformGlyph platform={platform} size={20} /></span>
         </div>
         <p className="whitespace-pre-line px-5 pb-4 pt-3 text-[15px] leading-relaxed">{text}</p>
         {PICTURES[field] ?? null}
       </article>
-      <p className="typed mt-4 text-right text-[12px] text-[var(--d-muted)]">Sample post · made-up story and brand · pick a beat above</p>
+      <p className="typed mt-4 text-right text-[13px] text-[var(--d-muted)]">Sample posts for illustration · pick a beat above</p>
     </div>
   );
 }

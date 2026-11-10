@@ -1,3 +1,4 @@
+import { env } from "@/server/env";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
@@ -17,7 +18,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
     <AuthShell
       title="Sign in"
       subtitle="Welcome back."
-      footer={signupsOpen() ? <>New to PostFlow? <Link href="/signup" className="font-medium text-[var(--ink)] underline">Start a free trial</Link></> : <>No account yet? <Link href="/#early-access" className="font-medium text-[var(--ink)] underline">Join the waitlist</Link></>}
+      footer={signupsOpen() ? <>New to PostFlow? <Link href="/signup" className="font-medium text-[var(--ink)] underline">{env().FREE_BETA ? "Join the free beta" : "Start a free trial"}</Link></> : <>No account yet? <Link href="/#early-access" className="font-medium text-[var(--ink)] underline">Join the waitlist</Link></>}
     >
       {sp.error && <p role="alert" className="mb-4 rounded-md bg-[var(--bad-soft)] px-3 py-2 text-[13px] text-[var(--bad)]">{sp.error}</p>}
       {googleConfigured() && (

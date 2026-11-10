@@ -7,7 +7,8 @@ export const metadata: Metadata = { title: "Privacy Policy · PostFlow", robots:
 export const dynamic = "force-dynamic";
 
 export default function PrivacyPage() {
-  const { COMPANY_NAME, LEGAL_ENTITY, CONTACT_EMAIL: contact } = env();
+  const { COMPANY_NAME, LEGAL_ENTITY, CONTACT_EMAIL: rawContact } = env();
+  const contact = rawContact && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawContact) ? rawContact : null;
   const company = LEGAL_ENTITY ?? COMPANY_NAME;
   return (
     <LegalShell title="Privacy Policy" updated="27 October 2026">

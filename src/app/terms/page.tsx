@@ -8,7 +8,8 @@ export const metadata: Metadata = { title: "Terms of Service · PostFlow", robot
 export const dynamic = "force-dynamic";
 
 export default function TermsPage() {
-  const { COMPANY_NAME, LEGAL_ENTITY, LEGAL_JURISDICTION: jurisdiction, CONTACT_EMAIL: contact } = env();
+  const { COMPANY_NAME, LEGAL_ENTITY, LEGAL_JURISDICTION: jurisdiction, CONTACT_EMAIL: rawContact } = env();
+  const contact = rawContact && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawContact) ? rawContact : null;
   const company = LEGAL_ENTITY ?? COMPANY_NAME;
   return (
     <LegalShell title="Terms of Service" updated="27 October 2026">

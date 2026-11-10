@@ -41,14 +41,14 @@ export function Pricing({ signupsOpen = false, beta = false }: { signupsOpen?: b
               <span className="text-[40px] font-semibold tracking-tight tnum">$0</span>
               <span className="text-[14px] text-[var(--muted)]">/ month</span>
             </div>
-            <p className="h-5 text-[12px] text-[var(--subtle)]">No card needed</p>
+            <p className="h-5 text-[13px] text-[var(--muted)]">No card needed</p>
             <ul className="mt-5 space-y-2 border-y border-[var(--line)] py-4 text-[14px]">
               {["1 LinkedIn account", `${BETA.quota.postsPerMonth} posts a month`, `Up to ${BETA.quota.feeds} news feeds`].map((l) => (
                 <li key={l} className="font-medium">{l}</li>
               ))}
             </ul>
             <ul className="mt-4 flex-1 space-y-2.5 text-[14px]">
-              {["Reviewer checks every draft", "News cross-checked by two outlets", "Posts from a link or your own articles", "Approve on Telegram before it posts", "Auto mode once you trust it"].map((f) => (
+              {["Reviewer checks every draft", "News cross-checked by two outlets", "Posts from a link or your own articles", "You approve each post first", "Optional auto mode once you trust it"].map((f) => (
                 <li key={f} className="flex gap-2.5">
                   <Icon name="check" size={16} className="mt-0.5 flex-none text-[var(--good)]" />
                   <span>{f}</span>
@@ -76,7 +76,7 @@ export function Pricing({ signupsOpen = false, beta = false }: { signupsOpen?: b
                 <span className="text-[40px] font-semibold tracking-tight tnum">${price}</span>
                 <span className="text-[14px] text-[var(--muted)]">/ month</span>
               </div>
-              <p className="h-5 text-[12px] text-[var(--subtle)]">{yearly ? `$${p.yearly * 12} billed yearly` : "Billed monthly"}</p>
+              <p className="h-5 text-[13px] text-[var(--muted)]">{yearly ? `$${p.yearly * 12} billed yearly` : "Billed monthly"}</p>
 
               <ul className="mt-5 space-y-2 border-y border-[var(--line)] py-4 text-[14px]">
                 {p.limits.map((l) => (
@@ -98,7 +98,7 @@ export function Pricing({ signupsOpen = false, beta = false }: { signupsOpen?: b
           );
         })}
       </div>
-      <p className="mt-6 text-center text-[13px] text-[var(--subtle)]">
+      <p className="mt-6 text-center text-[14px] text-[var(--muted)]">
         {beta
           ? "Prices in USD. The free beta covers LinkedIn. Pro adds X and opens soon: join the waitlist to hear first. A post is one post on one platform."
           : `Prices in USD. Every plan starts with a ${TRIAL_DAYS}-day free trial. A post is one post on one platform.`}

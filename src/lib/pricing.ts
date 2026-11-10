@@ -82,7 +82,7 @@ export const PLANS: Plan[] = [
       "Fast lane for breaking stories",
       "Posts from a link or your own articles",
       "Remembers your wording preferences",
-      "Auto mode once you trust it",
+      "Optional auto mode once you trust it",
     ],
   },
   {

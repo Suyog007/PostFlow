@@ -4,8 +4,8 @@ import { Logo, PlatformGlyph } from "./ui";
 
 const STEPS = [
   { t: "Pick your field and topics", b: "Engineer, doctor, accountant, lawyer or anything else." },
-  { t: "PostFlow reads the news", b: "It writes a clear post and checks every fact against the source." },
-  { t: "You approve in one tap", b: "On Telegram, ten minutes before it goes out. Nothing posts without you." },
+  { t: "PostFlow reads the news", b: "It writes a clear post and checks each claim against the source." },
+  { t: "You approve in one tap", b: "On the calendar, or in one tap on Telegram. Nothing posts without your OK." },
 ];
 
 const PROFESSIONS = ["Engineers", "Doctors", "Accountants", "Lawyers", "Marketers", "Teachers"];
@@ -43,19 +43,19 @@ function Pitch() {
             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--mark-soft)] text-[12px] font-bold" aria-hidden="true">DR</span>
             <div className="min-w-0 flex-1">
               <p className="text-[13px] font-bold">Dr. Rana</p>
-              <p className="text-[11px] text-[var(--muted)]">Eye doctor · now</p>
+              <p className="text-[12px] text-[var(--muted)]">Eye doctor · now</p>
             </div>
             <PlatformGlyph platform="linkedin" size={16} />
           </div>
           <p className="mt-3 text-[13px] leading-relaxed">
             Children should now have their first eye check at three, not five. The Eye Health Council changed its screening advice this week. General information, not medical advice.
           </p>
-          <figcaption className="typed mt-3 text-[11px] uppercase tracking-[.1em] text-[var(--subtle)]">Sample post · made-up story</figcaption>
+          <figcaption className="typed mt-3 text-[12px] uppercase tracking-[.1em] text-[var(--subtle)]">Sample post · made-up story</figcaption>
         </figure>
       </div>
 
       <div>
-        <p className="typed text-[11px] uppercase tracking-[.12em] text-[var(--subtle)]">Made for</p>
+        <p className="typed text-[12px] uppercase tracking-[.12em] text-[var(--subtle)]">Made for</p>
         <ul className="mt-2 flex flex-wrap gap-2">
           {PROFESSIONS.map((p) => (
             <li key={p} className="rounded-full border border-[var(--line-strong)] px-3 py-1 text-[12px]">{p}</li>

@@ -14,7 +14,7 @@ import { env } from "@/server/env";
 
 const TITLE = "PostFlow · The news breaks. Your post is ready.";
 const DESCRIPTION =
-  "For engineers, doctors, accountants, lawyers and anyone whose work is in the news. PostFlow reads the news in your field, writes a clear LinkedIn or X post, checks every fact, and waits for your one-tap OK on Telegram.";
+  "For engineers, doctors, accountants, lawyers and anyone whose work is in the news. PostFlow reads the news in your field, writes a clear LinkedIn or X post, checks each claim against its source, and waits for your one-tap OK on Telegram.";
 
 export const metadata: Metadata = {
   title: TITLE,
@@ -35,11 +35,15 @@ export const metadata: Metadata = {
 const faqFor = (beta: boolean): { q: string; a: string }[] => [
   {
     q: "Will it post something I haven't seen?",
-    a: "Not unless you choose that. Ten minutes before each post, Telegram sends it to you. If you don't approve it, it is skipped and the calendar moves on. On Pro you can switch to auto mode later.",
+    a: "Not unless you choose that. By default every post waits for your OK: approve it on the calendar, or with one tap on Telegram ten minutes before it goes out. A post you don't approve is skipped, never sent. Once you trust it, you can switch on auto mode in Settings, on the free beta and on Pro.",
+  },
+  {
+    q: "Do I need Telegram?",
+    a: "No. You can see, edit and approve every post in the app. Telegram is optional and free: it sends each post to your phone ten minutes early so approving takes one tap. Either way, nothing you haven't approved goes out.",
   },
   {
     q: "Does it make things up?",
-    a: "It is built not to. Every news post names its source, and a separate reviewer checks each claim against the article before it reaches you. Stories are only used once other publishers confirm them. First-person stories only come from notes you wrote.",
+    a: "It is built not to. Every news post names its source, and a separate reviewer checks each claim against the article before it reaches you. Stories are only used once other publishers confirm them. First-person stories only come from notes you wrote. It can still get something wrong, which is why every post waits for your OK unless you turn on auto mode.",
   },
   {
     q: "Do posts come with a picture?",
@@ -96,9 +100,9 @@ const PROFESSIONS = [
 const DESK = [
   { t: "News desk", b: "Reads your field all day. Keeps what your audience will care about." },
   { t: "Research", b: "Digs into any link, even an X post, before a word is written." },
-  { t: "Fact-checker", b: "Every claim checked against the source. Weak drafts never reach you." },
+  { t: "Fact-checker", b: "Each claim is checked against the source, and weak drafts are held back. It can still miss things, so you approve first." },
   { t: "Logo desk", b: "A story about Qwen gets the Qwen logo. A general idea stays text only." },
-  { t: "Telegram", b: "Each post arrives ten minutes early. One tap to approve." },
+  { t: "Approval", b: "Approve on the calendar, or in one tap on Telegram (optional) ten minutes before it goes out." },
   { t: "Calendar", b: "Two posts a day, and never the same story twice." },
 ];
 
@@ -109,7 +113,8 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
   const beta = env().FREE_BETA;
   const FAQ = faqFor(beta);
   const startLabel = beta ? "Join the free beta" : `Start my ${TRIAL_DAYS}-day trial`;
-  const cta = open ? { href: "/signup?plan=pro&interval=year", label: startLabel } : { href: "#early-access", label: "Get early access" };
+  const signupHref = beta ? "/signup" : "/signup?plan=pro&interval=year";
+  const cta = open ? { href: signupHref, label: startLabel } : { href: "#early-access", label: "Get early access" };
 
   return (
     <div className="desk min-h-screen text-[16px]">
@@ -140,7 +145,7 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
               className="text-[50px] sm:text-[72px] xl:text-[80px]"
             />
             <p className="mt-7 max-w-[560px] text-[19px] leading-[1.7] text-[var(--d-muted)] sm:text-[21px]">
-              Whatever you do, engineer, doctor, accountant or lawyer: PostFlow reads <span className="hl">the news in your field</span>, writes <span className="hl">a clear post anyone can follow</span> and checks every fact. Ten minutes before it goes out, Telegram asks for your OK.
+              Whatever you do, engineer, doctor, accountant or lawyer: PostFlow reads <span className="hl">the news in your field</span>, writes <span className="hl">a clear post anyone can follow</span> and checks each claim against its source. Ten minutes before it goes out, Telegram asks for your OK.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
               <a href={cta.href} className="btn-desk">{cta.label}</a>
@@ -149,7 +154,7 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
             <p className="mt-3 text-[14px] text-[var(--d-muted)]">{beta ? "Free on LinkedIn during the beta. No card needed." : open ? "No charge during the trial. Cancel anytime." : `${TRIAL_DAYS}-day free trial at launch. No card to join.`}</p>
             {/* A byline strip: what every post comes with. */}
             <p className="typed mt-10 flex flex-wrap items-center gap-x-3 gap-y-1 border-y border-[var(--line)] py-3 text-[13px] uppercase tracking-[.12em] text-[var(--d-muted)]">
-              <span>Fact-checked</span><span aria-hidden="true">·</span><span>Plain words</span><span aria-hidden="true">·</span><span>Sent only when you approve</span>
+              <span>Fact-checked</span><span aria-hidden="true">·</span><span>Plain words</span><span aria-hidden="true">·</span><span>You approve first</span>
             </p>
           </div>
           <HeroDemo />
@@ -278,7 +283,7 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
             </div>
             {open && plan !== "agency" && !(beta && plan) ? (
               <div className="rounded-2xl border-[1.5px] border-[var(--d-sky-line)] bg-[var(--surface)] p-8 shadow-[0_6px_0_var(--d-sky-line)]">
-                <a href="/signup?plan=pro&interval=year" className="btn-desk w-full">{startLabel}</a>
+                <a href={signupHref} className="btn-desk w-full">{startLabel}</a>
                 <p className="mt-4 text-center text-[15px] text-[var(--d-muted)]">
                   Already on the desk? <Link href="/login" className="font-semibold underline">Sign in</Link>
                 </p>
