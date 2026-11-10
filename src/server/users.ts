@@ -251,3 +251,11 @@ export async function setPassword(userId: string, password: string): Promise<Use
     .returning();
   return u;
 }
+
+const SEEN_EVERY_MS = 3_600_000;
+
+/** Records that the person used PostFlow, at most once an hour so it costs almost nothing. */
+export async function markSeen(user: { id: string; lastSeenAt: Date | null }): Promise<void> {
+  if (user.lastSeenAt && Date.now() - user.lastSeenAt.getTime() < SEEN_EVERY_MS) return;
+  await db().update(schema.users).set({ lastSeenAt: new Date() }).where(eq(schema.users.id, user.id));
+}

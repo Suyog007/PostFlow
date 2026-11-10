@@ -6,7 +6,7 @@ import { SignJWT, jwtVerify } from "jose";
 import { env } from "./env";
 import { setRequestUserResolver } from "./context";
 import { entitlementOf } from "./billing/plans";
-import { findUser, type UserRow } from "./users";
+import { findUser, markSeen, type UserRow } from "./users";
 import { hit } from "./rate-limit";
 
 const COOKIE = "pf_session";
@@ -60,6 +60,7 @@ export const getSessionUser = cache(async (): Promise<UserRow | null> => {
     const user = await findUser(payload.sub);
     // A password change or "sign out everywhere" bumps the version and ends older sessions.
     if (!user || user.sessionVersion !== payload.ver) return null;
+    await markSeen(user).catch(() => undefined);
     return user;
   } catch {
     return null;

@@ -25,6 +25,8 @@ export interface TickResult {
   users: number;
   /** Users whose writing pipeline ran in this pass. */
   served: number;
+  /** Users skipped because they have not used PostFlow for a week. */
+  idleSkipped?: number;
   published: number;
   collected: number;
   analyzed: number;
@@ -322,7 +324,11 @@ export async function tick(opts: { budgetMs?: number } = {}): Promise<TickResult
 
   // Writing is the slow part; one pass at a time does it.
   const ran = await withLease(TICK_LEASE, budget + LEASE_MARGIN_MS, async () => {
-    const queue = [...users].sort((a, b) => (a.lastPipelineAt?.getTime() ?? 0) - (b.lastPipelineAt?.getTime() ?? 0));
+    // Only people who used PostFlow (web or Telegram) in the last week get new posts written; idle accounts cost
+    // nothing until they come back. Their scheduled posts still go out above.
+    const active = users.filter((u) => isRecentlySeen(u));
+    out.idleSkipped = users.length - active.length;
+    const queue = active.sort((a, b) => (a.lastPipelineAt?.getTime() ?? 0) - (b.lastPipelineAt?.getTime() ?? 0));
     for (const u of queue) {
       // Leave room to finish cleanly.
       if (Date.now() > deadline - 15_000) break;
@@ -348,6 +354,14 @@ export async function tick(opts: { budgetMs?: number } = {}): Promise<TickResult
 }
 
 const DAY = 86_400_000;
+
+/** How long after someone's last visit autopilot keeps writing for them. */
+export const ACTIVE_WITHIN_DAYS = 7;
+
+export function isRecentlySeen(u: { lastSeenAt: Date | null; createdAt: Date }, now = Date.now()): boolean {
+  const seen = u.lastSeenAt ?? u.createdAt;
+  return now - seen.getTime() < ACTIVE_WITHIN_DAYS * 86_400_000;
+}
 
 /**
  * Once a day: drops rows nothing reads any more, so tables do not grow forever.

@@ -47,6 +47,8 @@ export const users = pgTable("users", {
   telegramLinkCode: text("telegram_link_code").unique(),
   /** When the scheduler last ran the writing pipeline for this user (fair round-robin). */
   lastPipelineAt: timestamp("last_pipeline_at", { withTimezone: true }),
+  /** Last time they used the app or Telegram (updated at most hourly). The scheduler only writes for recent users. */
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

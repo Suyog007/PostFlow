@@ -11,7 +11,7 @@ import { publishDue } from "./publisher";
 import { declinePost, refillSlot, rewordPost, writeLesson } from "./generate";
 import { requestFillNow, requestRefresh, requestReplacement } from "./tick";
 import { formatLocal } from "./slots";
-import { consumeToken } from "./users";
+import { markSeen, consumeToken } from "./users";
 import { sendEmail } from "./email";
 import { env } from "./env";
 import { warnOnError } from "./log";
@@ -211,6 +211,8 @@ export async function handleTelegramUpdate(u: Update): Promise<void> {
     if (u.message) await sendTo(chat, NOT_LINKED);
     return;
   }
+  // Using Telegram counts as using PostFlow, so autopilot keeps writing for people who never open the web app.
+  await markSeen(user).catch(() => undefined);
   if (!isPrivate) {
     // Linked before group chats were refused: unlink it rather than let every member act for the account.
     await db().update(schema.users).set({ telegramChatId: null, updatedAt: new Date() }).where(eq(schema.users.id, user.id));
