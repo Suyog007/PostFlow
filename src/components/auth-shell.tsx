@@ -21,9 +21,9 @@ function Pitch() {
 
       <div className="mx-auto w-full max-w-[460px] py-10">
         <p className="display text-[44px] leading-[1.02]">
-          The news breaks.
+          The news breaks
           <br />
-          <span className="italic text-[var(--accent)]">Your post is ready.</span>
+          <span className="text-[var(--accent)]">Your post is ready</span>
         </p>
         <ol className="mt-8 space-y-5">
           {STEPS.map((s, i) => (
@@ -40,9 +40,9 @@ function Pitch() {
         {/* A sample post, labelled as one: made-up story. */}
         <figure className="mt-9 -rotate-[0.6deg] rounded-[4px] border border-[var(--line-strong)] bg-[var(--surface)] p-4 shadow-[0_14px_30px_-20px_rgba(24,34,30,.45)]">
           <div className="flex items-center gap-2.5">
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--mark-soft)] text-[12px] font-bold" aria-hidden="true">DR</span>
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--mark-soft)] text-[12px] font-semibold" aria-hidden="true">AR</span>
             <div className="min-w-0 flex-1">
-              <p className="text-[13px] font-bold">Dr. Rana</p>
+              <p className="text-[13px] font-semibold">Dr. Asha Rana</p>
               <p className="text-[12px] text-[var(--muted)]">Eye doctor · now</p>
             </div>
             <PlatformGlyph platform="linkedin" size={16} />
@@ -50,12 +50,12 @@ function Pitch() {
           <p className="mt-3 text-[13px] leading-relaxed">
             Children should now have their first eye check at three, not five. The Eye Health Council changed its screening advice this week. General information, not medical advice.
           </p>
-          <figcaption className="typed mt-3 text-[12px] uppercase tracking-[.1em] text-[var(--subtle)]">Sample post · made-up story</figcaption>
+          <figcaption className="typed mt-3 text-[12px] text-[var(--subtle)]">Sample post · made-up story</figcaption>
         </figure>
       </div>
 
       <div>
-        <p className="typed text-[12px] uppercase tracking-[.12em] text-[var(--subtle)]">Made for</p>
+        <p className="typed text-[12px] text-[var(--subtle)]">Made for</p>
         <ul className="mt-2 flex flex-wrap gap-2">
           {PROFESSIONS.map((p) => (
             <li key={p} className="rounded-full border border-[var(--line-strong)] px-3 py-1 text-[12px]">{p}</li>

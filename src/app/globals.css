@@ -246,29 +246,30 @@ h1, h2, h3 { text-wrap: balance; }
 .desk .typed { font-family: var(--font-type), var(--mono); }
 /* Highlighter: a marigold stroke under the words, not a box. */
 .desk .hl { background: linear-gradient(transparent 58%, var(--mark-soft) 58%, var(--mark-soft) 92%, transparent 92%); padding: 0 .1em; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
-.desk .red { font-style: italic; color: var(--accent); font-variation-settings: "opsz" 144, "SOFT" 100; }
+.desk .red { color: var(--accent); }
 .desk .press-stripe { height: 6px; background: linear-gradient(var(--ink) 0 3px, transparent 3px 5px, var(--ink) 5px 6px); }
-.desk .btn-desk { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 50px; padding: 0 24px; border-radius: 4px; background: var(--mark); color: var(--mark-ink); font-weight: 700; font-size: 16px; border: 1.5px solid var(--ink); transition: background .15s, transform .15s; }
-.desk .btn-desk:hover { background: color-mix(in srgb, var(--mark) 85%, #fff); transform: translateY(-1px); }
+.desk .btn-desk { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 50px; padding: 0 24px; border-radius: 4px; background: var(--mark); color: var(--mark-ink); font-weight: 600; font-size: 16px; border: 1.5px solid var(--ink); transition: background .15s, transform .1s; }
+.desk .btn-desk:hover { background: color-mix(in srgb, var(--mark) 85%, #fff); }
+.desk .btn-desk:active, .desk .btn-outline:active { transform: scale(.98); }
 .desk .btn-outline { display: inline-flex; align-items: center; justify-content: center; height: 46px; padding: 0 18px; border-radius: 4px; border: 1.5px solid var(--ink); color: var(--ink); font-weight: 600; background: transparent; }
 .desk .btn-outline:hover { background: var(--side); }
 /* Feature columns: a heavy rule on top, like a newspaper column, no card box. */
 .desk .card-lift { border-top: 2px solid var(--ink); padding-left: 0 !important; padding-right: 0 !important; transition: border-color .15s; }
 .desk .card-lift:hover { border-top-color: var(--accent); }
-.desk .stamp { display: inline-block; border: 2px solid var(--accent); color: var(--accent); padding: 6px 14px; border-radius: 999px; transform: rotate(-6deg); font-family: var(--font-type), var(--mono); font-weight: 600; letter-spacing: .14em; text-transform: uppercase; }
+.desk .stamp { display: inline-block; border: 2px solid var(--accent); color: var(--accent); padding: 6px 14px; border-radius: 999px; transform: rotate(-6deg); font-family: var(--font-type), var(--mono); font-weight: 600; }
 .desk :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
 /* ---------- the news desk, app-wide ----------
    Display type for titles, typewriter type for times and small notes, the press stripe. */
 .display { font-family: var(--font-display), Georgia, serif; font-weight: 600; letter-spacing: -0.02em; line-height: 1.02; font-variation-settings: "opsz" 144, "SOFT" 30; }
-/* The words that matter in a title: italic, in teal. */
-.em { font-style: italic; color: var(--accent); font-variation-settings: "opsz" 144, "SOFT" 100; }
+/* The words that matter in a title: in teal. */
+.em { color: var(--accent); }
 .typed { font-family: var(--font-type), var(--mono); }
 /* Masthead rule: one thick line over one thin line, like the top of a newspaper. */
 .press-stripe { height: 6px; background: linear-gradient(var(--ink) 0 3px, transparent 3px 5px, var(--ink) 5px 6px); }
 
 /* ---------- "Watch it work" motion piece on the landing page ---------- */
-.desk .film-stage { display: flex; align-items: center; position: relative; min-height: 400px; border: 1.5px solid var(--ink); border-radius: 6px; background: var(--surface); padding: 28px; overflow: hidden; box-shadow: 0 6px 0 var(--d-sky-line); }
+.desk .film-stage { display: flex; align-items: center; position: relative; min-height: 400px; border: 1.5px solid var(--ink); border-radius: 6px; background: var(--surface); padding: 28px; overflow: hidden; }
 .desk .film-scene { width: 100%; }
 @media (max-width: 640px) {
   .desk .film-stage { min-height: 520px; padding: 18px; }

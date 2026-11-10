@@ -69,12 +69,17 @@ const faqFor = (beta: boolean): { q: string; a: string }[] => [
 ];
 
 /** Two-line headline: navy first line, red second line. */
-function Headline({ a, b, as: Tag = "h2", className = "" }: { a: ReactNode; b: ReactNode; as?: "h1" | "h2"; className?: string }) {
+/** A section title. Only the hero gets a second line in the accent colour. */
+function Headline({ a, b, as: Tag = "h2", className = "" }: { a: ReactNode; b?: ReactNode; as?: "h1" | "h2"; className?: string }) {
   return (
     <Tag className={`display ${className}`}>
       {a}
-      <br />
-      <span className="red">{b}</span>
+      {b && (
+        <>
+          <br />
+          <span className="red">{b}</span>
+        </>
+      )}
     </Tag>
   );
 }
@@ -85,12 +90,12 @@ function Rule() {
 
 /** One line per profession: what PostFlow watches for them, and the rule their posts follow. */
 const PROFESSIONS = [
-  { who: "Software engineers", watch: "Launches, security alerts and AI news in your stack.", rule: "Explains every acronym." },
-  { who: "Doctors & clinicians", watch: "Guideline changes, recalls and strong new studies in your speciality.", rule: "Never gives medical advice." },
-  { who: "Accountants & finance", watch: "Tax changes, filing deadlines and new reporting standards.", rule: "Always names the country." },
-  { who: "Lawyers & compliance", watch: "New laws, rulings and compliance deadlines in your area.", rule: "Always names the jurisdiction." },
-  { who: "Marketers & sales", watch: "Platform, algorithm and privacy changes that move your numbers.", rule: "Never invents results." },
-  { who: "Teachers & educators", watch: "Exam, curriculum and policy changes, and what the evidence says.", rule: "Never names a student." },
+  { who: "Software engineers", watch: "Launches, security alerts and AI news in your stack.", rule: "Explains every acronym" },
+  { who: "Doctors & clinicians", watch: "Guideline changes, recalls and strong new studies in your speciality.", rule: "Never gives medical advice" },
+  { who: "Accountants & finance", watch: "Tax changes, filing deadlines and new reporting standards.", rule: "Always names the country" },
+  { who: "Lawyers & compliance", watch: "New laws, rulings and compliance deadlines in your area.", rule: "Always names the jurisdiction" },
+  { who: "Marketers & sales", watch: "Platform, algorithm and privacy changes that move your numbers.", rule: "Never invents results" },
+  { who: "Teachers & educators", watch: "Exam, curriculum and policy changes, and what the evidence says.", rule: "Never names a student" },
 ];
 
 const DESK = [
@@ -134,12 +139,12 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
           <div>
             <Headline
               as="h1"
-              a="The news breaks."
-              b="Your post is ready."
+              a="The news breaks"
+              b="Your post is ready"
               className="text-[50px] sm:text-[72px] xl:text-[80px]"
             />
             <p className="mt-7 max-w-[560px] text-[19px] leading-[1.7] text-[var(--d-muted)] sm:text-[21px]">
-              PostFlow reads <span className="hl">the news in your field</span> and drafts a short post about the stories worth sharing. Each one names its source, and nothing goes out until <span className="hl">you approve it</span>.
+              PostFlow reads the news in your field and drafts a short post about the stories worth sharing. Each one names its source, and nothing goes out until you approve it.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
               <a href={cta.href} className="btn-desk">{cta.label}</a>
@@ -147,7 +152,7 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
             </div>
             <p className="mt-3 text-[14px] text-[var(--d-muted)]">{beta ? "Free on LinkedIn during the beta. No card needed." : open ? "No charge during the trial. Cancel anytime." : `${TRIAL_DAYS}-day free trial at launch. No card to join.`}</p>
             {/* A byline strip: what every post comes with. */}
-            <p className="typed mt-10 flex flex-wrap items-center gap-x-3 gap-y-1 border-y border-[var(--line)] py-3 text-[13px] uppercase tracking-[.12em] text-[var(--d-muted)]">
+            <p className="typed mt-10 flex flex-wrap items-center gap-x-3 gap-y-1 border-y border-[var(--line)] py-3 text-[13px] text-[var(--d-muted)]">
               <span>Names its source</span><span aria-hidden="true">·</span><span>Plain words</span><span aria-hidden="true">·</span><span>You approve first</span>
             </p>
           </div>
@@ -159,11 +164,11 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
         {/* ---------- a real post ---------- */}
         <section id="real" className="mx-auto grid max-w-[1200px] scroll-mt-24 items-center gap-10 px-4 py-20 sm:px-6 sm:py-24 lg:grid-cols-[0.9fr_1.1fr] lg:gap-16">
           <div>
-            <Headline a="One real post." b="Drafted by PostFlow." className="text-[46px] sm:text-[60px]" />
+            <Headline a="One real post, drafted by PostFlow" className="text-[40px] leading-[1.04] sm:text-[56px]" />
             <p className="mt-6 max-w-[480px] text-[19px] leading-relaxed text-[var(--d-muted)]">
               PostFlow found this story in its owner's feeds, wrote the post, checked it against the article and waited for approval. It reached 263 impressions in its first 11 minutes.
             </p>
-            <p className="typed mt-5 text-[13px] uppercase tracking-[.12em] text-[var(--d-muted)]">Published on LinkedIn · name and photo changed for privacy</p>
+            <p className="typed mt-5 text-[13px] text-[var(--d-muted)]">Published on LinkedIn · name and photo changed for privacy</p>
           </div>
           <figure className="reveal overflow-hidden rounded-[6px] border border-[var(--line-strong)] bg-white shadow-[0_18px_40px_-22px_rgba(24,34,30,.45)]">
             <img
@@ -183,7 +188,7 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
         {/* ---------- watch it work ---------- */}
         <section id="watch" className="mx-auto max-w-[1200px] scroll-mt-24 px-4 py-20 sm:px-6 sm:py-24">
           <div className="mb-10 grid gap-6 lg:grid-cols-2 lg:items-end">
-            <Headline a="Watch it work." b="In thirty seconds." className="text-[46px] sm:text-[68px]" />
+            <Headline a="Watch it work in thirty seconds" className="text-[40px] leading-[1.04] sm:text-[56px]" />
             <p className="max-w-[520px] text-[19px] leading-relaxed text-[var(--d-muted)] lg:justify-self-end">
               From a story breaking to a post your readers see, without you writing a word. You only tap approve.
             </p>
@@ -196,7 +201,7 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
         {/* ---------- who it's for ---------- */}
         <section id="who" className="mx-auto max-w-[1200px] scroll-mt-24 px-4 py-20 sm:px-6 sm:py-24">
           <div className="mb-12 grid gap-6 lg:grid-cols-2 lg:items-end">
-            <Headline a="Pick your field." b="Get its news." className="text-[46px] sm:text-[68px]" />
+            <Headline a="Pick your field, get its news" className="text-[40px] leading-[1.04] sm:text-[56px]" />
             <p className="max-w-[520px] text-[19px] leading-relaxed text-[var(--d-muted)] lg:justify-self-end">
               Choose your field and topics at sign-up. The stories PostFlow picks, and the rules your posts follow, come from that.
             </p>
@@ -204,9 +209,9 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
           <div className="grid gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
             {PROFESSIONS.map((p, i) => (
               <div key={p.who} className="card-lift reveal pt-4" style={{ "--d": `${(i % 3) * 80}ms` } as React.CSSProperties}>
-                <h3 className="display text-[26px] tracking-[-0.03em]">{p.who}</h3>
+                <h3 className="display text-[26px] tracking-[-0.02em]">{p.who}</h3>
                 <p className="mt-2 text-[16px] leading-relaxed text-[var(--d-muted)]">{p.watch}</p>
-                <p className="typed mt-3 text-[12px] uppercase tracking-[.12em] text-[var(--accent)]">{p.rule}</p>
+                <p className="typed mt-3 text-[13px] text-[var(--accent)]">{p.rule}</p>
               </div>
             ))}
           </div>
@@ -220,15 +225,15 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
         {/* ---------- what's inside ---------- */}
         <section id="desk" className="mx-auto max-w-[1200px] scroll-mt-24 px-4 py-20 sm:px-6 sm:py-24">
           <div className="mb-12 grid gap-6 lg:grid-cols-2 lg:items-end">
-            <Headline a="The whole newsroom." b="In one quiet tab." className="text-[46px] sm:text-[68px]" />
+            <Headline a="The whole newsroom in one quiet tab" className="text-[40px] leading-[1.04] sm:text-[56px]" />
+            <p className="max-w-[520px] text-[19px] leading-relaxed text-[var(--d-muted)] lg:justify-self-end">
+              What every post gets, whatever your field.
+            </p>
           </div>
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {DESK.map((d, i) => (
-              <div key={d.t} className="card-lift reveal p-7" style={{ "--d": `${(i % 3) * 80}ms` } as React.CSSProperties}>
-                <div className="flex items-center justify-between">
-                  <span className="typed pt-3 text-[13px] uppercase tracking-[.14em] text-[var(--d-muted)]">No. {i + 1}</span>
-                </div>
-                <h3 className="display mt-5 text-[28px] tracking-[-0.03em]">{d.t}</h3>
+              <div key={d.t} className="card-lift reveal pb-2" style={{ "--d": `${(i % 3) * 80}ms` } as React.CSSProperties}>
+                <h3 className="display pt-4 text-[26px] tracking-[-0.02em]">{d.t}</h3>
                 <p className="mt-2 text-[16px] leading-relaxed text-[var(--d-muted)]">{d.b}</p>
               </div>
             ))}
@@ -241,7 +246,7 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
         <section id="pricing" className="mx-auto max-w-[1200px] scroll-mt-24 px-4 py-20 sm:px-6 sm:py-24">
           <div className="mb-12 grid gap-6 lg:grid-cols-2 lg:items-end">
             <div>
-              <Headline a={beta ? "Free on LinkedIn." : "One price a month."} b={beta ? "X when you need it." : "Every post checked."} className="text-[46px] sm:text-[68px]" />
+              <Headline a={beta ? "Free on LinkedIn, X when you need it" : "One price a month, every post checked"} className="text-[40px] leading-[1.04] sm:text-[56px]" />
             </div>
             <p className="max-w-[520px] text-[19px] leading-relaxed text-[var(--d-muted)] lg:justify-self-end">
               {beta
@@ -256,11 +261,11 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
 
         {/* ---------- FAQ ---------- */}
         <section id="faq" className="mx-auto grid max-w-[1200px] scroll-mt-24 gap-10 px-4 py-20 sm:px-6 sm:py-24 lg:grid-cols-[0.8fr_1.2fr]">
-          <Headline a="Before you" b="sign up." className="text-[46px] sm:text-[60px]" />
+          <Headline a="Before you sign up" className="text-[40px] leading-[1.04] sm:text-[56px]" />
           <div className="divide-y divide-[var(--d-sky-line)] border-y border-[var(--d-sky-line)]">
             {FAQ.map((f) => (
               <details key={f.q} className="group py-5">
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-[18px] font-bold [&::-webkit-details-marker]:hidden">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-[18px] font-semibold [&::-webkit-details-marker]:hidden">
                   {f.q}
                   <span aria-hidden="true" className="red flex-none text-[26px] leading-none transition-transform group-open:rotate-45">+</span>
                 </summary>
@@ -274,7 +279,7 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
         <section id="early-access" className="scroll-mt-24 bg-[var(--d-sky)]">
           <div className="mx-auto grid max-w-[1200px] items-center gap-10 px-4 py-20 sm:px-6 sm:py-24 lg:grid-cols-2">
             <div>
-              <Headline a="Your next post" b="is already in the news." className="text-[44px] sm:text-[64px]" />
+              <Headline a="Your next post is already in the news" className="text-[40px] leading-[1.04] sm:text-[56px]" />
               <p className="mt-6 max-w-[500px] text-[19px] leading-relaxed text-[var(--d-muted)]">
                 {open && beta && plan
                   ? `The ${plan === "agency" ? "Agency" : "Pro"} plan adds X and opens soon. Join the list and you will hear first. Until then, LinkedIn is free.`
@@ -286,7 +291,7 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
               </p>
             </div>
             {open && plan !== "agency" && !(beta && plan) ? (
-              <div className="rounded-2xl border-[1.5px] border-[var(--d-sky-line)] bg-[var(--surface)] p-8 shadow-[0_6px_0_var(--d-sky-line)]">
+              <div className="rounded-[6px] border border-[var(--line-strong)] bg-[var(--surface)] p-8">
                 <a href={signupHref} className="btn-desk w-full">{startLabel}</a>
                 <p className="mt-4 text-center text-[15px] text-[var(--d-muted)]">
                   Already on the desk? <Link href="/login" className="font-semibold underline">Sign in</Link>

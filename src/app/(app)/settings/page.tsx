@@ -21,7 +21,10 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const pro = (label: string) => <Link href="/billing" className="badge badge-accent ml-1" title={`${label} is part of Pro`}>Pro</Link>;
   const s = await getSettings();
   const field = fieldOf(s.profile.field);
-  const checks = await myChecks();
+  const checks = await myChecks({ x: ent.features.x });
+  const showX = ent.features.x;
+  // A hidden X control keeps its saved value, so saving a form never switches it off by accident.
+  const keep = (name: string, on: boolean) => (on ? <input type="hidden" name={name} value="on" /> : null);
   const accounts = await db().select().from(schema.platformAccounts).where(eq(schema.platformAccounts.userId, user.id));
   const sources = await db().select().from(schema.sources).where(eq(schema.sources.userId, user.id)).orderBy(asc(schema.sources.pillar), asc(schema.sources.name));
   const tgReady = telegramConfigured() && Boolean(env().TELEGRAM_BOT_USERNAME);
@@ -45,7 +48,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <ul className="card divide-y divide-line text-sm">
           {checks.map((c) => (
             <li key={c.label} className="flex gap-3 p-3">
-              <span className={c.ok ? "text-good" : "text-warn"}>{c.ok ? "✓" : "●"}</span>
+              <span aria-hidden="true" className={`mt-1.5 h-2 w-2 flex-none rounded-full ${c.ok ? "bg-[var(--good)]" : "bg-[var(--warn)]"}`} />
               <div><span className="font-medium">{c.label}</span>{!c.ok && <p className="text-muted">{c.hint}</p>}</div>
             </li>
           ))}
@@ -134,7 +137,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <label className="block"><span className="label">Quiet until</span><input name="fl_qe" defaultValue={s.fastLane.quietEnd} className="input" /></label>
           </div>
           <div className="flex gap-6">
-            <label className="flex items-center gap-2"><input type="checkbox" name="fl_x" defaultChecked={s.fastLane.platforms.includes("x")} /> X</label>
+            {showX ? <label className="flex items-center gap-2"><input type="checkbox" name="fl_x" defaultChecked={s.fastLane.platforms.includes("x")} /> X</label> : keep("fl_x", s.fastLane.platforms.includes("x"))}
             <label className="flex items-center gap-2"><input type="checkbox" name="fl_linkedin" defaultChecked={s.fastLane.platforms.includes("linkedin")} /> LinkedIn</label>
           </div>
           <button className="btn-primary">Save fast lane</button>
@@ -174,18 +177,18 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           <div className="grid gap-3 sm:grid-cols-3">
             <label className="block"><span className="label">Timezone</span><input name="timezone" defaultValue={s.timezone} className="input" /></label>
             <label className="block"><span className="label">Plan ahead (days)</span><input name="horizonDays" type="number" min={1} max={14} defaultValue={s.horizonDays} className="input" /></label>
-            <label className="block"><span className="label">Min. news score, X (1-10)</span><input name="minRelevance" type="number" min={1} max={10} defaultValue={s.minRelevance} className="input" /></label>
+            {showX ? <label className="block"><span className="label">Min. news score, X (1-10)</span><input name="minRelevance" type="number" min={1} max={10} defaultValue={s.minRelevance} className="input" /></label> : <input type="hidden" name="minRelevance" value={s.minRelevance} />}
             <label className="block"><span className="label">Min. news score, LinkedIn (1-10)</span><input name="linkedinMinRelevance" type="number" min={1} max={10} defaultValue={s.linkedinMinRelevance} className="input" /></label>
           </div>
           <label className="block"><span className="label">Your own sites (links to these are treated as your own articles)</span><input name="ownDomains" defaultValue={s.ownDomains.join(", ")} placeholder="yourname.dev, blog.yourname.com" className="input" /></label>
           <label className="flex items-center gap-2"><input type="checkbox" name="fillerPosts" defaultChecked={s.fillerPosts} /> Fill empty slots with evergreen explainers when there is nothing strong to post <span className="text-xs text-muted">(off: the slot stays empty)</span></label>
           <div className="flex flex-wrap gap-6">
-            <label className="flex items-center gap-2"><input type="checkbox" name="tags_x" defaultChecked={s.hashtags.x} /> Add 1-2 hashtags on X</label>
+            {showX ? <label className="flex items-center gap-2"><input type="checkbox" name="tags_x" defaultChecked={s.hashtags.x} /> Add 1-2 hashtags on X</label> : keep("tags_x", s.hashtags.x)}
             <label className="flex items-center gap-2"><input type="checkbox" name="tags_linkedin" defaultChecked={s.hashtags.linkedin} /> Add up to 3 hashtags on LinkedIn</label>
           </div>
           <div className="flex flex-wrap gap-6">
             <label className="flex items-center gap-2"><input type="checkbox" name="img_linkedin" defaultChecked={s.images.linkedin} /> Add the logo of what a LinkedIn post is about, when there is one</label>
-            <label className="flex items-center gap-2"><input type="checkbox" name="img_x" defaultChecked={s.images.x} /> Add the logo on X posts too</label>
+            {showX ? <label className="flex items-center gap-2"><input type="checkbox" name="img_x" defaultChecked={s.images.x} /> Add the logo on X posts too</label> : keep("img_x", s.images.x)}
           </div>
           <div className="flex gap-6">
             <label className="flex items-center gap-2"><input type="checkbox" name="link_linkedin" defaultChecked={s.includeLinks.linkedin} /> Add the news source link on LinkedIn</label>
@@ -201,7 +204,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           <p className="text-muted">Get every new post in Telegram with Approve and Remove buttons, and message the bot to add notes or ask for a post. Free.</p>
           {user.telegramChatId ? (
             <div className="flex flex-wrap items-center gap-3">
-              <span className="flex-1 font-medium text-good">✓ Linked</span>
+              <span className="flex-1 font-medium text-good">Linked</span>
               <form action={unlinkTelegramAction}><button className="btn-ghost">Disconnect</button></form>
             </div>
           ) : tgReady ? (

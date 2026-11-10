@@ -23,7 +23,7 @@ export function Pricing({ signupsOpen = false, beta = false }: { signupsOpen?: b
               className={`flex h-8 items-center gap-2 rounded-full px-4 transition-colors ${yearly === o.v ? "bg-[var(--ink)] text-[var(--bg)]" : "text-[var(--muted)] hover:text-[var(--ink)]"}`}
             >
               {o.label}
-              {o.v && <span className={`rounded-full px-1.5 py-px text-[11px] ${yearly ? "bg-[var(--bg)]/15 text-[var(--bg)]" : "bg-[var(--good-soft)] text-[var(--good)]"}`}>Save 20%</span>}
+              {o.v && <span className={`text-[12px] ${yearly ? "opacity-70" : "text-[var(--good)]"}`}>save 20%</span>}
             </button>
           ))}
         </div>
@@ -31,10 +31,10 @@ export function Pricing({ signupsOpen = false, beta = false }: { signupsOpen?: b
 
       <div className="grid gap-4 lg:grid-cols-3">
         {beta && (
-          <div className="relative flex flex-col rounded-2xl border border-[var(--ink)] bg-[var(--surface)] p-6 shadow-[0_1px_0_var(--line),0_12px_32px_-12px_rgba(16,24,40,.18)]">
-            <div className="flex items-center gap-2">
+          <div className="relative flex flex-col rounded-[6px] border border-[var(--ink)] bg-[var(--surface)] p-6">
+            <div className="flex items-baseline gap-2">
               <h3 className="text-[17px] font-semibold">Free beta</h3>
-              <span className="badge badge-accent">Open now</span>
+              <span className="text-[13px] text-[var(--accent)]">Open now</span>
             </div>
             <p className="mt-1 min-h-[42px] text-[14px] text-[var(--muted)]">Try the whole desk on LinkedIn while PostFlow is in beta.</p>
             <div className="mt-5 flex items-baseline gap-1">
@@ -61,15 +61,14 @@ export function Pricing({ signupsOpen = false, beta = false }: { signupsOpen?: b
         {PLANS.filter((p) => !beta || p.id !== "starter").map((p) => {
           const price = yearly ? p.yearly : p.monthly;
           return (
-            // fixmyslop-ignore[ui/neon-glow] neutral grey elevation on the recommended plan only, no colour
             <div
               key={p.id}
-              className={`relative flex flex-col rounded-2xl border bg-[var(--surface)] p-6 ${p.popular && !beta ? "border-[var(--ink)] shadow-[0_1px_0_var(--line),0_12px_32px_-12px_rgba(16,24,40,.18)]" : "border-[var(--line)]"}`}
+              className={`relative flex flex-col rounded-[6px] border bg-[var(--surface)] p-6 ${p.popular && !beta ? "border-[var(--ink)]" : "border-[var(--line-strong)]"}`}
             >
-              <div className="flex items-center gap-2">
+              <div className="flex items-baseline gap-2">
                 <h3 className="text-[17px] font-semibold">{p.name}</h3>
-                {p.popular && !beta && <span className="badge badge-accent">Most popular</span>}
-                {(p.soon || beta) && <span className="badge">{beta && !p.soon ? "Opens soon" : "Coming soon"}</span>}
+                {p.popular && !beta && <span className="text-[13px] text-[var(--accent)]">Most popular</span>}
+                {(p.soon || beta) && <span className="text-[13px] text-[var(--muted)]">{beta && !p.soon ? "Opens soon" : "Coming soon"}</span>}
               </div>
               <p className="mt-1 min-h-[42px] text-[14px] text-[var(--muted)]">{p.tagline}</p>
               <div className="mt-5 flex items-baseline gap-1">

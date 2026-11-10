@@ -154,7 +154,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
           <ul className="panel divide-y divide-[var(--line)] text-[13px]">
             {checks.map((c) => (
               <li key={c.label} className="flex gap-3 p-3">
-                <span className={c.ok ? "text-good" : c.critical ? "text-bad" : "text-warn"}>{c.ok ? "✓" : "●"}</span>
+                <span aria-hidden="true" className={`mt-1.5 h-2 w-2 flex-none rounded-full ${c.ok ? "bg-[var(--good)]" : c.critical ? "bg-[var(--bad)]" : "bg-[var(--warn)]"}`} />
                 <div><span className="font-medium">{c.label}</span>{!c.ok && <p className="text-[var(--muted)]">{c.hint}</p>}</div>
               </li>
             ))}

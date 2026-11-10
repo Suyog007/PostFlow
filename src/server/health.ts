@@ -27,19 +27,22 @@ export async function lastHeartbeat(): Promise<Date | null> {
 }
 
 /** What a customer sees: their own setup. No server configuration details. */
-export async function myChecks(): Promise<Check[]> {
+/** What a user sees in Settings. Each label says the current state, so a missing piece never reads as done. */
+export async function myChecks(opts: { x: boolean }): Promise<Check[]> {
   const userId = await uid();
   const accounts = await db().select().from(schema.platformAccounts).where(eq(schema.platformAccounts.userId, userId));
   const live = (p: string) => accounts.find((a) => a.platform === p && a.status === "connected");
   const beat = await lastHeartbeat();
   const beatOk = !!beat && Date.now() - beat.getTime() < 30 * 60_000;
   const chat = await myTelegramChat();
-  return [
-    { label: "LinkedIn connected", ok: !!live("linkedin"), hint: "Press Connect next to LinkedIn below." },
-    { label: "X connected", ok: !!live("x"), hint: "Press Connect next to X below." },
-    { label: "Telegram linked", ok: !!chat, hint: telegramConfigured() ? "Optional: approve posts and send notes from your phone." : "Telegram is not available yet." },
-    { label: "Autopilot running", ok: beatOk, hint: "The scheduler has not checked in recently. We are looking into it." },
+  const checks: Check[] = [
+    { label: live("linkedin") ? "LinkedIn connected" : "LinkedIn not connected", ok: !!live("linkedin"), hint: "Press Connect next to LinkedIn below." },
   ];
+  // X is a Pro feature: during the free beta it is not offered, so it is not listed as missing either.
+  if (opts.x) checks.push({ label: live("x") ? "X connected" : "X not connected", ok: !!live("x"), hint: "Press Connect next to X below." });
+  if (telegramConfigured()) checks.push({ label: chat ? "Telegram linked" : "Telegram not linked", ok: !!chat, hint: "Optional: approve posts and send notes from your phone." });
+  checks.push({ label: beatOk ? "Autopilot running" : "Autopilot not checking in", ok: beatOk, hint: "The scheduler has not checked in recently. We are looking into it." });
+  return checks;
 }
 
 /** What the admin sees: server configuration. */

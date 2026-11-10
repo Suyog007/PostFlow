@@ -8,7 +8,7 @@ export default function NotFound() {
         <Logo size={26} />
         <span className="display text-[24px]">PostFlow</span>
       </Link>
-      <p className="mono text-[13px] uppercase tracking-[.14em] text-[var(--muted)]">Error 404</p>
+      <p className="mono text-[13px] text-[var(--muted)]">Error 404</p>
       <h1 className="display mt-3 text-[44px]">
         This page <span className="em">isn&apos;t in print.</span>
       </h1>

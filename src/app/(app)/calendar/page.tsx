@@ -269,7 +269,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
           return (
             <section key={d.toISODate()} aria-label={d.toFormat("cccc d LLL")} className={`flex min-h-[420px] min-w-0 flex-col ${i ? "border-l border-[var(--line)]" : ""} ${isToday ? "bg-[var(--mark-soft)]/40" : ""}`}>
               <header className="flex items-baseline justify-between gap-1 border-b border-[var(--line)] px-2.5 py-2">
-                <span className={`text-[11px] font-semibold uppercase tracking-wide ${isToday ? "text-[var(--ink)]" : "text-[var(--subtle)]"}`}>{isToday ? "Today" : d.toFormat("ccc")}</span>
+                <span className={`text-[12px] font-semibold ${isToday ? "text-[var(--ink)]" : "text-[var(--subtle)]"}`}>{isToday ? "Today" : d.toFormat("ccc")}</span>
                 <span className={`flex h-7 min-w-7 items-center justify-center rounded-full px-1 text-[14px] font-semibold tnum ${isToday ? "bg-[var(--mark)] text-[var(--mark-ink)]" : ""}`}>{d.day}</span>
               </header>
               <div className="flex flex-1 flex-col gap-2 p-2">
@@ -286,7 +286,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
           const dayPosts = entries.filter((p) => DateTime.fromJSDate(p.scheduledAt, { zone: tz }).hasSame(d, "day"));
           return (
             <section key={d.toISODate()}>
-              <h2 className={`mb-1.5 text-[12px] font-semibold uppercase tracking-wide ${d.hasSame(today, "day") ? "text-[var(--ink)]" : "text-[var(--subtle)]"}`}>{d.toFormat("cccc d LLL")}{d.hasSame(today, "day") ? " · Today" : ""}</h2>
+              <h2 className={`mb-1.5 text-[12px] font-semibold ${d.hasSame(today, "day") ? "text-[var(--ink)]" : "text-[var(--subtle)]"}`}>{d.toFormat("cccc d LLL")}{d.hasSame(today, "day") ? " · Today" : ""}</h2>
               {dayPosts.length ? (
                 <div className="panel divide">
                   {dayPosts.map((p) => isOpen(p) ? (

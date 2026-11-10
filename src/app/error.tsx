@@ -10,7 +10,7 @@ export default function ErrorPage({ error, reset }: { error: Error & { digest?: 
   }, [error]);
   return (
     <main className="flex min-h-screen flex-col items-center justify-center px-4 text-center">
-      <p className="mono text-[13px] uppercase tracking-[.14em] text-[var(--muted)]">Something went wrong</p>
+      <p className="mono text-[13px] text-[var(--muted)]">Something went wrong</p>
       <h1 className="display mt-3 text-[40px]">
         This page <span className="em">didn&apos;t load.</span>
       </h1>

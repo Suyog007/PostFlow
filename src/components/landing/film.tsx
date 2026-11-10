@@ -5,6 +5,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useInView, usePrefersReducedMotion } from "./motion";
+import { Icon, PlatformGlyph } from "@/components/ui";
 
 const SCENES = [
   { id: "news", label: "News breaks", caption: "Hundreds of stories land every day. PostFlow reads them all, from the outlets and topics of your field.", ms: 4200 },
@@ -56,7 +57,7 @@ export function NewsFilm() {
       </div>
 
       <p className="mt-5 min-h-[56px] max-w-[720px] text-[18px] leading-relaxed" aria-live="polite">
-        <span className="typed mr-2 text-[13px] uppercase tracking-[.14em] text-[var(--accent)]">Step {i + 1}</span>
+        <span className="typed mr-2 text-[13px] text-[var(--accent)]">Step {i + 1}</span>
         {scene.caption}
       </p>
 
@@ -68,7 +69,7 @@ export function NewsFilm() {
                 <span className="film-bar">
                   <span className={n < i ? "film-fill is-done" : n === i ? `film-fill ${playing ? "is-running" : "is-done"}` : "film-fill"} style={n === i && playing ? { animationDuration: `${s.ms}ms` } : undefined} />
                 </span>
-                <span className={`typed mt-1.5 hidden text-[12px] uppercase tracking-[.1em] sm:block ${n === i ? "text-[var(--d-ink)]" : "text-[var(--d-muted)] group-hover:text-[var(--d-ink)]"}`}>{s.label}</span>
+                <span className={`typed mt-1.5 hidden text-[12px] sm:block ${n === i ? "text-[var(--d-ink)]" : "text-[var(--d-muted)] group-hover:text-[var(--d-ink)]"}`}>{s.label}</span>
               </button>
             </li>
           ))}
@@ -79,7 +80,7 @@ export function NewsFilm() {
           </button>
         )}
       </div>
-      <p className="typed mt-3 text-[12px] uppercase tracking-[.1em] text-[var(--d-muted)]">Illustration · made-up outlets and stories</p>
+      <p className="typed mt-3 text-[12px] text-[var(--d-muted)]">Illustration · made-up outlets and stories</p>
     </div>
   );
 }
@@ -95,7 +96,7 @@ function Sources({ dim }: { dim?: boolean }) {
           className={`film-card ${dim ? (h.keep ? "film-keep" : "film-out") : "film-pop"}`}
           style={{ animationDelay: dim ? `${500 + n * 140}ms` : `${n * 260}ms` }}
         >
-          <span className="typed text-[12px] uppercase tracking-[.12em] text-[var(--d-muted)]">{h.src}</span>
+          <span className="typed text-[12px] text-[var(--d-muted)]">{h.src}</span>
           <span className="mt-1 block text-[14px] font-semibold leading-snug">{h.t}</span>
           {dim && h.score !== undefined && (
             <span className={`film-score film-pop ${h.keep ? "is-high" : ""}`} style={{ animationDelay: `${900 + n * 120}ms` }}>
@@ -111,7 +112,7 @@ function Sources({ dim }: { dim?: boolean }) {
 function SceneNews() {
   return (
     <div>
-      <SceneTitle>The news breaks.</SceneTitle>
+      <SceneTitle>The news breaks</SceneTitle>
       <Sources />
     </div>
   );
@@ -121,7 +122,7 @@ function ScenePick() {
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center gap-2 film-pop">
-        <span className="typed text-[12px] uppercase tracking-[.12em] text-[var(--d-muted)]">Your field</span>
+        <span className="typed text-[12px] text-[var(--d-muted)]">Your field</span>
         <span className="film-chip">Eye doctor</span>
         <span className="film-chip">glaucoma</span>
         <span className="film-chip">children's eyes</span>
@@ -157,17 +158,17 @@ function SceneCheck() {
       <div className="space-y-2.5">
         {claims.map((c, n) => (
           <div key={c} className="film-card film-pop flex items-start gap-2.5" style={{ animationDelay: `${n * 450}ms` }}>
-            <span className="film-tick film-pop" style={{ animationDelay: `${n * 450 + 350}ms` }}>✓</span>
+            <span className="film-tick film-pop" style={{ animationDelay: `${n * 450 + 350}ms` }}><Icon name="check" size={14} /></span>
             <span className="text-[14px] leading-snug">
               {c}
-              <span className="typed mt-1 block text-[12px] uppercase tracking-[.1em] text-[var(--d-muted)]">Found in the source</span>
+              <span className="typed mt-1 block text-[12px] text-[var(--d-muted)]">Found in the source</span>
             </span>
           </div>
         ))}
       </div>
       <div className="flex flex-col items-center gap-4">
         <span className="stamp film-stamp" style={{ animationDelay: "1700ms" }}>Fact-checked</span>
-        <span className="stamp film-stamp" style={{ animationDelay: "2700ms" }}>2nd opinion ✓</span>
+        <span className="stamp film-stamp" style={{ animationDelay: "2700ms" }}>Second check</span>
       </div>
     </div>
   );
@@ -177,14 +178,14 @@ function SceneApprove() {
   return (
     <div className="mx-auto flex max-w-[360px] flex-col gap-3">
       <div className="film-phone film-pop">
-        <div className="typed mb-2 text-[12px] uppercase tracking-[.12em] text-[var(--d-muted)]">Telegram · PostFlow</div>
+        <div className="typed mb-2 text-[12px] text-[var(--d-muted)]">Telegram · PostFlow</div>
         <div className="film-bubble">
           <p className="text-[13px] leading-snug">LinkedIn post at 09:15. Approve it?</p>
           <p className="mt-2 border-l-2 border-[var(--line-strong)] pl-2 text-[12px] leading-snug text-[var(--d-muted)]">Children should now have their first eye check at three, not five…</p>
         </div>
         <div className="mt-2 grid grid-cols-2 gap-2">
-          <span className="film-tg film-press">✅ Approve</span>
-          <span className="film-tg">🔁 Other story</span>
+          <span className="film-tg film-press">Approve</span>
+          <span className="film-tg">Other story</span>
         </div>
       </div>
       <div className="film-toast film-pop" style={{ animationDelay: "2200ms" }}>Approved. Goes out at 09:15.</div>
@@ -199,8 +200,8 @@ function SceneLive() {
         <p className="whitespace-pre-line text-[15px] leading-relaxed">{POST}</p>
       </PostCard>
       <div className="mt-3 flex flex-wrap gap-2">
-        {["👍 128", "💬 24", "↻ 17"].map((r, n) => (
-          <span key={r} className="film-chip film-pop" style={{ animationDelay: `${700 + n * 350}ms` }}>{r}</span>
+        {([["like", "128"], ["comment", "24"], ["repost", "17"]] as const).map(([icon, count], n) => (
+          <span key={icon} className="film-chip film-pop gap-1.5 tnum" style={{ animationDelay: `${700 + n * 350}ms` }}><Icon name={icon} size={16} className="text-[var(--d-muted)]" />{count}</span>
         ))}
       </div>
     </div>
@@ -215,12 +216,12 @@ function PostCard({ children, live }: { children: React.ReactNode; live?: boolea
   return (
     <div className="film-card film-pop p-5">
       <div className="mb-3 flex items-center gap-2.5">
-        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--d-cream)] text-[12px] font-bold">DR</span>
+        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--d-cream)] text-[12px] font-semibold">AR</span>
         <span className="min-w-0 flex-1">
-          <span className="block text-[14px] font-bold">Dr. Rana</span>
+          <span className="block text-[14px] font-semibold">Dr. Asha Rana</span>
           <span className="block text-[12px] text-[var(--d-muted)]">Eye doctor · {live ? "just now" : "draft"}</span>
         </span>
-        <span className="rounded-[3px] bg-[#0a66c2] px-1.5 text-[12px] font-bold text-white">in</span>
+        <PlatformGlyph platform="linkedin" size={16} />
       </div>
       {children}
     </div>

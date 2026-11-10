@@ -68,7 +68,7 @@ function LogoCard({ name, color, mark, label }: { name: string; color: string; m
       <rect width="640" height="300" fill="#ffffff" />
       <g transform="translate(176 118)">
         <g fill={color}>{mark}</g>
-        <text x="84" y="48" fontFamily="Inter, system-ui, sans-serif" fontWeight="800" fontSize="44" letterSpacing="-1.5" fill="#18221e">{name}</text>
+        <text x="84" y="48" fontFamily="Inter, system-ui, sans-serif" fontWeight="600" fontSize="44" letterSpacing="-1" fill="#18221e">{name}</text>
       </g>
     </svg>
   );
@@ -80,10 +80,10 @@ const PICTURES: Record<string, ReactNode> = {
 };
 
 const FIELDS = [
-  { id: "security", label: "Tech", role: "Software engineer" },
-  { id: "ai", label: "AI", role: "Startup founder" },
-  { id: "health", label: "Healthcare", role: "Eye doctor" },
-  { id: "tax", label: "Accounting", role: "Chartered accountant" },
+  { id: "security", label: "Tech", role: "Software engineer", name: "Sam Carter" },
+  { id: "ai", label: "AI", role: "Startup founder", name: "Lena Brooks" },
+  { id: "health", label: "Healthcare", role: "Eye doctor", name: "Dr. Asha Rana" },
+  { id: "tax", label: "Accounting", role: "Chartered accountant", name: "Tom Hale" },
 ] as const;
 type Field = (typeof FIELDS)[number]["id"];
 
@@ -113,10 +113,12 @@ const SAMPLES: Record<Field, { linkedin: string; x: string; tags: string }> = {
 };
 
 /** Pick a field and a platform, see the kind of post PostFlow writes, with the logo of what it is about. */
-export function HeroDemo({ name = "Your Name" }: { name?: string }) {
+export function HeroDemo() {
   const [field, setField] = useState<Field>("security");
   const [platform, setPlatform] = useState<"linkedin" | "x">("linkedin");
   const s = SAMPLES[field];
+  const who = FIELDS.find((f) => f.id === field)!;
+  const initials = who.name.replace("Dr. ", "").split(" ").map((w) => w[0]).join("").slice(0, 2);
   const text = platform === "x" ? `${s.x}\n\n${s.tags}` : s.linkedin;
   return (
     <div className="relative">
@@ -124,7 +126,7 @@ export function HeroDemo({ name = "Your Name" }: { name?: string }) {
       <div className="flex flex-wrap items-end justify-between gap-3 border-b-2 border-[var(--ink)] pb-2">
         <div role="radiogroup" aria-label="News from" className="flex flex-wrap gap-x-4 gap-y-1">
           {FIELDS.map((f) => (
-            <button key={f.id} type="button" role="radio" aria-checked={field === f.id} onClick={() => setField(f.id)} className={`typed py-1 text-[13px] uppercase tracking-[.1em] ${field === f.id ? "font-semibold text-[var(--ink)] underline decoration-[var(--mark)] decoration-[3px] underline-offset-[7px]" : "text-[var(--d-muted)] hover:text-[var(--ink)]"}`}>
+            <button key={f.id} type="button" role="radio" aria-checked={field === f.id} onClick={() => setField(f.id)} className={`typed py-1 text-[13px] ${field === f.id ? "font-semibold text-[var(--ink)] underline decoration-[var(--mark)] decoration-[3px] underline-offset-[7px]" : "text-[var(--d-muted)] hover:text-[var(--ink)]"}`}>
               {f.label}
             </button>
           ))}
@@ -139,10 +141,10 @@ export function HeroDemo({ name = "Your Name" }: { name?: string }) {
       </div>
       <article aria-live="polite" className="mt-6 -rotate-[0.6deg] overflow-hidden rounded-[4px] border border-[var(--line-strong)] bg-[var(--surface)] shadow-[0_18px_40px_-22px_rgba(24,34,30,.45)]">
         <div className="flex items-center gap-3 px-5 pt-4">
-          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--d-cream)] text-[14px] font-bold" aria-hidden="true">{name.split(" ").map((w) => w[0]).join("").slice(0, 2)}</span>
+          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--d-cream)] text-[14px] font-semibold" aria-hidden="true">{initials}</span>
           <div className="min-w-0">
-            <p className="text-[15px] font-bold">{name}</p>
-            <p className="truncate text-[13px] text-[var(--d-muted)]">{FIELDS.find((f) => f.id === field)?.role} · now</p>
+            <p className="text-[15px] font-semibold">{who.name}</p>
+            <p className="truncate text-[13px] text-[var(--d-muted)]">{who.role} · now</p>
           </div>
           <span className="ml-auto"><PlatformGlyph platform={platform} size={20} /></span>
         </div>
