@@ -156,6 +156,30 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
 
         <Rule />
 
+        {/* ---------- a real post ---------- */}
+        <section id="real" className="mx-auto grid max-w-[1200px] scroll-mt-24 items-center gap-10 px-4 py-20 sm:px-6 sm:py-24 lg:grid-cols-[0.9fr_1.1fr] lg:gap-16">
+          <div>
+            <Headline a="One real post." b="Drafted by PostFlow." className="text-[46px] sm:text-[60px]" />
+            <p className="mt-6 max-w-[480px] text-[19px] leading-relaxed text-[var(--d-muted)]">
+              PostFlow found this story in its owner's feeds, wrote the post, checked it against the article and waited for approval. It reached 263 impressions in its first 11 minutes.
+            </p>
+            <p className="typed mt-5 text-[13px] uppercase tracking-[.12em] text-[var(--d-muted)]">Published on LinkedIn · name and photo changed for privacy</p>
+          </div>
+          <figure className="reveal overflow-hidden rounded-[6px] border border-[var(--line-strong)] bg-white shadow-[0_18px_40px_-22px_rgba(24,34,30,.45)]">
+            <img
+              src="/landing/real-post.webp"
+              width={880}
+              height={673}
+              loading="lazy"
+              decoding="async"
+              alt="A LinkedIn post drafted by PostFlow about Meta's Muse Ember model, with 263 impressions after 11 minutes. The author's name and photo are replaced with a placeholder."
+              className="block h-auto w-full"
+            />
+          </figure>
+        </section>
+
+        <Rule />
+
         {/* ---------- watch it work ---------- */}
         <section id="watch" className="mx-auto max-w-[1200px] scroll-mt-24 px-4 py-20 sm:px-6 sm:py-24">
           <div className="mb-10 grid gap-6 lg:grid-cols-2 lg:items-end">
