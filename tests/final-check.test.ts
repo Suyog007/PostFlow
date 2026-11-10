@@ -118,8 +118,8 @@ describe("autopilot leaves room for what you ask for", () => {
     await resetDb();
     await saveSettings({ slots: SLOT, horizonDays: 3, pillars: { own_work: 0, news: 1, local: 0, learning: 0 } });
     await addStory();
-    // The test account is on Pro: 200 calls a day, so 140 is the autopilot's share.
-    await db().insert(schema.llmCalls).values(Array.from({ length: 140 }, () => ({ userId: me(), task: "write_post", model: "m", status: "ok" })));
+    // The test account is on Pro: 300 calls a day, so 210 is the autopilot's share.
+    await db().insert(schema.llmCalls).values(Array.from({ length: 210 }, () => ({ userId: me(), task: "write_post", model: "m", status: "ok" })));
     const calls = fakeLLM((req) => (req.schemaName === "write_post" ? { text: "Acme says Postgres backups now take seconds, not an hour." } : GOOD_REVIEW));
     const auto = await fillCalendar({ max: 1 });
     expect(auto.idle).toMatch(/saving the rest of today's AI budget/);
