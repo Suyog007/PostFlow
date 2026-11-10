@@ -48,11 +48,12 @@ export async function signupAction(_: FormState, form: FormData): Promise<FormSt
     if (!form.get("terms")) return { error: "Please accept the terms to continue." };
     user = await createUser({ email, password, name: String(form.get("name") ?? ""), verified: false, timezone: String(form.get("tz") ?? "") || undefined, source: await visitSource() });
     await startSession(user);
-    await sendVerificationEmail(user);
   } catch (err) {
     return { error: message(err) };
   }
-  redirect("/verify-email");
+  // The account exists now; if the email fails, say so on the next page instead of implying it was sent.
+  const sent = await sendVerificationEmail(user).then(() => true, () => false);
+  redirect(sent ? "/verify-email" : `/verify-email?error=${encodeURIComponent("Your account is ready, but we could not send the confirmation email just now. Press \"Send the link again\" in a minute.")}`);
 }
 
 export async function logoutAction() {
