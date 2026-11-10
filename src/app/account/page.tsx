@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { contactEmail } from "@/server/env";
 import type { Metadata } from "next";
 import { requireUser } from "@/server/auth";
 import { entitlementOf } from "@/server/billing/plans";
@@ -58,6 +59,15 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
             </form>
           )}
         </section>
+
+        {contactEmail() && (
+          <section className="panel p-5">
+            <h2 className="font-semibold">Help</h2>
+            <p className="mt-1 text-[14px] text-[var(--muted)]">
+              A question, a bug or a post that looks wrong? Email <a href={`mailto:${contactEmail()}`} className="font-medium text-[var(--ink)] underline">{contactEmail()}</a> and a person will reply.
+            </p>
+          </section>
+        )}
 
         <section className="panel p-5">
           <h2 className="font-semibold">Sessions</h2>

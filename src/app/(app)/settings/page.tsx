@@ -9,7 +9,7 @@ import { myChecks } from "@/server/health";
 import { requireActiveUser } from "@/server/auth";
 import { approvalGate, entitlementOf } from "@/server/billing/plans";
 import { telegramConfigured } from "@/server/telegram";
-import { env } from "@/server/env";
+import { contactEmail, env } from "@/server/env";
 import { isPlatformConfigured } from "@/server/platforms/accounts";
 import { ScheduleEditor } from "@/components/schedule-editor";
 import { addSourceAction, connectAction, deleteSourceAction, disconnectAction, runTickAction, saveFastLaneAction, saveVoiceAction, saveAdvancedAction, saveSlotsAction, unlinkTelegramAction, toggleSourceAction, togglePauseAction, toggleApprovalAction, removeStyleNoteAction, connectTelegramAction } from "@/app/actions";
@@ -190,6 +190,14 @@ async function General({ user, s, ent, showX, pro }: { user: User; s: S; ent: En
           )}
         </div>
       </Section>
+
+      {contactEmail() && (
+        <Section title="Help">
+          <p className="text-[14px] text-[var(--muted)]">
+            A question, a bug or a post that looks wrong? Email <a href={`mailto:${contactEmail()}`} className="font-medium text-[var(--ink)] underline">{contactEmail()}</a> and a person will reply.
+          </p>
+        </Section>
+      )}
     </>
   );
 }

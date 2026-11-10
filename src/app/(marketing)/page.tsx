@@ -10,7 +10,7 @@ import { LandingMotion } from "@/components/landing/motion";
 import { DeskNav, HeroDemo } from "@/components/landing/desk";
 import { NewsFilm } from "@/components/landing/film";
 import { BETA, TRIAL_DAYS } from "@/lib/pricing";
-import { env } from "@/server/env";
+import { contactEmail, env } from "@/server/env";
 
 const TITLE = "PostFlow · The news breaks. Your post is ready.";
 const DESCRIPTION =
@@ -317,6 +317,7 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
             <a href="#faq" className="hover:text-[var(--d-ink)]">FAQ</a>
             <Link href="/terms" className="hover:text-[var(--d-ink)]">Terms</Link>
             <Link href="/privacy" className="hover:text-[var(--d-ink)]">Privacy</Link>
+            {contactEmail() && <a href={`mailto:${contactEmail()}`} className="hover:text-[var(--d-ink)]">Contact</a>}
           </nav>
           <p className="sm:ml-auto">© {new Date().getFullYear()} PostFlow</p>
         </div>

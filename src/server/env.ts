@@ -104,3 +104,9 @@ export function env(): Env {
 export function resetEnvCache() {
   cached = undefined;
 }
+
+/** The support address shown to customers, or null while it is unset or a placeholder. */
+export function contactEmail(): string | null {
+  const c = env().CONTACT_EMAIL?.trim();
+  return c && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c) ? c : null;
+}

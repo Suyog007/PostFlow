@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Logo, PlatformGlyph } from "./ui";
+import { contactEmail } from "@/server/env";
 
 const STEPS = [
   { t: "Pick your field and topics", b: "Engineer, doctor, accountant, lawyer or anything else." },
@@ -81,6 +82,11 @@ export function AuthShell({ title, subtitle, children, footer }: { title: string
           {subtitle && <p className="mt-2 text-[15px] text-[var(--muted)]">{subtitle}</p>}
           <div className="panel mt-6 p-6">{children}</div>
           {footer && <div className="mt-4 text-center text-[13px] text-[var(--muted)]">{footer}</div>}
+          {contactEmail() && (
+            <p className="mt-6 text-center text-[13px] text-[var(--subtle)]">
+              Trouble signing in? Email <a href={`mailto:${contactEmail()}`} className="underline hover:text-[var(--ink)]">{contactEmail()}</a>
+            </p>
+          )}
         </div>
       </main>
     </div>
