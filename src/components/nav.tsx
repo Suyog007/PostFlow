@@ -5,14 +5,13 @@ import { usePathname } from "next/navigation";
 import { Icon } from "./ui";
 
 const ITEMS = [
-  { href: "/calendar", label: "Calendar", icon: "calendar" },
-  { href: "/create", label: "Create", icon: "create" },
-  { href: "/notes", label: "Notes", icon: "notes" },
+  { href: "/calendar", label: "Posts", icon: "calendar" },
+  { href: "/create", label: "Write", icon: "create" },
+  { href: "/notes", label: "Ideas", icon: "notes" },
   { href: "/settings", label: "Settings", icon: "settings" },
 ] as const;
 
 const SECONDARY = [
-  { href: "/billing", label: "Billing", icon: "chart" },
   { href: "/account", label: "Account", icon: "shield" },
 ] as const;
 
@@ -30,7 +29,7 @@ export function SideNav({ owner = false }: { owner?: boolean }) {
           key={i.href}
           href={i.href}
           aria-current={active(path, i.href) ? "page" : undefined}
-          className={`relative flex h-9 items-center gap-2.5 rounded-md px-3 text-[14px] font-semibold ${active(path, i.href) ? "bg-[var(--surface)] text-[var(--ink)] shadow-[0_2px_0_var(--line)] before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-full before:bg-[var(--accent)]" : "text-[var(--muted)] hover:bg-[var(--surface)]/70 hover:text-[var(--ink)]"}`}
+          className={`relative flex h-10 items-center gap-3 rounded-[8px] px-3 text-[15px] font-medium ${active(path, i.href) ? "bg-[var(--surface)] text-[var(--ink)] shadow-[0_2px_0_var(--line)] before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-full before:bg-[var(--accent)]" : "text-[var(--muted)] hover:bg-[var(--surface)]/70 hover:text-[var(--ink)]"}`}
         >
           <Icon name={i.icon} size={16} />
           {i.label}

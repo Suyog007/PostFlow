@@ -19,11 +19,11 @@ export async function GET(req: Request, ctx: { params: Promise<{ platform: strin
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
   const denied = url.searchParams.get("error_description") ?? url.searchParams.get("error");
-  if (denied || !code || !state) return NextResponse.redirect(`${base}/settings?error=${encodeURIComponent(denied ?? "Missing authorization code")}`);
+  if (denied || !code || !state) return NextResponse.redirect(`${base}/settings?tab=accounts&error=${encodeURIComponent(denied ?? "Missing authorization code")}`);
   try {
     await completeOAuth(platform, state, code);
   } catch (err) {
-    return NextResponse.redirect(`${base}/settings?error=${encodeURIComponent((err as Error).message)}`);
+    return NextResponse.redirect(`${base}/settings?tab=accounts&error=${encodeURIComponent((err as Error).message)}`);
   }
   // The first account connected: start writing straight away and show the calendar's "first posts" loader,
   // instead of leaving the person on Settings until the next scheduler run.

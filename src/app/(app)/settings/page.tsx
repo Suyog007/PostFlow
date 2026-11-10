@@ -12,17 +12,20 @@ import { telegramConfigured } from "@/server/telegram";
 import { contactEmail, env } from "@/server/env";
 import { isPlatformConfigured } from "@/server/platforms/accounts";
 import { ScheduleEditor } from "@/components/schedule-editor";
-import { addSourceAction, connectAction, deleteSourceAction, disconnectAction, runTickAction, saveFastLaneAction, saveVoiceAction, saveAdvancedAction, saveSlotsAction, unlinkTelegramAction, toggleSourceAction, togglePauseAction, toggleApprovalAction, removeStyleNoteAction, connectTelegramAction } from "@/app/actions";
+import { ToneField } from "@/components/tone-field";
+import { addSourceAction, connectAction, deleteSourceAction, disconnectAction, runTickAction, saveFastLaneAction, saveVoiceAction, saveAdvancedAction, savePostStyleAction, saveSlotsAction, unlinkTelegramAction, toggleSourceAction, togglePauseAction, toggleApprovalAction, removeStyleNoteAction, connectTelegramAction } from "@/app/actions";
 import { Flash } from "../flash";
 
 const TABS = [
-  { id: "general", label: "General" },
-  { id: "schedule", label: "Schedule" },
-  { id: "voice", label: "Voice" },
-  { id: "sources", label: "Sources" },
-  { id: "advanced", label: "Advanced" },
+  { id: "you", label: "About you" },
+  { id: "times", label: "Posting times" },
+  { id: "accounts", label: "Accounts" },
+  { id: "sources", label: "News sources" },
+  { id: "more", label: "More" },
 ] as const;
 type Tab = (typeof TABS)[number]["id"];
+/** Old tab names still open the right place, for links people already have. */
+const OLD: Record<string, Tab> = { voice: "you", schedule: "times", general: "accounts", advanced: "more" };
 
 /** A titled block in a tab: heading, one line on what it does, then the controls. */
 function Section({ title, hint, children, id }: { title: ReactNode; hint?: ReactNode; children: ReactNode; id?: string }) {
@@ -59,7 +62,8 @@ function timezones(current: string): string[] {
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ ok?: string; error?: string; connected?: string; tab?: string }> }) {
   const sp = await searchParams;
-  const tab: Tab = TABS.some((t) => t.id === sp.tab) ? (sp.tab as Tab) : "general";
+  const asked = OLD[sp.tab ?? ""] ?? sp.tab;
+  const tab: Tab = TABS.some((t) => t.id === asked) ? (asked as Tab) : sp.connected ? "accounts" : "you";
   const user = await requireActiveUser();
   const ent = entitlementOf(user);
   const pro = (label: string) => <Link href="/billing" className="badge badge-accent ml-2 align-middle" title={`${label} is part of Pro`}>Pro</Link>;
@@ -76,9 +80,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         {TABS.map((t) => (
           <Link
             key={t.id}
-            href={t.id === "general" ? "/settings" : `/settings?tab=${t.id}`}
+            href={t.id === "you" ? "/settings" : `/settings?tab=${t.id}`}
             aria-current={tab === t.id ? "page" : undefined}
-            className={`-mb-px whitespace-nowrap border-b-2 pb-2.5 text-[14px] transition-colors ${tab === t.id ? "border-[var(--ink)] font-semibold text-[var(--ink)]" : "border-transparent text-[var(--muted)] hover:text-[var(--ink)]"}`}
+            className={`-mb-px whitespace-nowrap border-b-2 pb-3 text-[15px] transition-colors ${tab === t.id ? "border-[var(--ink)] font-semibold text-[var(--ink)]" : "border-transparent text-[var(--muted)] hover:text-[var(--ink)]"}`}
           >
             {t.label}
           </Link>
@@ -91,11 +95,11 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
 
       <div className="mt-6 space-y-10">
         <Flash ok={sp.ok ?? (sp.connected ? `Connected ${sp.connected}.` : undefined)} error={sp.error} />
-        {tab === "general" && <General user={user} s={s} ent={ent} showX={showX} pro={pro} />}
-        {tab === "schedule" && <Schedule s={s} ent={ent} showX={showX} pro={pro} keep={keep} />}
-        {tab === "voice" && <Voice s={s} field={field} />}
+        {tab === "accounts" && <General user={user} s={s} ent={ent} showX={showX} pro={pro} />}
+        {tab === "times" && <Schedule s={s} ent={ent} showX={showX} pro={pro} keep={keep} />}
+        {tab === "you" && <Voice s={s} field={field} />}
         {tab === "sources" && <Sources userId={user.id} s={s} feeds={ent.quota.feeds} />}
-        {tab === "advanced" && <Advanced s={s} field={field} showX={showX} isOwner={user.isOwner} keep={keep} />}
+        {tab === "more" && <Advanced s={s} field={field} showX={showX} isOwner={user.isOwner} keep={keep} />}
       </div>
     </div>
   );
@@ -267,34 +271,45 @@ function Schedule({ s, ent, showX, pro, keep }: { s: S; ent: Ent; showX: boolean
 function Voice({ s, field }: { s: S; field: Field }) {
   return (
     <>
-      <Section id="profile" title="You" hint="The writer uses this so posts sound like someone in your seat.">
-        <form action={saveVoiceAction} className="card space-y-4 p-4">
+      <Section id="profile" title="Who you are" hint="PostFlow writes as you, so posts sound like someone in your seat.">
+        <form action={saveVoiceAction} className="card space-y-5 p-5">
           <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block"><span className="label">Name</span><input name="name" defaultValue={s.profile.name} className="input" /></label>
-            <label className="block"><span className="label">Role</span><input name="role" defaultValue={s.profile.role} placeholder={field.roleExample} className="input" /></label>
+            <label className="block"><span className="label">Your name</span><input name="name" defaultValue={s.profile.name} className="input h-10" /></label>
+            <label className="block"><span className="label">What you do</span><input name="role" defaultValue={s.profile.role} placeholder={field.roleExample} className="input h-10" /></label>
             <label className="block">
-              <span className="label">Field</span>
-              <select name="field" defaultValue={field.id} className="input">
+              <span className="label">Your field</span>
+              <select name="field" defaultValue={field.id} className="input h-10">
                 {FIELD_IDS.map((id) => <option key={id} value={id}>{FIELDS[id].label}</option>)}
               </select>
             </label>
-            <label className="block"><span className="label">Who reads your posts</span><input name="audience" maxLength={160} defaultValue={s.profile.audience} placeholder={field.audience} className="input" /></label>
+            <label className="block"><span className="label">Who reads your posts</span><input name="audience" maxLength={160} defaultValue={s.profile.audience} placeholder={field.audience} className="input h-10" /></label>
           </div>
-          <label className="block"><span className="label">Topics you know well</span><textarea name="expertise" rows={2} defaultValue={s.profile.expertise.join(", ")} placeholder="Separate with commas" className="textarea" /></label>
-          <label className="block"><span className="label">How you sound</span><textarea name="voice" rows={2} defaultValue={s.profile.voice} className="textarea" /></label>
+          <label className="block"><span className="label">Topics you know well</span><textarea name="expertise" rows={2} defaultValue={s.profile.expertise.join(", ")} placeholder="Separate with commas" className="textarea" /><span className="hint mt-1 block">PostFlow picks news about these first.</span></label>
+          <ToneField name="voice" defaultValue={s.profile.voice} />
           <label className="block"><span className="label">Never write about</span><textarea name="avoid" rows={2} defaultValue={s.profile.avoid} className="textarea" /></label>
           <details>
-            <summary className="cursor-pointer text-[13px] text-[var(--muted)] hover:text-[var(--ink)]">Bio and region</summary>
+            <summary className="cursor-pointer text-[14px] text-[var(--muted)] hover:text-[var(--ink)]">Bio and city</summary>
             <div className="mt-3 space-y-4">
               <label className="block"><span className="label">Short bio</span><textarea name="bio" rows={2} defaultValue={s.profile.bio} className="textarea" /></label>
-              <label className="block"><span className="label">Your city or country, for local {field.community} posts</span><input name="region" defaultValue={s.profile.region} placeholder="e.g. Berlin, Nepal, Lagos" className="input" /></label>
+              <label className="block"><span className="label">Your city or country, for local {field.community} posts</span><input name="region" defaultValue={s.profile.region} placeholder="e.g. Berlin, Nepal, Lagos" className="input h-10" /></label>
             </div>
           </details>
-          <button className="btn-primary">Save</button>
+          <button className="btn-primary h-10 px-5">Save</button>
         </form>
       </Section>
 
-      <Section title="Wording you asked for" hint={s.styleNotes.length ? "Every new post follows these." : "None yet. When you reword a post and tick “Remember this”, it shows up here."}>
+      <Section title="What every post includes" hint="Switch these on or off. PostFlow follows them for every new post.">
+        <form action={savePostStyleAction} className="card p-5">
+          <div className="divide-y divide-line">
+            <Toggle name="link_linkedin" label="A link to the news source" hint="Added at the end as “Source: …”. This is the only way links get into posts." on={s.includeLinks.linkedin} />
+            <Toggle name="img_linkedin" label="The logo of what the post is about" hint="When the story is about one company or product." on={s.images.linkedin} />
+            <Toggle name="tags_linkedin" label="Up to 3 hashtags" on={s.hashtags.linkedin} />
+          </div>
+          <button className="btn-primary mt-4 h-10 px-5">Save</button>
+        </form>
+      </Section>
+
+      <Section title="Wording you asked for" hint={s.styleNotes.length ? "Every new post follows these." : "None yet. When you change a post and tick \u201cRemember this\u201d, it shows up here."}>
         {s.styleNotes.length > 0 && (
           <ul className="card divide-y divide-line">
             {s.styleNotes.map((n, i) => (
@@ -345,18 +360,20 @@ async function Sources({ userId, s, feeds }: { userId: string; s: S; feeds: numb
 function Advanced({ s, field, showX, isOwner, keep }: { s: S; field: Field; showX: boolean; isOwner: boolean; keep: (n: string, on: boolean) => ReactNode }) {
   return (
     <form action={saveAdvancedAction} className="space-y-10">
-      <Section title="What goes into a post">
-        <div className="card divide-y divide-line px-4">
-          <Toggle name="img_linkedin" label="Add the logo of what the post is about" hint="When the story is about one company or product." on={s.images.linkedin} />
-          <Toggle name="tags_linkedin" label="Add up to 3 hashtags" on={s.hashtags.linkedin} />
-          <Toggle name="link_linkedin" label="Add the link to the news source" on={s.includeLinks.linkedin} />
-          <Toggle name="fillerPosts" label="Fill quiet days with explainers" hint="When no story is strong enough, write a short lesson from your topics instead of leaving the time empty." on={s.fillerPosts} />
+      <Section title="Quiet days">
+        <div className="card px-4">
+          <Toggle name="fillerPosts" label="Fill quiet days with short explainers" hint="When no story is strong enough, write a short lesson from your topics instead of leaving the time empty." on={s.fillerPosts} />
           {showX && <Toggle name="img_x" label="Add the logo on X too" on={s.images.x} />}
           {showX && <Toggle name="tags_x" label="Add 1-2 hashtags on X" on={s.hashtags.x} />}
           {isOwner && <Toggle name="link_x" label="Add the news source link on X" hint="X charges far more per post with a link." on={s.includeLinks.x} />}
         </div>
+        {/* These live under About you; sent again here so saving this tab keeps them. */}
+        {keep("img_linkedin", s.images.linkedin)}
+        {keep("tags_linkedin", s.hashtags.linkedin)}
+        {keep("link_linkedin", s.includeLinks.linkedin)}
         {!showX && keep("img_x", s.images.x)}
         {!showX && keep("tags_x", s.hashtags.x)}
+        {!isOwner && keep("link_x", s.includeLinks.x)}
       </Section>
 
       <Section title="Content mix" hint="How often each kind of post comes up. Higher means more often; 0 turns it off.">

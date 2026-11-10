@@ -13,41 +13,52 @@ export default async function CreatePage({ searchParams }: { searchParams: Promi
   const sp = await searchParams;
   const user = await requireActiveUser();
   const links = entitlementOf(user).features.links;
+  const showX = entitlementOf(user).features.x;
   const s = await getSettings();
   const reqs = await recentRequests(8);
   return (
     <div className="max-w-3xl space-y-8">
       <Flash ok={sp.ok} error={sp.error} />
       <section>
-        <h1 className="display mb-2 text-[34px]">Create a post</h1>
-        <p className="mb-4 text-sm text-muted">Give me an idea, a link, or a link with your angle. I write it for each platform, the reviewer checks it, and it goes on the calendar unless you ask for a draft.</p>
-        <form action={createPostAction} className="card space-y-3 p-4 text-sm">
-          <textarea name="text" rows={5} required placeholder={"An idea: Most teams add caching before they measure. Here is what I check first.\nA link (an article or an X post): https://x.com/jack/status/...\nA link with your angle: https://example.com/article  the pricing change matters more than the model"} className="textarea" />
-          <p className="text-[12px] text-[var(--muted)]">Links, including X posts, are researched first: PostFlow reads them, follows their links and checks other coverage, and only writes a post if it is worth one.</p>
-          <label className="flex items-center gap-2"><input type="checkbox" name="research" /> This is news I heard about: look it up before writing</label>
-          <label className="flex items-center gap-2"><input type="checkbox" name="force" /> Write it even if the research says it is weak</label>
-          {links ? (
-            <label className="flex items-center gap-2"><input type="checkbox" name="own" /> The link is my own article. Write it as me and include the link in the post.</label>
-          ) : (
-            <p className="text-[12px] text-[var(--muted)]">On Starter, describe the idea in your own words. Writing from a link or your own articles is part of <Link href="/billing" className="underline">Pro</Link>.</p>
-          )}
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-            <label className="flex items-center gap-2"><input type="checkbox" name="p_linkedin" defaultChecked /> LinkedIn</label>
-            <label className="flex items-center gap-2"><input type="checkbox" name="p_x" defaultChecked /> X</label>
-            <select name="mode" aria-label="When it goes out" className="input w-auto" defaultValue="schedule">
-              <option value="schedule">Put on the calendar (next free slot)</option>
-              <option value="soon">Post in about 20 minutes</option>
-              <option value="draft">Draft only, I will decide</option>
+        <h1 className="display mb-2 text-[34px]">Write a post</h1>
+        <p className="mb-5 max-w-2xl text-[15px] text-[var(--muted)]">Type an idea or paste a link to an article. PostFlow writes the post, checks it, and puts it in your posts for you to approve.</p>
+        <form action={createPostAction} className="card space-y-4 p-5 text-[14px]">
+          <textarea name="text" rows={5} required aria-label="Your idea or link" placeholder={"An idea: Most clients ask me the same three questions before signing. Here they are.\nOr a link: https://example.com/article"} className="textarea text-[15px]" />
+          <div className="flex flex-wrap items-center gap-3">
+            <select name="mode" aria-label="When it goes out" className="input h-10" style={{ width: "auto" }} defaultValue="schedule">
+              <option value="schedule">At my next posting time</option>
+              <option value="soon">In about 20 minutes</option>
+              <option value="draft">Keep as a draft</option>
             </select>
-            <button className="btn-primary">Create</button>
+            {showX ? (
+              <>
+                <label className="flex items-center gap-2"><input type="checkbox" name="p_linkedin" defaultChecked /> LinkedIn</label>
+                <label className="flex items-center gap-2"><input type="checkbox" name="p_x" defaultChecked /> X</label>
+              </>
+            ) : (
+              <input type="hidden" name="p_linkedin" value="on" />
+            )}
+            <button className="btn-primary h-10 px-5">Write it</button>
           </div>
+          <details>
+            <summary className="cursor-pointer text-[13px] text-[var(--muted)] hover:text-[var(--ink)]">More options</summary>
+            <div className="mt-3 space-y-2">
+              <label className="flex items-center gap-2"><input type="checkbox" name="research" /> It&apos;s news I heard about: look it up before writing</label>
+              <label className="flex items-center gap-2"><input type="checkbox" name="force" /> Write it even if the story looks weak</label>
+              {links ? (
+                <label className="flex items-center gap-2"><input type="checkbox" name="own" /> The link is my own article: write it as me and include the link</label>
+              ) : (
+                <p className="text-[12px] text-[var(--muted)]">Writing from a link or your own articles is part of <Link href="/billing" className="underline">Pro</Link>.</p>
+              )}
+            </div>
+          </details>
           {s.ownDomains.length > 0 && <p className="text-xs text-muted">Links to {s.ownDomains.join(", ")} are treated as your own articles automatically.</p>}
         </form>
       </section>
 
       <section>
-        <h2 className="mb-1 text-lg font-semibold">Tip a story</h2>
-        <p className="mb-3 text-sm text-muted">Saw something worth sharing? Paste the link. It joins the news pipeline and is posted only if other publishers confirm it. Use "Create a post" above to skip that check and write about it yourself.</p>
+        <h2 className="mb-1 text-[17px] font-semibold">Saw a story? Send it in</h2>
+        <p className="mb-3 text-[14px] text-[var(--muted)]">PostFlow writes about it later, but only once other news sites confirm it.</p>
         <form action={addTipAction} className="card flex gap-2 p-3">
           <input name="url" type="url" required placeholder="https://" className="input" />
           <button className="btn-secondary">Save tip</button>

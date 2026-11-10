@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { DateTime } from "luxon";
 import { requireActiveUser } from "@/server/auth";
 import { entitlementOf, postsThisMonth } from "@/server/billing/plans";
 import { getSettings } from "@/server/settings";
@@ -7,18 +6,9 @@ import { lastHeartbeat } from "@/server/health";
 import { Avatar, Logo } from "@/components/ui";
 import { SideNav, TabBar } from "@/components/nav";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { togglePauseAction } from "../actions";
 import { logoutAction } from "../auth-actions";
 
 export const dynamic = "force-dynamic";
-
-/** "just now", "4 min ago", "3 h ago", "6 days ago". */
-function ago(mins: number) {
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins} min ago`;
-  if (mins < 48 * 60) return `${Math.round(mins / 60)} h ago`;
-  return `${Math.round(mins / 1440)} days ago`;
-}
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireActiveUser();
@@ -44,24 +34,18 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <Link href="/billing" className="mx-1 rounded-lg border border-[var(--line)] bg-[var(--surface)] p-3 text-[12px] hover:border-[var(--line-strong)]">
             <div className="flex justify-between font-medium"><span>{ent.plan === "beta" ? "Free beta" : ent.plan === "pro" ? "Pro plan" : "Starter plan"}</span><span className="tnum text-[var(--muted)]">{used}/{ent.quota.postsPerMonth}</span></div>
             <div className="mt-1.5 h-1.5 rounded-full bg-[var(--side)]"><div className="h-1.5 rounded-full bg-[var(--accent)]" style={{ width: `${Math.min(100, (used / ent.quota.postsPerMonth) * 100)}%` }} /></div>
-            <div className="mt-1 text-[11px] text-[var(--subtle)]">posts this month{user.subscriptionStatus === "trialing" ? " · free trial" : ""}</div>
+            <div className="mt-1 text-[12px] text-[var(--subtle)]">posts used this month{user.subscriptionStatus === "trialing" ? " · free trial" : ""}</div>
           </Link>
         )}
         <div className="mt-auto space-y-3">
-          <form action={togglePauseAction} className="rounded-lg border border-[var(--line)] bg-[var(--surface)] p-3">
-            <div className="flex items-center gap-2 text-[12px] font-medium">
-              <span className={`inline-block h-2 w-2 rounded-full ${s.paused ? "bg-[var(--warn)]" : alive ? "bg-[var(--good)]" : "bg-[var(--subtle)]"}`} />
-              {s.paused ? "Autopilot paused" : "Autopilot on"}
-            </div>
-            <p className="mt-1 text-[11px] text-[var(--subtle)]">{beat ? `Scheduler checked in ${ago(mins!)}` : "Scheduler has not run yet"}</p>
-            <button className="btn btn-sm mt-2 w-full">{s.paused ? "Resume" : "Pause"}</button>
-          </form>
+          {/* One plain line about whether PostFlow is working, with the switch in Settings. */}
+          <Link href="/settings?tab=accounts" className="flex items-center gap-2 rounded-[8px] px-3 py-2 text-[13px] text-[var(--muted)] hover:bg-[var(--surface)]">
+            <span className={`inline-block h-2 w-2 rounded-full ${s.paused ? "bg-[var(--warn)]" : alive ? "bg-[var(--good)]" : "bg-[var(--subtle)]"}`} />
+            {s.paused ? "PostFlow is paused" : "PostFlow is on"}
+          </Link>
           <div className="flex items-center gap-2 px-1">
             <Avatar name={name} size={28} />
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-[12px] font-medium">{name}</div>
-              <div className="truncate text-[11px] text-[var(--muted)]">{DateTime.now().setZone(s.timezone).toFormat("ccc d LLL, HH:mm")}</div>
-            </div>
+            <div className="min-w-0 flex-1 truncate text-[13px] font-medium">{name}</div>
           </div>
           <div className="flex items-center justify-between px-1">
             <ThemeToggle />
@@ -78,14 +62,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <span className="display text-[20px]">PostFlow</span>
           <div className="press-stripe absolute inset-x-0 bottom-0" aria-hidden="true" />
           <span className="ml-auto"><ThemeToggle /></span>
-          <span className="flex items-center gap-1.5 text-[12px] text-[var(--muted)]">
-            <span className={`inline-block h-2 w-2 rounded-full ${s.paused ? "bg-[var(--warn)]" : "bg-[var(--good)]"}`} />
-            {s.paused ? "Paused" : "On"}
-          </span>
+          <Link href="/account" aria-label="Account"><Avatar name={name} size={28} /></Link>
         </header>
         {s.paused && (
           <div className="border-b border-[var(--line)] bg-[var(--warn-soft)] px-4 py-2 text-[13px] text-[var(--warn)] md:px-8">
-            Autopilot is paused. Nothing is being written or posted.
+            PostFlow is paused. Nothing is being written or posted. <Link href="/settings?tab=accounts" className="underline">Turn it back on</Link>
           </div>
         )}
         <main className="mx-auto max-w-[1180px] px-4 pb-24 pt-5 md:px-8 md:pb-12 md:pt-7">{children}</main>

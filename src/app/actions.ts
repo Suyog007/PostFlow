@@ -27,7 +27,8 @@ import { redrawPostImage } from "@/server/post-images";
 import { isPublicHttpUrl } from "@/server/net";
 
 function back(path: string, kind: "error" | "ok", message: string): never {
-  redirect(`${path}${path.includes("?") ? "&" : "?"}${kind}=${encodeURIComponent(message)}`);
+  const [base, hash] = path.split("#");
+  redirect(`${base}${base.includes("?") ? "&" : "?"}${kind}=${encodeURIComponent(message)}${hash ? `#${hash}` : ""}`);
 }
 
 async function guarded(path: string, fn: () => Promise<unknown>, okMessage?: string): Promise<never> {
@@ -83,13 +84,16 @@ export async function postNowAction(form: FormData) {
     "Posting now. It should be live within a minute. Its original slot stays empty.",
   );
 }
+/** Where a post action returns to: the home list when it was pressed there, else the post's own page. */
+const backTo = (form: FormData, id: string) => (form.get("back") === "home" ? `/calendar#post-${id}` : `/posts/${id}`);
+
 export async function approvePostAction(form: FormData) {
   const id = String(form.get("id"));
-  await guarded(`/posts/${id}`, () => approvePost(id), "Approved. It goes out at its scheduled time.");
+  await guarded(backTo(form, id), () => approvePost(id), "Approved. It goes out at its time.");
 }
 export async function unapprovePostAction(form: FormData) {
   const id = String(form.get("id"));
-  await guarded(`/posts/${id}`, () => unapprovePost(id), "Approval withdrawn. It will not be posted until you approve it again.");
+  await guarded(backTo(form, id), () => unapprovePost(id), "Approval withdrawn. It will not be posted until you approve it again.");
 }
 export async function rejectPostAction(form: FormData) {
   const id = String(form.get("id"));
@@ -191,7 +195,7 @@ export async function recheckPostAction(form: FormData) {
 }
 export async function removeStyleNoteAction(form: FormData) {
   const i = Number(form.get("i"));
-  await guarded("/settings?tab=voice", async () => {
+  await guarded("/settings", async () => {
     const s = await getSettings();
     await saveSettings({ styleNotes: s.styleNotes.filter((_, j) => j !== i) });
   }, "Removed.");
@@ -275,7 +279,7 @@ export async function deleteNoteAction(form: FormData) {
 
 /** Settings > Voice: who you are and how you sound. */
 export async function saveVoiceAction(form: FormData) {
-  await guarded("/settings?tab=voice", async () => {
+  await guarded("/settings", async () => {
     const s = await getSettings();
     await saveSettings({
       profile: {
@@ -294,9 +298,21 @@ export async function saveVoiceAction(form: FormData) {
   });
 }
 
+/** Settings > About you > Post style: what goes into every post. */
+export async function savePostStyleAction(form: FormData) {
+  await guarded("/settings", async () => {
+    const s = await getSettings();
+    await saveSettings({
+      hashtags: { ...s.hashtags, linkedin: form.get("tags_linkedin") === "on" },
+      images: { ...s.images, linkedin: form.get("img_linkedin") === "on" },
+      includeLinks: { ...s.includeLinks, linkedin: form.get("link_linkedin") === "on" },
+    });
+  });
+}
+
 /** Settings > Advanced: content mix, thresholds and what goes into a post. */
 export async function saveAdvancedAction(form: FormData) {
-  await guarded("/settings?tab=advanced", async () => {
+  await guarded("/settings?tab=more", async () => {
     const s = await getSettings();
     await saveSettings({
       horizonDays: Number(form.get("horizonDays") || s.horizonDays),
@@ -319,7 +335,7 @@ export async function saveAdvancedAction(form: FormData) {
 }
 
 export async function saveFastLaneAction(form: FormData) {
-  await guarded("/settings?tab=schedule", async () => {
+  await guarded("/settings?tab=times", async () => {
     if (form.get("fl_enabled") === "on") await assertFeature("fastLane", "The fast lane");
     const platforms = (["x", "linkedin"] as const).filter((p) => form.get(`fl_${p}`) === "on");
     await saveSettings({
@@ -336,53 +352,53 @@ export async function saveFastLaneAction(form: FormData) {
   });
 }
 export async function saveSlotsAction(form: FormData) {
-  await guarded("/settings?tab=schedule", async () => {
+  await guarded("/settings?tab=times", async () => {
     const timezone = String(form.get("timezone") ?? "").trim();
     if (timezone && !DateTime.local().setZone(timezone).isValid) throw new Error(`"${timezone}" is not a timezone PostFlow knows.`);
     await saveSettings({ slots: parseSlots(String(form.get("slots") ?? "")), ...(timezone ? { timezone } : {}) });
   });
 }
 export async function toggleApprovalAction() {
-  await guarded("/settings", async () => {
+  await guarded("/settings?tab=accounts", async () => {
     const s = await getSettings();
     if (s.requireApproval) await assertFeature("autoMode", "Auto mode");
     await saveSettings({ requireApproval: !s.requireApproval });
   });
 }
-export async function togglePauseAction() {
-  await guarded("/settings", async () => saveSettings({ paused: !(await getSettings()).paused }));
+export async function togglePauseAction(form?: FormData) {
+  await guarded(form?.get("back") === "home" ? "/calendar" : "/settings?tab=accounts", async () => saveSettings({ paused: !(await getSettings()).paused }));
 }
 
 export async function connectAction(form: FormData) {
   const user = await requireActiveUser();
   const platform = String(form.get("platform"));
   if (platform !== "x" && platform !== "linkedin") return;
-  if (platform === "x" && !(await entitlementFor(user.id)).features.x) back("/settings", "error", X_IS_PRO);
+  if (platform === "x" && !(await entitlementFor(user.id)).features.x) back("/settings?tab=accounts", "error", X_IS_PRO);
   let url: string;
   try {
     url = await startOAuth(platform);
   } catch (err) {
-    back("/settings", "error", (err as Error).message);
+    back("/settings?tab=accounts", "error", (err as Error).message);
   }
   redirect(url);
 }
 export async function disconnectAction(form: FormData) {
   const platform = String(form.get("platform"));
-  await guarded("/settings", () => disconnectAccount(platform as "x" | "linkedin"), "Disconnected.");
+  await guarded("/settings?tab=accounts", () => disconnectAccount(platform as "x" | "linkedin"), "Disconnected.");
 }
 /** Makes a fresh 15-minute link code only when the user asks for it, then opens the bot. */
 export async function connectTelegramAction() {
   await requireActiveUser();
   const url = await newTelegramLinkUrl();
-  if (!url) back("/settings", "error", "Telegram is not available yet.");
+  if (!url) back("/settings?tab=accounts", "error", "Telegram is not available yet.");
   redirect(url!);
 }
 export async function unlinkTelegramAction() {
-  await guarded("/settings", () => unlinkTelegram(), "Telegram disconnected.");
+  await guarded("/settings?tab=accounts", () => unlinkTelegram(), "Telegram disconnected.");
 }
 /** Runs the pipeline for the signed-in user only. */
 export async function runTickAction() {
-  await guarded("/settings", async () => {
+  await guarded("/settings?tab=accounts", async () => {
     const user = await requireActiveUser();
     const r = await runForUser(user.id, { budgetMs: 45_000 });
     if (r.errors.length) throw new Error(r.errors[0]);
