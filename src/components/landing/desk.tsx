@@ -8,14 +8,13 @@ import { Logo, PlatformGlyph } from "@/components/ui";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 const NAV = [
-  { href: "#watch", label: "Watch it work" },
+  { href: "#how", label: "How it works" },
   { href: "#who", label: "Who it's for" },
-  { href: "#desk", label: "What's inside" },
   { href: "#pricing", label: "Pricing" },
-  { href: "#faq", label: "FAQ" },
+  { href: "#faq", label: "Questions" },
 ];
 
-export function DeskNav({ loggedIn }: { loggedIn: boolean }) {
+export function DeskNav({ loggedIn, cta }: { loggedIn: boolean; cta?: { href: string; label: string } }) {
   const [menu, setMenu] = useState(false);
   useEffect(() => {
     if (!menu) return;
@@ -30,15 +29,22 @@ export function DeskNav({ loggedIn }: { loggedIn: boolean }) {
           <span className="self-center"><Logo size={28} /></span>
           <span className="display text-[24px] sm:text-[28px]">PostFlow</span>
         </Link>
-        <nav aria-label="Sections" className="ml-auto hidden items-center gap-7 text-[16px] font-semibold lg:flex">
+        <nav aria-label="Sections" className="ml-auto hidden items-center gap-7 text-[16px] font-medium lg:flex">
           {NAV.map((n) => (
-            <a key={n.href} href={n.href} className="hover:text-[var(--d-red)]">{n.label}</a>
+            <a key={n.href} href={n.href} className="hover:text-[var(--accent)]">{n.label}</a>
           ))}
         </nav>
         <div className="ml-auto flex items-center gap-2 lg:ml-6">
           {/* Very small phones have no room for it next to Sign in and the menu. */}
           <span className="hidden min-[360px]:contents"><ThemeToggle /></span>
-          <Link href={loggedIn ? "/calendar" : "/login"} className="btn-outline h-10 whitespace-nowrap px-3.5 sm:h-11 sm:px-[18px]">{loggedIn ? "Open app" : "Sign in"}</Link>
+          {loggedIn ? (
+            <Link href="/calendar" className="btn-desk h-10 whitespace-nowrap px-4 text-[15px] sm:h-11">Open my posts</Link>
+          ) : (
+            <>
+              <Link href="/login" className="whitespace-nowrap px-2 text-[15px] font-medium hover:underline">Sign in</Link>
+              {cta && <span className="hidden sm:contents"><a href={cta.href} className="btn-desk h-11 whitespace-nowrap px-4 text-[15px]">{cta.label}</a></span>}
+            </>
+          )}
           <span className="lg:hidden">
             <button type="button" aria-expanded={menu} aria-controls="desk-menu" aria-label={menu ? "Close menu" : "Open menu"} onClick={() => setMenu((m) => !m)} className="inline-flex h-11 w-11 items-center justify-center rounded-lg">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
@@ -140,7 +146,7 @@ export function HeroDemo() {
           ))}
         </div>
       </div>
-      <article aria-live="polite" className="mt-6 -rotate-[0.6deg] overflow-hidden rounded-[4px] border border-[var(--line-strong)] bg-[var(--surface)] shadow-[0_18px_40px_-22px_rgba(24,34,30,.45)]">
+      <article aria-live="polite" className="mt-6 overflow-hidden rounded-[16px] border border-[var(--line-strong)] bg-[var(--surface)] shadow-[0_24px_48px_-28px_rgba(24,34,30,.45)]">
         <div className="flex items-center gap-3 px-5 pt-4">
           <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--d-cream)] text-[14px] font-semibold" aria-hidden="true">{initials}</span>
           <div className="min-w-0">
@@ -151,8 +157,13 @@ export function HeroDemo() {
         </div>
         <p className="whitespace-pre-line px-5 pb-4 pt-3 text-[15px] leading-relaxed">{text}</p>
         {PICTURES[field] ?? null}
+        <div className="flex items-center gap-2 border-t border-[var(--line)] bg-[var(--bg)] px-4 py-3" aria-hidden="true">
+          <span className="inline-flex h-10 items-center gap-1.5 rounded-[8px] bg-[var(--ink)] px-4 text-[14px] font-semibold text-[var(--bg)]">✓ Approve</span>
+          <span className="inline-flex h-10 items-center rounded-[8px] border border-[var(--line-strong)] px-4 text-[14px]">Edit</span>
+          <span className="ml-auto text-[13px] text-[var(--d-muted)]">Waiting for your OK</span>
+        </div>
       </article>
-      <p className="typed mt-4 text-right text-[13px] text-[var(--d-muted)]">Sample posts for illustration · pick a beat above</p>
+      <p className="mt-4 text-right text-[13px] text-[var(--d-muted)]">Sample posts, made up for illustration. Tap a field above.</p>
     </div>
   );
 }

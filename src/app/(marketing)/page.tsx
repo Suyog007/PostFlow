@@ -8,7 +8,6 @@ import { Pricing } from "@/components/landing/pricing";
 import { WaitlistForm } from "@/components/landing/waitlist-form";
 import { LandingMotion } from "@/components/landing/motion";
 import { DeskNav, HeroDemo } from "@/components/landing/desk";
-import { NewsFilm } from "@/components/landing/film";
 import { BETA, TRIAL_DAYS } from "@/lib/pricing";
 import { contactEmail, env } from "@/server/env";
 
@@ -35,15 +34,15 @@ export const metadata: Metadata = {
 const faqFor = (beta: boolean): { q: string; a: string }[] => [
   {
     q: "Will it post something I haven't seen?",
-    a: "No, unless you turn on auto mode. Every post waits for your OK on the calendar; one you don't approve is skipped.",
+    a: "No. Every post waits for you to tap Approve. One you don't approve is skipped, never posted.",
   },
   {
     q: "Do I need Telegram?",
-    a: "No. It's optional: it sends each post to your phone ten minutes early, so approving takes one tap.",
+    a: "No. It's optional: it sends each post to your phone so you can approve it from there.",
   },
   {
     q: "Does it make things up?",
-    a: "It's built not to. News posts name their source, each claim is checked against the article, and first-person posts only come from your own notes. It can still get something wrong, which is why you approve first.",
+    a: "It's built not to. News posts name their source, each claim is checked against the article, and posts about you only come from ideas you give it. It can still get something wrong, which is why you approve first.",
   },
   {
     q: "Do posts come with a picture?",
@@ -84,9 +83,6 @@ function Headline({ a, b, as: Tag = "h2", className = "" }: { a: ReactNode; b?: 
   );
 }
 
-function Rule() {
-  return <hr className="mx-auto max-w-[1200px] border-[var(--d-sky-line)]" />;
-}
 
 /** One line per profession: what PostFlow watches for them, and the rule their posts follow. */
 const PROFESSIONS = [
@@ -98,12 +94,48 @@ const PROFESSIONS = [
   { who: "Teachers & educators", watch: "Exam, curriculum and policy changes, and what the evidence says.", rule: "Never names a student" },
 ];
 
-const DESK = [
-  { t: "Sources named", b: "Every news post says where the story came from, and a story is only used once a second outlet or the company itself confirms it." },
-  { t: "Checked twice", b: "A reviewer compares each claim with the article, then a second model reads it again. Drafts that fail are held back." },
-  { t: "From a link", b: "Send a link or an X post and it reads the whole thing before writing." },
-  { t: "One story, once", b: "Posts land on your schedule, and the same story is never posted twice." },
-];
+
+/** The three steps, each with a small picture of what happens. */
+function Steps() {
+  return (
+    <ol className="grid gap-5 md:grid-cols-3">
+      <li className="reveal flex flex-col rounded-[16px] border border-[var(--line-strong)] bg-[var(--surface)] p-6" style={{ "--d": "0ms" } as React.CSSProperties}>
+        <div className="flex h-[150px] flex-wrap content-center items-center justify-center gap-2 rounded-[12px] bg-[var(--bg)] p-4" aria-hidden="true">
+          {["Doctor", "Accountant", "Engineer", "Lawyer", "Teacher", "Marketer"].map((j, i) => (
+            <span key={j} className={`rounded-full border px-3 py-1 text-[13px] ${i === 1 ? "border-[var(--ink)] bg-[var(--ink)] text-[var(--bg)]" : "border-[var(--line-strong)] text-[var(--muted)]"}`}>{j}</span>
+          ))}
+        </div>
+        <p className="mt-5 text-[13px] font-medium text-[var(--accent)]">Step 1</p>
+        <h3 className="mt-1 text-[21px] font-semibold">Tell it what you do</h3>
+        <p className="mt-2 text-[16px] leading-relaxed text-[var(--d-muted)]">Pick your job and a few topics you know well. Takes two minutes.</p>
+      </li>
+      <li className="reveal flex flex-col rounded-[16px] border border-[var(--line-strong)] bg-[var(--surface)] p-6" style={{ "--d": "80ms" } as React.CSSProperties}>
+        <div className="flex h-[150px] flex-col justify-center gap-2 rounded-[12px] bg-[var(--bg)] p-4" aria-hidden="true">
+          {[["HMRC raises VAT threshold to £90,000", true], ["Celebrity buys third island", false], ["Ten phone cases ranked by colour", false]].map(([t, keep]) => (
+            <span key={String(t)} className={`flex items-center gap-2 rounded-[8px] border px-3 py-1.5 text-[13px] ${keep ? "border-[var(--good)]/50 bg-[var(--surface)] font-medium" : "border-[var(--line)] text-[var(--subtle)] line-through"}`}>
+              <span className={`h-2 w-2 flex-none rounded-full ${keep ? "bg-[var(--good)]" : "bg-[var(--line-strong)]"}`} />{t}
+            </span>
+          ))}
+        </div>
+        <p className="mt-5 text-[13px] font-medium text-[var(--accent)]">Step 2</p>
+        <h3 className="mt-1 text-[21px] font-semibold">It writes from the news</h3>
+        <p className="mt-2 text-[16px] leading-relaxed text-[var(--d-muted)]">PostFlow reads the news in your field, keeps what your readers should know, and writes a short post that names its source.</p>
+      </li>
+      <li className="reveal flex flex-col rounded-[16px] border border-[var(--line-strong)] bg-[var(--surface)] p-6" style={{ "--d": "160ms" } as React.CSSProperties}>
+        <div className="flex h-[150px] flex-col justify-center gap-3 rounded-[12px] bg-[var(--bg)] p-4" aria-hidden="true">
+          <span className="flex items-center gap-2 text-[14px] font-medium"><span className="h-2.5 w-2.5 rounded-full bg-[var(--warn)]" />1 post is waiting for your OK</span>
+          <span className="flex gap-2">
+            <span className="inline-flex h-10 items-center gap-1.5 rounded-[8px] bg-[var(--ink)] px-4 text-[14px] font-semibold text-[var(--bg)]">✓ Approve</span>
+            <span className="inline-flex h-10 items-center rounded-[8px] border border-[var(--line-strong)] px-4 text-[14px]">Edit</span>
+          </span>
+        </div>
+        <p className="mt-5 text-[13px] font-medium text-[var(--accent)]">Step 3</p>
+        <h3 className="mt-1 text-[21px] font-semibold">You tap Approve</h3>
+        <p className="mt-2 text-[16px] leading-relaxed text-[var(--d-muted)]">Read it, change it if you like, approve it. Nothing goes out without your OK.</p>
+      </li>
+    </ol>
+  );
+}
 
 export default async function LandingPage({ searchParams }: { searchParams: Promise<{ plan?: string; deleted?: string }> }) {
   const { plan, deleted } = await searchParams;
@@ -111,9 +143,10 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
   const open = signupsOpen();
   const beta = env().FREE_BETA;
   const FAQ = faqFor(beta);
-  const startLabel = beta ? "Join the free beta" : `Start my ${TRIAL_DAYS}-day trial`;
+  const startLabel = beta ? "Try it free" : `Start my ${TRIAL_DAYS}-day trial`;
   const signupHref = beta ? "/signup" : "/signup?plan=pro&interval=year";
   const cta = open ? { href: signupHref, label: startLabel } : { href: "#early-access", label: "Get early access" };
+  const H = "text-[36px] leading-[1.06] sm:text-[52px]";
 
   return (
     <div className="desk min-h-screen text-[16px]">
@@ -129,48 +162,46 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
         }}
       />
       <LandingMotion />
-      <DeskNav loggedIn={loggedIn} />
+      <DeskNav loggedIn={loggedIn} cta={loggedIn ? undefined : cta} />
 
       <main id="main" tabIndex={-1} className="outline-none">
         {deleted && <p role="status" className="mx-auto mt-4 max-w-[1200px] px-4 text-[14px]">Your account and its data were deleted, and your subscription was cancelled.</p>}
 
         {/* ---------- hero ---------- */}
-        <section className="mx-auto grid max-w-[1200px] gap-12 px-4 pb-20 pt-12 sm:px-6 lg:grid-cols-[1.05fr_1fr] lg:gap-14 lg:pt-16">
+        <section className="mx-auto grid max-w-[1200px] items-center gap-12 px-4 pb-20 pt-10 sm:px-6 lg:grid-cols-[1fr_1fr] lg:gap-16 lg:pt-16">
           <div>
-            <Headline
-              as="h1"
-              a="The news breaks"
-              b="Your post is ready"
-              className="text-[50px] sm:text-[72px] xl:text-[80px]"
-            />
-            <p className="mt-7 max-w-[560px] text-[19px] leading-[1.7] text-[var(--d-muted)] sm:text-[21px]">
-              PostFlow reads the news in your field and drafts a short post about the stories worth sharing. Each one names its source, and nothing goes out until you approve it.
+            <Headline as="h1" a="Be seen on LinkedIn" b="without the writing" className="text-[46px] leading-[1.02] sm:text-[68px]" />
+            <p className="mt-6 max-w-[520px] text-[19px] leading-[1.6] text-[var(--d-muted)] sm:text-[21px]">
+              PostFlow follows the news in your field and writes short, clear posts in your voice. You read each one and tap Approve. That&apos;s it.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
               <a href={cta.href} className="btn-desk">{cta.label}</a>
-              <a href="#watch" className="btn-outline">See how it works</a>
+              <a href="#how" className="btn-outline">See how it works</a>
             </div>
-            <p className="mt-3 text-[14px] text-[var(--d-muted)]">{beta ? "Free on LinkedIn during the beta. No card needed." : open ? "No charge during the trial. Cancel anytime." : `${TRIAL_DAYS}-day free trial at launch. No card to join.`}</p>
-            {/* A byline strip: what every post comes with. */}
-            <p className="typed mt-10 flex flex-wrap items-center gap-x-3 gap-y-1 border-y border-[var(--line)] py-3 text-[13px] text-[var(--d-muted)]">
-              <span>Names its source</span><span aria-hidden="true">·</span><span>Plain words</span><span aria-hidden="true">·</span><span>You approve first</span>
-            </p>
+            <p className="mt-3 text-[14px] text-[var(--d-muted)]">{beta ? "Free during the beta. No card needed." : open ? "No charge during the trial. Cancel anytime." : `${TRIAL_DAYS}-day free trial at launch. No card to join.`}</p>
           </div>
           <HeroDemo />
         </section>
 
-        <Rule />
+        {/* ---------- how it works ---------- */}
+        <section id="how" className="scroll-mt-24 border-y border-[var(--line)] bg-[var(--surface)]/50">
+          <div className="mx-auto max-w-[1200px] px-4 py-20 sm:px-6 sm:py-24">
+            <Headline a="How it works" className={H} />
+            <p className="mt-4 max-w-[560px] text-[19px] leading-relaxed text-[var(--d-muted)]">Set it up once. After that, posts show up for you to approve.</p>
+            <div className="mt-10"><Steps /></div>
+          </div>
+        </section>
 
         {/* ---------- a real post ---------- */}
         <section id="real" className="mx-auto grid max-w-[1200px] scroll-mt-24 items-center gap-10 px-4 py-20 sm:px-6 sm:py-24 lg:grid-cols-[0.9fr_1.1fr] lg:gap-16">
           <div>
-            <Headline a="One real post, drafted by PostFlow" className="text-[40px] leading-[1.04] sm:text-[56px]" />
+            <Headline a="A real post it wrote" className={H} />
             <p className="mt-6 max-w-[480px] text-[19px] leading-relaxed text-[var(--d-muted)]">
-              PostFlow found this story in its owner's feeds, wrote the post, checked it against the article and waited for approval. It reached 263 impressions in its first 11 minutes.
+              PostFlow found this story, wrote the post, checked it against the article and waited for approval. It reached 263 people in its first 11 minutes.
             </p>
-            <p className="typed mt-5 text-[13px] text-[var(--d-muted)]">Published on LinkedIn · name and photo changed for privacy</p>
+            <p className="mt-4 text-[14px] text-[var(--d-muted)]">Published on LinkedIn. Name and photo changed for privacy.</p>
           </div>
-          <figure className="reveal overflow-hidden rounded-[6px] border border-[var(--line-strong)] bg-white shadow-[0_18px_40px_-22px_rgba(24,34,30,.45)]">
+          <figure className="reveal overflow-hidden rounded-[12px] border border-[var(--line-strong)] bg-white shadow-[0_18px_40px_-22px_rgba(24,34,30,.45)]">
             <img
               src="/landing/real-post.webp"
               width={880}
@@ -183,95 +214,66 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
           </figure>
         </section>
 
-        <Rule />
-
-        {/* ---------- watch it work ---------- */}
-        <section id="watch" className="mx-auto max-w-[1200px] scroll-mt-24 px-4 py-20 sm:px-6 sm:py-24">
-          <div className="mb-10 grid gap-6 lg:grid-cols-2 lg:items-end">
-            <Headline a="Watch it work in thirty seconds" className="text-[40px] leading-[1.04] sm:text-[56px]" />
-            <p className="max-w-[520px] text-[19px] leading-relaxed text-[var(--d-muted)] lg:justify-self-end">
-              From a story breaking to a post your readers see, without you writing a word. You only tap approve.
-            </p>
-          </div>
-          <NewsFilm />
-        </section>
-
-        <Rule />
-
         {/* ---------- who it's for ---------- */}
-        <section id="who" className="mx-auto max-w-[1200px] scroll-mt-24 px-4 py-20 sm:px-6 sm:py-24">
-          <div className="mb-12 grid gap-6 lg:grid-cols-2 lg:items-end">
-            <Headline a="Pick your field, get its news" className="text-[40px] leading-[1.04] sm:text-[56px]" />
-            <p className="max-w-[520px] text-[19px] leading-relaxed text-[var(--d-muted)] lg:justify-self-end">
-              Choose your field and topics at sign-up. The stories PostFlow picks, and the rules your posts follow, come from that.
-            </p>
-          </div>
-          <div className="grid gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
-            {PROFESSIONS.map((p, i) => (
-              <div key={p.who} className="card-lift reveal pt-4" style={{ "--d": `${(i % 3) * 80}ms` } as React.CSSProperties}>
-                <h3 className="display text-[26px] tracking-[-0.02em]">{p.who}</h3>
-                <p className="mt-2 text-[16px] leading-relaxed text-[var(--d-muted)]">{p.watch}</p>
-                <p className="typed mt-3 text-[13px] text-[var(--accent)]">{p.rule}</p>
-              </div>
-            ))}
-          </div>
-          <p className="mt-10 text-[16px] text-[var(--d-muted)]">
-            Not listed? Choose <span className="font-semibold text-[var(--d-ink)]">Something else</span> and name your topics.
-          </p>
-        </section>
-
-        <Rule />
-
-        {/* ---------- what's inside ---------- */}
-        <section id="desk" className="mx-auto max-w-[1200px] scroll-mt-24 px-4 py-20 sm:px-6 sm:py-24">
-          <div className="mb-12 grid gap-6 lg:grid-cols-2 lg:items-end">
-            <Headline a="The whole newsroom in one quiet tab" className="text-[40px] leading-[1.04] sm:text-[56px]" />
-            <p className="max-w-[520px] text-[19px] leading-relaxed text-[var(--d-muted)] lg:justify-self-end">
-              What every post gets, whatever your field.
-            </p>
-          </div>
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-            {DESK.map((d, i) => (
-              <div key={d.t} className="card-lift reveal pb-2" style={{ "--d": `${(i % 3) * 80}ms` } as React.CSSProperties}>
-                <h3 className="display pt-4 text-[26px] tracking-[-0.02em]">{d.t}</h3>
-                <p className="mt-2 text-[16px] leading-relaxed text-[var(--d-muted)]">{d.b}</p>
-              </div>
-            ))}
+        <section id="who" className="scroll-mt-24 border-y border-[var(--line)] bg-[var(--surface)]/50">
+          <div className="mx-auto max-w-[1200px] px-4 py-20 sm:px-6 sm:py-24">
+            <Headline a="Made for your job" className={H} />
+            <p className="mt-4 max-w-[560px] text-[19px] leading-relaxed text-[var(--d-muted)]">It knows what matters in your field, and the rules your posts should follow.</p>
+            <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {PROFESSIONS.map((p, i) => (
+                <div key={p.who} className="reveal rounded-[14px] border border-[var(--line)] bg-[var(--surface)] p-5" style={{ "--d": `${(i % 3) * 80}ms` } as React.CSSProperties}>
+                  <h3 className="text-[18px] font-semibold">{p.who}</h3>
+                  <p className="mt-1.5 text-[15px] leading-relaxed text-[var(--d-muted)]">{p.watch}</p>
+                  <p className="mt-3 flex items-center gap-1.5 text-[14px] text-[var(--accent)]"><span aria-hidden="true">✓</span>{p.rule}</p>
+                </div>
+              ))}
+            </div>
+            <p className="mt-6 text-[16px] text-[var(--d-muted)]">Something else? Pick &ldquo;Something else&rdquo; and name your topics.</p>
           </div>
         </section>
-
-        <Rule />
 
         {/* ---------- pricing ---------- */}
         <section id="pricing" className="mx-auto max-w-[1200px] scroll-mt-24 px-4 py-20 sm:px-6 sm:py-24">
-          <div className="mb-12 grid gap-6 lg:grid-cols-2 lg:items-end">
-            <div>
-              <Headline a={beta ? "Free on LinkedIn, X when you need it" : "One price a month, every post checked"} className="text-[40px] leading-[1.04] sm:text-[56px]" />
+          {beta ? (
+            <div className="mx-auto max-w-[560px] text-center">
+              <Headline a="Free while we're in beta" className={H} />
+              <div className="mt-10 rounded-[16px] border border-[var(--ink)] bg-[var(--surface)] p-8 text-left">
+                <p className="text-[15px] font-medium text-[var(--accent)]">Free beta</p>
+                <p className="mt-1 flex items-baseline gap-1.5"><span className="text-[44px] font-semibold tnum">$0</span><span className="text-[16px] text-[var(--d-muted)]">a month, no card</span></p>
+                <ul className="mt-6 space-y-3 text-[16px]">
+                  {["Your LinkedIn account", `Up to ${BETA.quota.postsPerMonth} posts a month`, "Every post checked before you see it", "You approve every post", "Ideas from your own work, too"].map((l) => (
+                    <li key={l} className="flex gap-3"><span aria-hidden="true" className="text-[var(--good)]">✓</span>{l}</li>
+                  ))}
+                </ul>
+                <a href={open ? "/signup" : "#early-access"} className="btn-desk mt-8 w-full">{open ? "Try it free" : "Get early access"}</a>
+              </div>
+              <p className="mt-5 text-[15px] text-[var(--d-muted)]">
+                A paid plan with X (Twitter) is coming. <a href="/?plan=pro#early-access" className="underline">Get notified</a>
+              </p>
             </div>
-            <p className="max-w-[520px] text-[19px] leading-relaxed text-[var(--d-muted)] lg:justify-self-end">
-              {beta
-                ? "Pro adds X and opens soon."
-                : `Every plan includes the fact-checker. No free plan, because checking costs real money. A ${TRIAL_DAYS}-day trial instead.`}
-            </p>
-          </div>
-          <Pricing signupsOpen={open} beta={beta} />
+          ) : (
+            <>
+              <Headline a="One price a month" className={H} />
+              <div className="mt-10"><Pricing signupsOpen={open} beta={beta} /></div>
+            </>
+          )}
         </section>
 
-        <Rule />
-
         {/* ---------- FAQ ---------- */}
-        <section id="faq" className="mx-auto grid max-w-[1200px] scroll-mt-24 gap-10 px-4 py-20 sm:px-6 sm:py-24 lg:grid-cols-[0.8fr_1.2fr]">
-          <Headline a="Before you sign up" className="text-[40px] leading-[1.04] sm:text-[56px]" />
-          <div className="divide-y divide-[var(--d-sky-line)] border-y border-[var(--d-sky-line)]">
-            {FAQ.map((f) => (
-              <details key={f.q} className="group py-5">
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-[18px] font-semibold [&::-webkit-details-marker]:hidden">
-                  {f.q}
-                  <span aria-hidden="true" className="red flex-none text-[26px] leading-none transition-transform group-open:rotate-45">+</span>
-                </summary>
-                <p className="mt-3 max-w-[640px] text-[16px] leading-relaxed text-[var(--d-muted)]">{f.a}</p>
-              </details>
-            ))}
+        <section id="faq" className="border-t border-[var(--line)]">
+          <div className="mx-auto grid max-w-[1200px] scroll-mt-24 gap-10 px-4 py-20 sm:px-6 sm:py-24 lg:grid-cols-[0.8fr_1.2fr]">
+            <Headline a="Questions" className={H} />
+            <div className="divide-y divide-[var(--d-sky-line)] border-y border-[var(--d-sky-line)]">
+              {FAQ.map((f) => (
+                <details key={f.q} className="group py-5">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-[18px] font-semibold [&::-webkit-details-marker]:hidden">
+                    {f.q}
+                    <span aria-hidden="true" className="red flex-none text-[26px] leading-none transition-transform group-open:rotate-45">+</span>
+                  </summary>
+                  <p className="mt-3 max-w-[640px] text-[16px] leading-relaxed text-[var(--d-muted)]">{f.a}</p>
+                </details>
+              ))}
+            </div>
           </div>
         </section>
 
@@ -279,22 +281,22 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
         <section id="early-access" className="scroll-mt-24 bg-[var(--d-sky)]">
           <div className="mx-auto grid max-w-[1200px] items-center gap-10 px-4 py-20 sm:px-6 sm:py-24 lg:grid-cols-2">
             <div>
-              <Headline a="Your next post is already in the news" className="text-[40px] leading-[1.04] sm:text-[56px]" />
+              <Headline a="Your next post is already in the news" className={H} />
               <p className="mt-6 max-w-[500px] text-[19px] leading-relaxed text-[var(--d-muted)]">
                 {open && beta && plan
                   ? `The ${plan === "agency" ? "Agency" : "Pro"} plan adds X and opens soon. Join the list and you will hear first. Until then, LinkedIn is free.`
                   : open
                   ? beta
-                    ? "Connect LinkedIn and pick your field. Your first drafts are on your calendar the same day."
-                    : `Connect LinkedIn or X, pick your field, and your first posts arrive in Telegram today. ${TRIAL_DAYS} days free.`
+                    ? "Sign up, connect LinkedIn and pick your field. Your first posts are ready the same day."
+                    : `Connect LinkedIn or X, pick your field, and your first posts arrive today. ${TRIAL_DAYS} days free.`
                   : `PostFlow is opening to a small group first. Join the list for an invite${beta ? " to the free beta." : ` and a ${TRIAL_DAYS}-day free trial.`}`}
               </p>
             </div>
             {open && plan !== "agency" && !(beta && plan) ? (
-              <div className="rounded-[6px] border border-[var(--line-strong)] bg-[var(--surface)] p-8">
+              <div className="rounded-[16px] border border-[var(--line-strong)] bg-[var(--surface)] p-8">
                 <a href={signupHref} className="btn-desk w-full">{startLabel}</a>
                 <p className="mt-4 text-center text-[15px] text-[var(--d-muted)]">
-                  Already on the desk? <Link href="/login" className="font-semibold underline">Sign in</Link>
+                  Already have an account? <Link href="/login" className="font-semibold underline">Sign in</Link>
                 </p>
               </div>
             ) : (
@@ -304,17 +306,16 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
         </section>
       </main>
 
-      <footer className="mx-auto max-w-[1200px] px-4 pb-10 sm:px-6">
-        <div className="press-stripe mb-8" aria-hidden="true" />
+      <footer className="mx-auto max-w-[1200px] px-4 pb-10 pt-10 sm:px-6">
         <div className="flex flex-col gap-5 text-[15px] text-[var(--d-muted)] sm:flex-row sm:items-center">
           <span className="flex items-center gap-2 text-[var(--d-ink)]">
             <Logo size={22} />
             <span className="display text-[22px]">PostFlow</span>
           </span>
           <nav aria-label="Footer" className="flex flex-wrap gap-x-6 gap-y-2">
-            <a href="#watch" className="hover:text-[var(--d-ink)]">How it works</a>
+            <a href="#how" className="hover:text-[var(--d-ink)]">How it works</a>
             <a href="#pricing" className="hover:text-[var(--d-ink)]">Pricing</a>
-            <a href="#faq" className="hover:text-[var(--d-ink)]">FAQ</a>
+            <a href="#faq" className="hover:text-[var(--d-ink)]">Questions</a>
             <Link href="/terms" className="hover:text-[var(--d-ink)]">Terms</Link>
             <Link href="/privacy" className="hover:text-[var(--d-ink)]">Privacy</Link>
             {contactEmail() && <a href={`mailto:${contactEmail()}`} className="hover:text-[var(--d-ink)]">Contact</a>}
