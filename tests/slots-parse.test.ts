@@ -17,3 +17,12 @@ describe("parseSlots", () => {
     expect(() => parseSlots("x daily 25:00")).toThrow();
   });
 });
+
+describe("schedule picker format", () => {
+  it("reads the day lists the Settings picker submits", () => {
+    expect(parseSlots("linkedin mon,tue,wed,thu,fri,sat 10:30\nlinkedin sun 08:05")).toEqual([
+      { platform: "linkedin", days: [1, 2, 3, 4, 5, 6], time: "10:30" },
+      { platform: "linkedin", days: [7], time: "08:05" },
+    ]);
+  });
+});

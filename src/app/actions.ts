@@ -191,7 +191,7 @@ export async function recheckPostAction(form: FormData) {
 }
 export async function removeStyleNoteAction(form: FormData) {
   const i = Number(form.get("i"));
-  await guarded("/settings", async () => {
+  await guarded("/settings?tab=voice", async () => {
     const s = await getSettings();
     await saveSettings({ styleNotes: s.styleNotes.filter((_, j) => j !== i) });
   }, "Removed.");
@@ -273,17 +273,13 @@ export async function deleteNoteAction(form: FormData) {
 
 // ---- settings -------------------------------------------------------------
 
-export async function saveProfileAction(form: FormData) {
-  await guarded("/settings", async () => {
+/** Settings > Voice: who you are and how you sound. */
+export async function saveVoiceAction(form: FormData) {
+  await guarded("/settings?tab=voice", async () => {
     const s = await getSettings();
     await saveSettings({
-      timezone: String(form.get("timezone") || s.timezone),
-      horizonDays: Number(form.get("horizonDays") || s.horizonDays),
-      minRelevance: Number(form.get("minRelevance") || s.minRelevance),
-      linkedinMinRelevance: Number(form.get("linkedinMinRelevance") || s.linkedinMinRelevance),
-      fillerPosts: form.get("fillerPosts") === "on",
-      ownDomains: String(form.get("ownDomains") ?? "").split(/[\s,]+/).map((d) => d.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "")).filter(Boolean),
       profile: {
+        ...s.profile,
         name: String(form.get("name") ?? ""),
         field: fieldOf(String(form.get("field") ?? s.profile.field)).id,
         audience: String(form.get("audience") ?? s.profile.audience).trim().slice(0, 160),
@@ -294,6 +290,20 @@ export async function saveProfileAction(form: FormData) {
         avoid: String(form.get("avoid") ?? ""),
         expertise: String(form.get("expertise") ?? "").split(/[\n,]/).map((x) => x.trim()).filter(Boolean),
       },
+    });
+  });
+}
+
+/** Settings > Advanced: content mix, thresholds and what goes into a post. */
+export async function saveAdvancedAction(form: FormData) {
+  await guarded("/settings?tab=advanced", async () => {
+    const s = await getSettings();
+    await saveSettings({
+      horizonDays: Number(form.get("horizonDays") || s.horizonDays),
+      minRelevance: Number(form.get("minRelevance") || s.minRelevance),
+      linkedinMinRelevance: Number(form.get("linkedinMinRelevance") || s.linkedinMinRelevance),
+      fillerPosts: form.get("fillerPosts") === "on",
+      ownDomains: String(form.get("ownDomains") ?? "").split(/[\s,]+/).map((d) => d.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "")).filter(Boolean),
       pillars: {
         own_work: Number(form.get("w_own_work") ?? 0),
         news: Number(form.get("w_news") ?? 0),
@@ -309,7 +319,7 @@ export async function saveProfileAction(form: FormData) {
 }
 
 export async function saveFastLaneAction(form: FormData) {
-  await guarded("/settings", async () => {
+  await guarded("/settings?tab=schedule", async () => {
     if (form.get("fl_enabled") === "on") await assertFeature("fastLane", "The fast lane");
     const platforms = (["x", "linkedin"] as const).filter((p) => form.get(`fl_${p}`) === "on");
     await saveSettings({
@@ -326,7 +336,11 @@ export async function saveFastLaneAction(form: FormData) {
   });
 }
 export async function saveSlotsAction(form: FormData) {
-  await guarded("/settings", async () => saveSettings({ slots: parseSlots(String(form.get("slots") ?? "")) }));
+  await guarded("/settings?tab=schedule", async () => {
+    const timezone = String(form.get("timezone") ?? "").trim();
+    if (timezone && !DateTime.local().setZone(timezone).isValid) throw new Error(`"${timezone}" is not a timezone PostFlow knows.`);
+    await saveSettings({ slots: parseSlots(String(form.get("slots") ?? "")), ...(timezone ? { timezone } : {}) });
+  });
 }
 export async function toggleApprovalAction() {
   await guarded("/settings", async () => {
@@ -410,7 +424,7 @@ export async function adminTickAction() {
 // ---- sources --------------------------------------------------------------
 
 export async function addSourceAction(form: FormData) {
-  await guarded("/settings", async () => {
+  await guarded("/settings?tab=sources", async () => {
     const url = String(form.get("url") ?? "").trim();
     if (!isPublicHttpUrl(url)) throw new Error("Enter a public http(s) feed URL.");
     const pillar = form.get("pillar") === "local" ? "local" : "news";
@@ -421,7 +435,7 @@ export async function addSourceAction(form: FormData) {
 }
 export async function toggleSourceAction(form: FormData) {
   const id = String(form.get("id"));
-  await guarded("/settings", async () => {
+  await guarded("/settings?tab=sources", async () => {
     const user = await requireActiveUser();
     const s = await db().query.sources.findFirst({ where: and(eq(schema.sources.id, id), eq(schema.sources.userId, user.id)) });
     if (s && !s.enabled) await assertFeedQuota();
@@ -429,7 +443,7 @@ export async function toggleSourceAction(form: FormData) {
   });
 }
 export async function deleteSourceAction(form: FormData) {
-  await guarded("/settings", async () => {
+  await guarded("/settings?tab=sources", async () => {
     const user = await requireActiveUser();
     await db().delete(schema.sources).where(and(eq(schema.sources.id, String(form.get("id"))), eq(schema.sources.userId, user.id)));
   }, "Feed removed.");
