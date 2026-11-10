@@ -25,10 +25,10 @@ export function DeskNav({ loggedIn }: { loggedIn: boolean }) {
   }, [menu]);
   return (
     <header className="sticky top-0 z-40 bg-[var(--d-paper)]/90 backdrop-blur">
-      <div className="mx-auto flex h-[72px] max-w-[1200px] items-center gap-8 px-4 sm:px-6">
+      <div className="mx-auto flex h-[72px] max-w-[1200px] items-center gap-3 px-4 sm:gap-8 sm:px-6">
         <Link href="/" className="flex items-baseline gap-2" aria-label="PostFlow home">
           <span className="self-center"><Logo size={28} /></span>
-          <span className="display text-[28px]">PostFlow</span>
+          <span className="display text-[24px] sm:text-[28px]">PostFlow</span>
         </Link>
         <nav aria-label="Sections" className="ml-auto hidden items-center gap-7 text-[16px] font-semibold lg:flex">
           {NAV.map((n) => (
@@ -36,7 +36,8 @@ export function DeskNav({ loggedIn }: { loggedIn: boolean }) {
           ))}
         </nav>
         <div className="ml-auto flex items-center gap-2 lg:ml-6">
-          <ThemeToggle />
+          {/* Very small phones have no room for it next to Sign in and the menu. */}
+          <span className="hidden min-[360px]:contents"><ThemeToggle /></span>
           <Link href={loggedIn ? "/calendar" : "/login"} className="btn-outline h-10 whitespace-nowrap px-3.5 sm:h-11 sm:px-[18px]">{loggedIn ? "Open app" : "Sign in"}</Link>
           <span className="lg:hidden">
             <button type="button" aria-expanded={menu} aria-controls="desk-menu" aria-label={menu ? "Close menu" : "Open menu"} onClick={() => setMenu((m) => !m)} className="inline-flex h-11 w-11 items-center justify-center rounded-lg">

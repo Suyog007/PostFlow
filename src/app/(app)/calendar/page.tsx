@@ -23,9 +23,8 @@ interface OpenSlot { open: true; id: string; platform: "x" | "linkedin"; schedul
 type Entry = Post | OpenSlot;
 const isOpen = (e: Entry): e is OpenSlot => "open" in e;
 
-/** Each platform's own colour: a stripe on the left and a light wash behind the card. */
-const platformTone = (platform: string) => (platform === "x" ? "var(--x)" : "var(--li)");
-const platformWash = (platform: string) => `color-mix(in srgb, ${platformTone(platform)} 7%, var(--surface))`;
+/** Cards waiting on you get the one coloured edge on the page; everything else stays neutral. */
+const edge = (waiting: boolean) => (waiting ? { boxShadow: "inset 3px 0 0 var(--warn)" } : undefined);
 
 function Thumb({ src, size }: { src: string; size: number }) {
   return (
@@ -34,11 +33,11 @@ function Thumb({ src, size }: { src: string; size: number }) {
   );
 }
 
-/** One short status per card, the same on phones and desktop. */
+/** One short status per card, the same on phones and desktop. Only "needs your OK" asks for attention. */
 function CardBadge({ p, needsOk }: { p: Post; needsOk: boolean }) {
-  if (needsOk) return <span className="badge badge-warn">Needs OK</span>;
-  if (p.status === "published") return <span className="badge badge-good">Posted</span>;
-  if (p.status === "scheduled") return p.approvedAt ? <span className="badge badge-good">Approved</span> : <span className="badge badge-info">Scheduled</span>;
+  if (needsOk) return <span className="text-[12px] font-semibold text-[var(--warn)]">Needs your OK</span>;
+  if (p.status === "published") return <span className="text-[12px] text-[var(--muted)]">Posted</span>;
+  if (p.status === "scheduled") return p.approvedAt ? <span className="text-[12px] text-[var(--good)]">Approved</span> : <span className="text-[12px] text-[var(--muted)]">Scheduled</span>;
   return <StatusBadge status={p.status} />;
 }
 
@@ -49,18 +48,16 @@ function DayCard({ p, tz, needsOk, thumb }: { p: Post; tz: string; needsOk: bool
     <Link
       href={`/posts/${p.id}`}
       title={p.text}
-      className={`block rounded-[6px] border border-[var(--line)] border-l-[3px] p-2 transition-colors hover:border-[var(--line-strong)] ${dead ? "opacity-55" : ""}`}
-      style={{ borderLeftColor: platformTone(p.platform), background: platformWash(p.platform) }}
+      className={`block rounded-[6px] border border-[var(--line)] bg-[var(--surface)] p-2.5 transition-colors hover:border-[var(--line-strong)] ${dead ? "opacity-55" : ""}`}
+      style={edge(needsOk)}
     >
-      <div className="flex items-center gap-1.5 text-[11px] text-[var(--muted)]">
+      <div className="flex items-center gap-1.5 text-[12px] text-[var(--muted)]">
         <PlatformGlyph platform={p.platform} size={12} />
-        <span className="mono">{DateTime.fromJSDate(p.scheduledAt, { zone: tz }).toFormat("HH:mm")}</span>
-        {p.fast && <Icon name="bolt" size={11} className="text-[var(--warn)]" />}
-        <span className="ml-auto"><CardBadge p={p} needsOk={needsOk} /></span>
+        <span className="mono tnum">{DateTime.fromJSDate(p.scheduledAt, { zone: tz }).toFormat("HH:mm")}</span>
+        {p.fast && <Icon name="bolt" size={12} className="text-[var(--muted)]" />}
       </div>
-      <div className="mt-1.5 flex gap-2">
-        <p className={`line-clamp-4 min-w-0 flex-1 break-words text-[12.5px] leading-snug ${p.status === "cancelled" ? "line-through" : ""}`}>{p.text}</p>
-      </div>
+      <p className={`mt-1.5 line-clamp-4 break-words text-[13px] leading-snug ${p.status === "cancelled" ? "line-through" : ""}`}>{p.text}</p>
+      <div className="mt-2"><CardBadge p={p} needsOk={needsOk} /></div>
       {thumb && (
         // eslint-disable-next-line @next/next/no-img-element -- a signed, already-made picture; next/image would re-encode it
         <img src={thumb} alt="" aria-hidden="true" loading="lazy" className="mt-2 aspect-[16/9] w-full rounded-[4px] border border-[var(--line)] object-cover" />
@@ -103,7 +100,7 @@ function FirstRun({ mins }: { mins: number }) {
 function OpenCard({ e, tz, loading }: { e: OpenSlot; tz: string; loading?: boolean }) {
   if (loading)
     return (
-      <div className="first-skeleton rounded-[6px] border border-[var(--line)] p-2 text-[11px] text-[var(--subtle)]">
+      <div className="first-skeleton rounded-[6px] border border-[var(--line)] p-2.5 text-[12px] text-[var(--subtle)]">
         <div className="flex items-center gap-1.5"><PlatformGlyph platform={e.platform} size={12} /><span className="mono">{DateTime.fromJSDate(e.scheduledAt, { zone: tz }).toFormat("HH:mm")}</span></div>
         <span aria-hidden="true" className="mt-2 block h-2 w-11/12 rounded bg-[var(--line)]" />
         <span aria-hidden="true" className="mt-1.5 block h-2 w-2/3 rounded bg-[var(--line)]" />
@@ -111,9 +108,9 @@ function OpenCard({ e, tz, loading }: { e: OpenSlot; tz: string; loading?: boole
       </div>
     );
   return (
-    <div className="rounded-[6px] border border-dashed border-[var(--line-strong)] p-2 text-[11px] text-[var(--subtle)]" title="Open slot: PostFlow fills it automatically when a story worth posting comes in. You don\u2019t need to do anything.">
+    <div className="rounded-[6px] border border-dashed border-[var(--line-strong)] p-2.5 text-[12px] text-[var(--subtle)]" title="Open slot: PostFlow fills it automatically when a story worth posting comes in. You don\u2019t need to do anything.">
       <div className="flex items-center gap-1.5"><PlatformGlyph platform={e.platform} size={12} /><span className="mono">{DateTime.fromJSDate(e.scheduledAt, { zone: tz }).toFormat("HH:mm")}</span></div>
-      <p className="mt-1">Open · fills by itself</p>
+      <p className="mt-1">Open, fills by itself</p>
     </div>
   );
 }
@@ -179,6 +176,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const status = !firstRun && !filling && openSlots.length && offset >= 0 ? await newsroomStatus(user.id, s, { beat: await lastHeartbeat() }) : null;
   const entries: Entry[] = [...week, ...openSlots].sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime());
   const postedCount = week.filter((p) => p.status === "published").length;
+  const waitingCount = week.filter((p) => needsOk(p) && p.scheduledAt.getTime() > Date.now()).length;
   const thumbFor = (p: Post) => (withPicture.has(p.id) && wantsImage(p, s) ? cardUrl(p) : undefined);
 
   return (
@@ -232,31 +230,47 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       )}
 
       <PageHeader
-        title={`${offset === 0 ? "This week" : offset === 1 ? "Next week" : offset === -1 ? "Last week" : "Week"} · ${weekStart.toFormat("d LLL")} – ${weekEnd.minus({ days: 1 }).toFormat("d LLL")}`}
+        title={`${offset === 0 ? "This week" : offset === 1 ? "Next week" : offset === -1 ? "Last week" : "Week of"} · ${weekStart.toFormat("d LLL")} – ${weekEnd.minus({ days: 1 }).toFormat("d LLL")}`}
         description={
-          upcoming[0] ? (
-            <>Next up: <span className="inline-block align-[-1px]"><PlatformGlyph platform={upcoming[0].platform} size={12} /></span> {DateTime.fromJSDate(upcoming[0].scheduledAt, { zone: tz }).toFormat("ccc HH:mm")}. {scheduledCount} scheduled and {postedCount} posted in these 7 days. {approvalOn ? "Posts go out only once you approve them; the rest are skipped." : "Everything scheduled goes out unless you remove it."}</>
-          ) : (
-            <>Nothing scheduled yet. PostFlow fills the open slots below by itself, up to {s.horizonDays} days ahead.</>
-          )
+          <>
+            <span className="tnum">
+              {upcoming[0] ? <>Next up {DateTime.fromJSDate(upcoming[0].scheduledAt, { zone: tz }).toFormat("ccc HH:mm")} · </> : null}
+              {scheduledCount} scheduled · {postedCount} posted
+              {waitingCount > 0 && <span className="font-medium text-[var(--warn)]"> · {waitingCount} {waitingCount === 1 ? "needs" : "need"} your OK</span>}
+            </span>
+            <span className="mt-0.5 block text-[13px] text-[var(--subtle)]">{upcoming[0] ? (approvalOn ? "Posts go out only once you approve them." : "Everything scheduled goes out unless you remove it.") : `PostFlow fills the open times by itself, up to ${s.horizonDays} days ahead.`}</span>
+          </>
         }
         actions={
-          <div className="flex flex-wrap items-center gap-1.5">
-            <Link href={`/calendar?w=${offset - 1}`} className="btn btn-sm" aria-label="Previous week"><Icon name="left" size={14} /></Link>
-            <Link href="/calendar" className="btn btn-sm" aria-current={offset === 0 ? "page" : undefined}>This week</Link>
-            <Link href={`/calendar?w=${offset + 1}`} className="btn btn-sm" aria-label="Next week"><Icon name="right" size={14} /></Link>
-            <form action={refreshQueuedAction} className="ml-1">
-              <button className="btn btn-sm" title="Write every queued post you have not approved again, in the latest style"><Icon name="repost" size={14} />Rewrite queued</button>
-            </form>
-            <form action={writeLessonAction}>
-              <button className="btn btn-sm" title="Write a short, simple lesson for your audience in the next free slot"><Icon name="notes" size={14} />Add a lesson</button>
-            </form>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1" role="group" aria-label="Week">
+              <Link href={`/calendar?w=${offset - 1}`} className="btn btn-sm" aria-label="Previous week"><Icon name="left" size={14} /></Link>
+              <Link href="/calendar" className="btn btn-sm" aria-current={offset === 0 ? "page" : undefined}>Today</Link>
+              <Link href={`/calendar?w=${offset + 1}`} className="btn btn-sm" aria-label="Next week"><Icon name="right" size={14} /></Link>
+            </div>
             <form action={fillCalendarAction}>
-              <button className="btn btn-sm" disabled={filling} title={`Write posts now for every open slot in the next ${fillNowDays(s)} days, retrying slots that failed`}>
+              <button className="btn btn-sm" disabled={filling} title={`Write posts now for every open time in the next ${fillNowDays(s)} days, retrying any that failed`}>
                 <Icon name="bolt" size={14} />{filling ? "Filling…" : "Fill now"}
               </button>
             </form>
-            <Link href="/create" className="btn btn-primary btn-sm ml-1"><Icon name="create" size={14} />New post</Link>
+            <details className="relative">
+              <summary className="btn btn-sm list-none [&::-webkit-details-marker]:hidden" aria-label="More actions">More</summary>
+              <div className="absolute right-0 z-20 mt-1 w-56 rounded-[8px] border border-[var(--line-strong)] bg-[var(--surface)] p-1 shadow-[0_8px_24px_-12px_rgba(0,0,0,.25)]">
+                <form action={writeLessonAction}>
+                  <button className="w-full rounded-[6px] px-3 py-2 text-left text-[13px] hover:bg-[var(--side)]">
+                    Add a lesson
+                    <span className="block text-[12px] text-[var(--muted)]">A short explainer in the next free time</span>
+                  </button>
+                </form>
+                <form action={refreshQueuedAction}>
+                  <button className="w-full rounded-[6px] px-3 py-2 text-left text-[13px] hover:bg-[var(--side)]">
+                    Rewrite queued posts
+                    <span className="block text-[12px] text-[var(--muted)]">Every post you have not approved yet</span>
+                  </button>
+                </form>
+              </div>
+            </details>
+            <Link href="/create" className="btn btn-primary btn-sm hidden md:inline-flex"><Icon name="create" size={14} />New post</Link>
           </div>
         }
       />
@@ -267,13 +281,13 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
           const isToday = d.hasSame(today, "day");
           const dayPosts = entries.filter((p) => DateTime.fromJSDate(p.scheduledAt, { zone: tz }).hasSame(d, "day"));
           return (
-            <section key={d.toISODate()} aria-label={d.toFormat("cccc d LLL")} className={`flex min-h-[420px] min-w-0 flex-col ${i ? "border-l border-[var(--line)]" : ""} ${isToday ? "bg-[var(--mark-soft)]/40" : ""}`}>
+            <section key={d.toISODate()} aria-label={d.toFormat("cccc d LLL")} className={`flex min-h-[420px] min-w-0 flex-col ${i ? "border-l border-[var(--line)]" : ""} ${isToday ? "bg-[var(--mark-soft)]/30" : ""}`}>
               <header className="flex items-baseline justify-between gap-1 border-b border-[var(--line)] px-2.5 py-2">
-                <span className={`text-[12px] font-semibold ${isToday ? "text-[var(--ink)]" : "text-[var(--subtle)]"}`}>{isToday ? "Today" : d.toFormat("ccc")}</span>
-                <span className={`flex h-7 min-w-7 items-center justify-center rounded-full px-1 text-[14px] font-semibold tnum ${isToday ? "bg-[var(--mark)] text-[var(--mark-ink)]" : ""}`}>{d.day}</span>
+                <span className={`text-[13px] ${isToday ? "font-semibold text-[var(--ink)]" : "text-[var(--muted)]"}`}>{isToday ? "Today" : d.toFormat("ccc")}</span>
+                <span className={`flex h-7 min-w-7 items-center justify-center rounded-full px-1 text-[14px] font-medium tnum ${isToday ? "bg-[var(--mark)] text-[var(--mark-ink)]" : "text-[var(--muted)]"}`}>{d.day}</span>
               </header>
               <div className="flex flex-1 flex-col gap-2 p-2">
-                {dayPosts.length ? dayPosts.map((p) => (isOpen(p) ? <OpenCard key={p.id} e={p} tz={tz} loading={firstRun} /> : <DayCard key={p.id} p={p} tz={tz} needsOk={needsOk(p)} thumb={thumbFor(p)} />)) : <p className="px-1 pt-1 text-[12px] text-[var(--subtle)]">Nothing planned</p>}
+                {dayPosts.length ? dayPosts.map((p) => (isOpen(p) ? <OpenCard key={p.id} e={p} tz={tz} loading={firstRun} /> : <DayCard key={p.id} p={p} tz={tz} needsOk={needsOk(p)} thumb={thumbFor(p)} />)) : <p className="px-1 pt-1 text-[13px] text-[var(--subtle)]">Nothing planned</p>}
               </div>
             </section>
           );
@@ -286,27 +300,27 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
           const dayPosts = entries.filter((p) => DateTime.fromJSDate(p.scheduledAt, { zone: tz }).hasSame(d, "day"));
           return (
             <section key={d.toISODate()}>
-              <h2 className={`mb-1.5 text-[12px] font-semibold ${d.hasSame(today, "day") ? "text-[var(--ink)]" : "text-[var(--subtle)]"}`}>{d.toFormat("cccc d LLL")}{d.hasSame(today, "day") ? " · Today" : ""}</h2>
+              <h2 className={`mb-2 text-[13px] ${d.hasSame(today, "day") ? "font-semibold text-[var(--ink)]" : "text-[var(--muted)]"}`}>{d.toFormat("cccc d LLL")}{d.hasSame(today, "day") ? " · Today" : ""}</h2>
               {dayPosts.length ? (
                 <div className="panel divide">
                   {dayPosts.map((p) => isOpen(p) ? (
                     <div key={p.id} className="flex gap-3 px-3 py-2.5 text-[var(--subtle)]">
-                      <div className="w-11 flex-none pt-0.5 text-[12px] mono">{DateTime.fromJSDate(p.scheduledAt, { zone: tz }).toFormat("HH:mm")}</div>
-                      <div className="flex min-w-0 flex-1 items-center gap-1.5 text-[13px]"><PlatformGlyph platform={p.platform} size={13} />{firstRun ? "Writing a post for this slot…" : "Open slot · fills by itself"}</div>
+                      <div className="w-11 flex-none pt-0.5 text-[12px] mono tnum">{DateTime.fromJSDate(p.scheduledAt, { zone: tz }).toFormat("HH:mm")}</div>
+                      <div className="flex min-w-0 flex-1 items-center gap-1.5 text-[13px]"><PlatformGlyph platform={p.platform} size={13} />{firstRun ? "Writing a post for this time…" : "Open, fills by itself"}</div>
                     </div>
                   ) : (
-                    <Link key={p.id} href={`/posts/${p.id}`} className="flex gap-3 border-l-[3px] px-3 py-2.5" style={{ borderLeftColor: platformTone(p.platform), background: platformWash(p.platform) }}>
-                      <div className="w-11 flex-none pt-0.5 text-[12px] text-[var(--muted)] mono">{DateTime.fromJSDate(p.scheduledAt, { zone: tz }).toFormat("HH:mm")}</div>
+                    <Link key={p.id} href={`/posts/${p.id}`} className="flex gap-3 px-3 py-3" style={edge(needsOk(p))}>
+                      <div className="w-11 flex-none pt-0.5 text-[12px] text-[var(--muted)] mono tnum">{DateTime.fromJSDate(p.scheduledAt, { zone: tz }).toFormat("HH:mm")}</div>
                       <div className="min-w-0 flex-1">
-                        <div className="mb-0.5 flex items-center gap-1.5"><PlatformGlyph platform={p.platform} size={13} />{p.fast && <Icon name="bolt" size={12} className="text-[var(--warn)]" />}<CardBadge p={p} needsOk={needsOk(p)} /></div>
-                        <p className="line-clamp-2 break-words text-[13px]">{p.text}</p>
+                        <p className="line-clamp-2 break-words text-[14px] leading-snug">{p.text}</p>
+                        <div className="mt-1 flex items-center gap-1.5"><PlatformGlyph platform={p.platform} size={12} />{p.fast && <Icon name="bolt" size={12} className="text-[var(--muted)]" />}<CardBadge p={p} needsOk={needsOk(p)} /></div>
                       </div>
                       {thumbFor(p) && <Thumb src={thumbFor(p)!} size={52} />}
                     </Link>
                   ))}
                 </div>
               ) : (
-                <p className="text-[13px] text-[var(--subtle)]">Nothing scheduled</p>
+                <p className="text-[13px] text-[var(--subtle)]">Nothing planned</p>
               )}
             </section>
           );
@@ -315,7 +329,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
 
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
         <section className="panel">
-          <div className="panel-head"><Icon name="draft" size={15} />Drafts<span className="badge ml-1">{drafts.length}</span></div>
+          <div className="panel-head"><Icon name="draft" size={15} />Drafts<span className="ml-1 font-normal text-[var(--subtle)] tnum">{drafts.length}</span></div>
           {drafts.length ? (
             <div className="divide">
               {drafts.map((p) => (
@@ -323,7 +337,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                   <PlatformGlyph platform={p.platform} size={14} />
                   <div className="min-w-0">
                     <p className="line-clamp-2 break-words text-[13px]">{p.text}</p>
-                    {p.error && <p className="mt-0.5 line-clamp-1 text-[11px] text-[var(--warn)]">{p.error}</p>}
+                    {p.error && <p className="mt-0.5 line-clamp-1 text-[12px] text-[var(--warn)]">{p.error}</p>}
                   </div>
                 </Link>
               ))}
@@ -334,14 +348,14 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
         </section>
 
         <section className="panel">
-          <div className="panel-head"><Icon name="shield" size={15} />Held back by the reviewer<span className="badge ml-1">{held.length}</span></div>
+          <div className="panel-head"><Icon name="shield" size={15} />Held back by the reviewer<span className="ml-1 font-normal text-[var(--subtle)] tnum">{held.length}</span></div>
           {held.length ? (
             <div className="divide max-h-[320px] overflow-auto">
               {held.map((p) => (
                 <Link key={p.id} href={`/posts/${p.id}`} className="block px-4 py-2.5 hover:bg-[var(--raised)]">
-                  <div className="flex items-center gap-1.5 text-[11px] text-[var(--subtle)]"><PlatformGlyph platform={p.platform} size={12} />{DateTime.fromJSDate(p.createdAt, { zone: tz }).toFormat("ccc HH:mm")}</div>
-                  <p className="line-clamp-1 text-[13px]">{p.text}</p>
-                  <p className="line-clamp-2 text-[12px] text-[var(--bad)]">{p.error?.replace(/^Reviewer: /, "")}</p>
+                  <div className="flex items-center gap-1.5 text-[12px] text-[var(--subtle)]"><PlatformGlyph platform={p.platform} size={12} /><span className="tnum">{DateTime.fromJSDate(p.createdAt, { zone: tz }).toFormat("ccc HH:mm")}</span></div>
+                  <p className="mt-0.5 line-clamp-1 text-[13px]">{p.text}</p>
+                  <p className="mt-0.5 line-clamp-2 text-[12px] text-[var(--muted)]">Why: {p.error?.replace(/^Reviewer: /, "")}</p>
                 </Link>
               ))}
             </div>
@@ -355,7 +369,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
           <ul className="divide text-[13px]">
             {events.length ? events.map((e) => (
               <li key={e.id} className="flex gap-3 px-4 py-2">
-                <span className="w-24 flex-none text-[12px] text-[var(--subtle)] mono">{DateTime.fromJSDate(e.at, { zone: tz }).toFormat("d LLL HH:mm")}</span>
+                <span className="w-24 flex-none text-[12px] text-[var(--subtle)] mono tnum">{DateTime.fromJSDate(e.at, { zone: tz }).toFormat("d LLL HH:mm")}</span>
                 <span className="min-w-0 break-words">{e.message}</span>
               </li>
             )) : <li className="px-4 py-6 text-[var(--subtle)]">Nothing yet. Once the scheduler runs, what it does shows up here.</li>}
