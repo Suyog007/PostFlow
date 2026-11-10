@@ -125,8 +125,8 @@ function Steps() {
         <div className="flex h-[150px] flex-col justify-center gap-3 rounded-[12px] bg-[var(--bg)] p-4" aria-hidden="true">
           <span className="flex items-center gap-2 text-[14px] font-medium"><span className="h-2.5 w-2.5 rounded-full bg-[var(--warn)]" />1 post is waiting for your OK</span>
           <span className="flex gap-2">
-            <span className="inline-flex h-10 items-center gap-1.5 rounded-[8px] bg-[var(--ink)] px-4 text-[14px] font-semibold text-[var(--bg)]">✓ Approve</span>
-            <span className="inline-flex h-10 items-center rounded-[8px] border border-[var(--line-strong)] px-4 text-[14px]">Edit</span>
+            <span className="inline-flex h-10 items-center gap-1.5 rounded-full bg-[var(--accent)] px-5 text-[14px] font-semibold text-[var(--accent-ink)]">✓ Approve</span>
+            <span className="inline-flex h-10 items-center rounded-full border border-[var(--line-strong)] px-4 text-[14px]">Edit</span>
           </span>
         </div>
         <p className="mt-5 text-[13px] font-medium text-[var(--accent)]">Step 3</p>
@@ -170,7 +170,7 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
         {/* ---------- hero ---------- */}
         <section className="mx-auto grid max-w-[1200px] items-center gap-12 px-4 pb-20 pt-10 sm:px-6 lg:grid-cols-[1fr_1fr] lg:gap-16 lg:pt-16">
           <div>
-            <Headline as="h1" a="Be seen on LinkedIn" b="without the writing" className="text-[46px] leading-[1.02] sm:text-[68px]" />
+            <Headline as="h1" a="Be seen on LinkedIn" b="without the writing" className="text-[44px] leading-[1.02] sm:text-[60px]" />
             <p className="mt-6 max-w-[520px] text-[19px] leading-[1.6] text-[var(--d-muted)] sm:text-[21px]">
               PostFlow follows the news in your field and writes short, clear posts in your voice. You read each one and tap Approve. That&apos;s it.
             </p>
@@ -320,7 +320,7 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
             <Link href="/privacy" className="hover:text-[var(--d-ink)]">Privacy</Link>
             {contactEmail() && <a href={`mailto:${contactEmail()}`} className="hover:text-[var(--d-ink)]">Contact</a>}
           </nav>
-          <p className="sm:ml-auto">© {new Date().getFullYear()} PostFlow</p>
+          <p className="sm:ml-auto">© {new Date().getFullYear()} PostFlow · Designed using <a href="https://www.designlounge.live" className="underline hover:text-[var(--d-ink)]">Design Lounge</a></p>
         </div>
       </footer>
     </div>

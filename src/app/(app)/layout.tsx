@@ -21,19 +21,18 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const name = s.profile.name || user.name || user.email;
   return (
     <div className="min-h-screen md:grid md:grid-cols-[224px_minmax(0,1fr)]">
-      <aside className="hidden flex-col gap-6 border-r border-[var(--line)] bg-[var(--side)] p-3 md:sticky md:top-0 md:flex md:h-screen">
+      <aside className="hidden flex-col gap-6 border-r border-[var(--line)] bg-[var(--surface)] p-4 md:sticky md:top-0 md:flex md:h-screen">
         <div className="px-2 pt-2">
           <Link href="/calendar" className="flex items-baseline gap-2">
             <span className="self-center"><Logo size={24} /></span>
-            <span className="display text-[22px]">PostFlow</span>
+            <span className="text-[20px] font-extrabold tracking-[-0.03em]">PostFlow</span>
           </Link>
-          <div className="press-stripe mt-3" aria-hidden="true" />
         </div>
         <SideNav owner={user.isOwner} />
         {used !== null && (
-          <Link href="/billing" className="mx-1 rounded-lg border border-[var(--line)] bg-[var(--surface)] p-3 text-[12px] hover:border-[var(--line-strong)]">
+          <Link href="/billing" className="mx-1 rounded-[14px] bg-[var(--bg)] p-3.5 text-[12px] hover:bg-[var(--raised)]">
             <div className="flex justify-between font-medium"><span>{ent.plan === "beta" ? "Free beta" : ent.plan === "pro" ? "Pro plan" : "Starter plan"}</span><span className="tnum text-[var(--muted)]">{used}/{ent.quota.postsPerMonth}</span></div>
-            <div className="mt-1.5 h-1.5 rounded-full bg-[var(--side)]"><div className="h-1.5 rounded-full bg-[var(--accent)]" style={{ width: `${Math.min(100, (used / ent.quota.postsPerMonth) * 100)}%` }} /></div>
+            <div className="mt-1.5 h-1.5 rounded-full bg-[var(--line)]"><div className="h-1.5 rounded-full bg-[var(--accent)]" style={{ width: `${Math.min(100, (used / ent.quota.postsPerMonth) * 100)}%` }} /></div>
             <div className="mt-1 text-[12px] text-[var(--subtle)]">posts used this month{user.subscriptionStatus === "trialing" ? " · free trial" : ""}</div>
           </Link>
         )}
@@ -57,10 +56,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </aside>
 
       <div className="min-w-0">
-        <header className="relative flex items-center gap-2 bg-[var(--surface)] px-4 py-3 md:hidden">
+        <header className="sticky top-0 z-30 flex items-center gap-2 border-b border-[var(--line)] bg-[var(--surface)]/95 px-4 py-3 backdrop-blur md:hidden">
           <Logo size={22} />
-          <span className="display text-[20px]">PostFlow</span>
-          <div className="press-stripe absolute inset-x-0 bottom-0" aria-hidden="true" />
+          <span className="text-[19px] font-extrabold tracking-[-0.03em]">PostFlow</span>
           <span className="ml-auto"><ThemeToggle /></span>
           <Link href="/account" aria-label="Account"><Avatar name={name} size={28} /></Link>
         </header>
@@ -69,7 +67,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             PostFlow is paused. Nothing is being written or posted. <Link href="/settings?tab=accounts" className="underline">Turn it back on</Link>
           </div>
         )}
-        <main className="mx-auto max-w-[1180px] px-4 pb-24 pt-5 md:px-8 md:pb-12 md:pt-7">{children}</main>
+        <main className="mx-auto max-w-[1180px] px-4 pb-28 pt-6 md:px-10 md:pb-14 md:pt-10">{children}</main>
       </div>
       <TabBar />
     </div>

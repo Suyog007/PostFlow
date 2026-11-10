@@ -9,7 +9,7 @@ import { requireActiveUser } from "@/server/auth";
 import { activePlatforms, approvalGate, entitlementOf } from "@/server/billing/plans";
 import { Avatar, Icon, PlatformGlyph } from "@/components/ui";
 import { Flash } from "../flash";
-import { approvePostAction, connectAction, fillCalendarAction, rejectPostAction, togglePauseAction, unapprovePostAction } from "@/app/actions";
+import { approvePostAction, connectAction, fillCalendarAction, rejectPostAction, togglePauseAction } from "@/app/actions";
 import { fillNowDays } from "@/server/generate";
 import { slotsBetween } from "@/server/slots";
 import { cardUrl, wantsImage } from "@/server/post-images";
@@ -81,186 +81,191 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   const onDay = (d: DateTime) => entries.filter((e) => DateTime.fromJSDate(e.scheduledAt, { zone: tz }).hasSame(d, "day"));
   const dayTitle = (d: DateTime) => (d.hasSame(now, "day") ? "Today" : d.hasSame(now.plus({ days: 1 }), "day") ? "Tomorrow" : d.toFormat("cccc d LLLL"));
 
+  const focus = waiting[0];
+  const rest = entries.filter((e) => e !== focus);
+  const today = now.toFormat("cccc d LLLL");
+
   return (
-    <div className="mx-auto max-w-[680px]">
+    <div className="mx-auto max-w-[640px]">
       {(filling || firstRun) && <meta httpEquiv="refresh" content="30;url=/calendar" />}
       <Flash ok={sp.ok} error={sp.error} />
 
-      <h1 className="display text-[34px] leading-tight sm:text-[40px]">Your posts</h1>
+      <p className="text-[14px] text-[var(--muted)]">{today}</p>
+      <h1 className="display mt-1 text-[32px] sm:text-[40px]">{focus ? `${waiting.length} ${waiting.length === 1 ? "post needs" : "posts need"} you` : "Your posts"}</h1>
 
-      {/* One message, the most important one. */}
-      <div className="mt-4">
+      {/* The one thing to do now, big. */}
+      <div className="mt-5">
         {s.paused ? (
           <Banner tone="warn" title="PostFlow is paused" body="Nothing is being written or posted until you turn it back on.">
-            <form action={togglePauseAction}><input type="hidden" name="back" value="home" /><button className="btn btn-primary">Turn back on</button></form>
+            <form action={togglePauseAction}><input type="hidden" name="back" value="home" /><button className="btn btn-primary h-12 w-full px-6 text-[15px] sm:w-auto">Turn back on</button></form>
           </Banner>
         ) : !connected ? (
-          <Banner tone="accent" title="Connect LinkedIn to get started" body="PostFlow needs your LinkedIn account to post for you. It never posts without your OK.">
-            <form action={connectAction}><input type="hidden" name="platform" value="linkedin" /><button className="btn btn-primary" disabled={!isPlatformConfigured("linkedin")}>Connect LinkedIn</button></form>
+          <Banner tone="accent" title="Connect LinkedIn to start" body="PostFlow needs your LinkedIn account to post for you. It never posts without your OK.">
+            <form action={connectAction}><input type="hidden" name="platform" value="linkedin" /><button className="btn btn-primary h-12 w-full px-6 text-[15px] sm:w-auto" disabled={!isPlatformConfigured("linkedin")}>Connect LinkedIn</button></form>
           </Banner>
         ) : firstRun ? (
-          <Banner tone="calm" title="Writing your first posts…" body="PostFlow is reading today's news in your field and picking the stories worth sharing. This takes 5 to 15 minutes. You can close this page." busy />
-        ) : waiting.length ? (
-          <Banner tone="warn" title={`${waiting.length} ${waiting.length === 1 ? "post is" : "posts are"} waiting for your OK`} body="Read them below and tap Approve. Posts you don't approve are skipped, never posted." />
+          <Banner tone="calm" title="Writing your first posts" body="PostFlow is reading today's news in your field and picking the stories worth sharing. This takes 5 to 15 minutes. You can close this page." busy />
+        ) : focus && !isOpen(focus) ? (
+          <FocusCard p={focus} name={name} role={role} when={when(focus.scheduledAt)} thumb={thumbFor(focus)} more={waiting.length - 1} />
         ) : next ? (
-          <Banner tone="good" title="You're all set" body={`Your next post goes out ${when(next.scheduledAt).replace(/^Today/, "today").replace(/^Tomorrow/, "tomorrow").replace(/^(\w+day) at/, "on $1 at")}.`} />
+          <Banner tone="good" title="You're all set" body={`Your next post goes out ${when(next.scheduledAt).replace(/^Today/, "today").replace(/^Tomorrow/, "tomorrow").replace(/^(\w+day) at/, "on $1 at")}. Nothing needs you right now.`} />
         ) : filling ? (
-          <Banner tone="calm" title="Writing your next posts…" body="Each one is researched and checked before it shows up here. This page updates by itself." busy />
+          <Banner tone="calm" title="Writing your next posts" body="Each one is researched and checked before it shows up here. This page updates by itself." busy />
         ) : (
-          <Banner tone="calm" title="Looking for stories worth sharing" body="PostFlow checks the news every few minutes and only writes when a story is worth your name. Want one now?">
-            <form action={fillCalendarAction}><button className="btn">Find stories now</button></form>
+          <Banner tone="calm" title="Looking for stories worth sharing" body="PostFlow checks the news all day and only writes when a story is worth your name.">
+            <form action={fillCalendarAction}><button className="btn h-12 w-full px-6 text-[15px] sm:w-auto">Find stories now</button></form>
           </Banner>
         )}
       </div>
 
-      {/* The week at a glance: one dot per post. */}
-      <ol className="mt-6 grid grid-cols-7 gap-1.5" aria-label="This week">
-        {days.map((d) => {
-          const list = onDay(d);
-          return (
-            <li key={d.toISODate()}>
-              <a href={`#day-${d.toISODate()}`} className={`flex flex-col items-center rounded-[10px] border py-2 transition-colors ${d.hasSame(now, "day") ? "border-[var(--ink)] bg-[var(--surface)]" : "border-[var(--line)] hover:border-[var(--line-strong)]"}`}>
-                <span className="text-[11px] text-[var(--muted)]">{d.toFormat("ccc")}</span>
-                <span className="text-[16px] font-semibold tnum">{d.day}</span>
-                <span className="mt-1 flex h-2 gap-1" aria-label={`${list.length} ${list.length === 1 ? "post" : "posts"}`}>
-                  {list.slice(0, 3).map((e) => (
-                    <span key={e.id} className={`h-2 w-2 rounded-full ${isOpen(e) ? "border border-dashed border-[var(--subtle)]" : needsOk(e) ? "bg-[var(--warn)]" : "bg-[var(--good)]"}`} />
-                  ))}
-                </span>
-              </a>
-            </li>
-          );
-        })}
-      </ol>
-      <p className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-[var(--muted)]">
-        <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[var(--warn)]" />Needs your OK</span>
-        <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[var(--good)]" />Ready</span>
-        <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full border border-dashed border-[var(--subtle)]" />Being written</span>
-      </p>
+      {/* The week at a glance. */}
+      <section className="mt-10" aria-label="This week">
+        <h2 className="text-[17px] font-bold">This week</h2>
+        <ol className="mt-3 grid grid-cols-7 gap-1.5">
+          {days.map((d) => {
+            const list = onDay(d);
+            const isToday = d.hasSame(now, "day");
+            return (
+              <li key={d.toISODate()}>
+                <a href={`#day-${d.toISODate()}`} className={`flex flex-col items-center rounded-[14px] py-2.5 transition-colors ${isToday ? "bg-[var(--accent)] text-[var(--accent-ink)]" : "bg-[var(--surface)] hover:bg-[var(--raised)]"}`}>
+                  <span className={`text-[11px] ${isToday ? "" : "text-[var(--muted)]"}`}>{d.toFormat("ccc")}</span>
+                  <span className="text-[17px] font-bold tnum">{d.day}</span>
+                  <span className="mt-1 flex h-1.5 gap-1" aria-label={`${list.length} ${list.length === 1 ? "post" : "posts"}`}>
+                    {list.slice(0, 3).map((e) => (
+                      <span key={e.id} className={`h-1.5 w-1.5 rounded-full ${isToday ? "bg-[var(--accent-ink)]" : isOpen(e) ? "bg-[var(--line-strong)]" : needsOk(e) ? "bg-[var(--warn)]" : "bg-[var(--good)]"}`} />
+                    ))}
+                  </span>
+                </a>
+              </li>
+            );
+          })}
+        </ol>
+      </section>
 
-      {/* The posts themselves, day by day. */}
-      <div className="mt-8 space-y-10">
-        {days.map((d) => {
-          const list = onDay(d);
-          if (!list.length) return null;
-          return (
-            <section key={d.toISODate()} id={`day-${d.toISODate()}`} className="scroll-mt-6">
-              <h2 className="mb-3 text-[15px] font-semibold">{dayTitle(d)}</h2>
-              <div className="space-y-4">
-                {list.map((e) =>
-                  isOpen(e) ? (
-                    <div key={e.id} className="flex items-center gap-3 rounded-[12px] border border-dashed border-[var(--line-strong)] px-4 py-4 text-[14px] text-[var(--muted)]">
-                      <Icon name="clock" size={18} className="flex-none text-[var(--subtle)]" />
-                      <span>PostFlow is finding a story for {DateTime.fromJSDate(e.scheduledAt, { zone: tz }).toFormat("h:mm a")}. Nothing to do.</span>
-                    </div>
-                  ) : (
-                    <PostCard key={e.id} p={e} name={name} role={role} time={DateTime.fromJSDate(e.scheduledAt, { zone: tz }).toFormat("h:mm a")} waiting={needsOk(e)} approvalOn={approvalOn} thumb={thumbFor(e)} />
-                  ),
-                )}
-              </div>
-            </section>
-          );
-        })}
-        {!entries.length && !firstRun && connected && (
-          <p className="rounded-[12px] border border-dashed border-[var(--line-strong)] px-4 py-8 text-center text-[14px] text-[var(--muted)]">
-            No posts planned yet. New ones appear here as soon as they are written.
-          </p>
-        )}
-      </div>
+      {/* Everything else coming up, one short row each. */}
+      {rest.length > 0 && (
+        <section className="mt-8">
+          <h2 className="text-[17px] font-bold">Coming up</h2>
+          <div className="mt-3 space-y-5">
+            {days.map((d) => {
+              const list = onDay(d).filter((e) => e !== focus);
+              if (!list.length) return null;
+              return (
+                <div key={d.toISODate()} id={`day-${d.toISODate()}`} className="scroll-mt-6">
+                  <h3 className="mb-2 text-[13px] font-semibold text-[var(--muted)]">{dayTitle(d)}</h3>
+                  <ul className="overflow-hidden rounded-[14px] bg-[var(--surface)]">
+                    {list.map((e, i) => (
+                      <li key={e.id} className={i ? "border-t border-[var(--line)]" : ""}>
+                        <Row e={e} tz={tz} waiting={!isOpen(e) && needsOk(e)} approvalOn={approvalOn} />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+      {!entries.length && !firstRun && connected && !s.paused && (
+        <p className="mt-8 rounded-[14px] bg-[var(--surface)] px-5 py-8 text-center text-[15px] text-[var(--muted)]">No posts planned yet. New ones appear here as soon as they are written.</p>
+      )}
 
       {posted.length > 0 && (
-        <details className="mt-10">
-          <summary className="cursor-pointer text-[14px] font-medium text-[var(--muted)] hover:text-[var(--ink)]">Posted earlier today ({posted.length})</summary>
-          <div className="mt-3 space-y-4">
-            {posted.map((p) => <PostCard key={p.id} p={p} name={name} role={role} time={DateTime.fromJSDate(p.scheduledAt, { zone: tz }).toFormat("h:mm a")} waiting={false} approvalOn={approvalOn} thumb={thumbFor(p)} />)}
-          </div>
+        <details className="mt-8">
+          <summary className="cursor-pointer text-[15px] font-semibold text-[var(--muted)] hover:text-[var(--ink)]">Posted today ({posted.length})</summary>
+          <ul className="mt-3 overflow-hidden rounded-[14px] bg-[var(--surface)]">
+            {posted.map((p, i) => (
+              <li key={p.id} className={i ? "border-t border-[var(--line)]" : ""}><Row e={p} tz={tz} waiting={false} approvalOn={approvalOn} /></li>
+            ))}
+          </ul>
         </details>
       )}
 
-      <div className="mt-12 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-[var(--line)] pt-5 text-[13px] text-[var(--muted)]">
-        <Link href="/create" className="flex items-center gap-1.5 hover:text-[var(--ink)]"><Icon name="create" size={15} />Write your own post</Link>
-        <Link href="/calendar?view=week" className="flex items-center gap-1.5 hover:text-[var(--ink)]"><Icon name="calendar" size={15} />Week view and history</Link>
-        <Link href="/settings?tab=times" className="flex items-center gap-1.5 hover:text-[var(--ink)]"><Icon name="clock" size={15} />Change posting times</Link>
+      <div className="mt-10 grid gap-2 sm:grid-cols-3">
+        <Link href="/create" className="flex items-center gap-2 rounded-[14px] bg-[var(--surface)] px-4 py-3.5 text-[14px] font-medium hover:bg-[var(--raised)]"><Icon name="create" size={18} className="text-[var(--accent)]" />Write your own</Link>
+        <Link href="/calendar?view=week" className="flex items-center gap-2 rounded-[14px] bg-[var(--surface)] px-4 py-3.5 text-[14px] font-medium hover:bg-[var(--raised)]"><Icon name="calendar" size={18} className="text-[var(--accent)]" />Full calendar</Link>
+        <Link href="/settings?tab=times" className="flex items-center gap-2 rounded-[14px] bg-[var(--surface)] px-4 py-3.5 text-[14px] font-medium hover:bg-[var(--raised)]"><Icon name="clock" size={18} className="text-[var(--accent)]" />Posting times</Link>
       </div>
     </div>
+  );
+}
+
+/** The post that needs you now, as it will look on LinkedIn, with the two answers. */
+function FocusCard({ p, name, role, when, thumb, more }: { p: Post; name: string; role: string; when: string; thumb?: string; more: number }) {
+  return (
+    <article id={`post-${p.id}`} className="scroll-mt-24 rounded-[20px] bg-[var(--surface)] p-4 shadow-[0_12px_28px_-16px_rgba(0,0,0,.16)] sm:p-6">
+      <p className="flex items-center gap-2 text-[13px] font-semibold text-[var(--warn)]"><span className="h-2 w-2 rounded-full bg-[var(--warn)]" />Waiting for your OK · {when}</p>
+      <div className="mt-4 overflow-hidden rounded-[14px] border border-[var(--line)]">
+        <div className="flex items-center gap-3 px-4 pt-4">
+          <Avatar name={name} size={40} />
+          <div className="min-w-0 flex-1 leading-tight">
+            <p className="truncate text-[14px] font-semibold">{name}</p>
+            <p className="truncate text-[12px] text-[var(--muted)]">{role || "LinkedIn"}</p>
+          </div>
+          <PlatformGlyph platform={p.platform} size={18} />
+        </div>
+        <p className="post-text whitespace-pre-line break-words px-4 pb-4 pt-3 text-[15px] leading-[1.55]">{p.text}</p>
+        {thumb && (
+          // eslint-disable-next-line @next/next/no-img-element -- a signed, already-made picture
+          <img src={thumb} alt="" aria-hidden="true" loading="lazy" className="block aspect-[16/9] w-full border-t border-[var(--line)] object-cover" />
+        )}
+      </div>
+      <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:items-center">
+        <form action={rejectPostAction} className="sm:mr-auto">
+          <input type="hidden" name="id" value={p.id} />
+          <button className="btn h-12 w-full px-5 text-[15px] sm:w-auto" title="Skip this one and write about a different story">Skip, try another story</button>
+        </form>
+        <Link href={`/posts/${p.id}`} className="btn h-12 px-5 text-[15px]"><Icon name="pencil" size={16} />Edit</Link>
+        <form action={approvePostAction}>
+          <input type="hidden" name="id" value={p.id} />
+          <input type="hidden" name="back" value="home" />
+          <button className="btn btn-primary h-12 w-full px-7 text-[15px] sm:w-auto"><Icon name="check" size={18} />Approve</button>
+        </form>
+      </div>
+      {more > 0 && <p className="mt-3 text-center text-[13px] text-[var(--muted)] sm:text-right">{more} more after this one</p>}
+    </article>
+  );
+}
+
+/** One line in the list: time, the start of the post, and where it stands. */
+function Row({ e, tz, waiting, approvalOn }: { e: Entry; tz: string; waiting: boolean; approvalOn: boolean }) {
+  const time = DateTime.fromJSDate(e.scheduledAt, { zone: tz }).toFormat("h:mm a");
+  if (isOpen(e))
+    return (
+      <div className="flex items-center gap-3 px-4 py-3.5 text-[14px] text-[var(--muted)]">
+        <span className="w-[68px] flex-none text-[13px] tnum">{time}</span>
+        <span className="min-w-0 flex-1">Finding a story for this time</span>
+        <Icon name="clock" size={16} className="flex-none text-[var(--subtle)]" />
+      </div>
+    );
+  const status =
+    e.status === "published" ? { t: "Posted", c: "text-[var(--good)]" }
+    : e.status === "failed" ? { t: "Could not post", c: "text-[var(--bad)]" }
+    : e.status === "unconfirmed" ? { t: "Check this", c: "text-[var(--bad)]" }
+    : waiting ? { t: "Needs OK", c: "text-[var(--warn)]" }
+    : { t: approvalOn ? "Approved" : "Scheduled", c: "text-[var(--good)]" };
+  return (
+    <Link href={`/posts/${e.id}`} id={`post-${e.id}`} className="flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-[var(--raised)]">
+      <span className="w-[68px] flex-none text-[13px] text-[var(--muted)] tnum">{time}</span>
+      <span className="min-w-0 flex-1">
+        <span className="line-clamp-2 text-[14px] leading-snug">{e.text}</span>
+        <span className={`mt-0.5 block text-[12px] font-semibold ${status.c}`}>{status.t}</span>
+      </span>
+      <Icon name="right" size={16} className="flex-none text-[var(--subtle)]" />
+    </Link>
   );
 }
 
 function Banner({ tone, title, body, children, busy }: { tone: "warn" | "good" | "calm" | "accent"; title: string; body: string; children?: React.ReactNode; busy?: boolean }) {
   const dot = { warn: "bg-[var(--warn)]", good: "bg-[var(--good)]", calm: "bg-[var(--subtle)]", accent: "bg-[var(--accent)]" }[tone];
   return (
-    <div className="flex flex-wrap items-center gap-4 rounded-[14px] border border-[var(--line)] bg-[var(--surface)] p-5" role="status">
+    <div className="flex flex-col gap-4 rounded-[20px] bg-[var(--surface)] p-5 shadow-[0_12px_28px_-16px_rgba(0,0,0,.16)] sm:flex-row sm:items-center sm:p-6" role="status">
       {busy ? <span aria-hidden="true" className="first-spinner flex-none" /> : <span aria-hidden="true" className={`h-3 w-3 flex-none rounded-full ${dot}`} />}
       <div className="min-w-0 flex-1">
-        <p className="text-[17px] font-semibold">{title}</p>
-        <p className="mt-0.5 text-[14px] text-[var(--muted)]">{body}</p>
+        <p className="text-[18px] font-bold">{title}</p>
+        <p className="mt-1 text-[15px] leading-relaxed text-[var(--muted)]">{body}</p>
       </div>
       {children}
     </div>
-  );
-}
-
-/** A post as it will look on LinkedIn, with the one or two things you can do about it. */
-function PostCard({ p, name, role, time, waiting, approvalOn, thumb }: { p: Post; name: string; role: string; time: string; waiting: boolean; approvalOn: boolean; thumb?: string }) {
-  const long = p.text.length > 420;
-  return (
-    <article id={`post-${p.id}`} className={`scroll-mt-24 overflow-hidden rounded-[14px] border bg-[var(--surface)] ${waiting ? "border-[var(--warn)]/50" : "border-[var(--line)]"}`}>
-      <div className="flex items-center gap-3 px-5 pt-4">
-        <Avatar name={name} size={40} />
-        <div className="min-w-0 flex-1 leading-tight">
-          <p className="truncate text-[14px] font-semibold">{name}</p>
-          <p className="truncate text-[12px] text-[var(--muted)]">{role || "LinkedIn"} · {time}</p>
-        </div>
-        <PlatformGlyph platform={p.platform} size={18} />
-      </div>
-      <Link href={`/posts/${p.id}`} className="block px-5 pb-4 pt-3">
-        <p className={`post-text whitespace-pre-line break-words text-[15px] leading-[1.55] ${long ? "line-clamp-[8]" : ""}`}>{p.text}</p>
-        {long && <span className="mt-1 inline-block text-[13px] text-[var(--muted)]">…see more</span>}
-      </Link>
-      {thumb && (
-        // eslint-disable-next-line @next/next/no-img-element -- a signed, already-made picture
-        <img src={thumb} alt="" aria-hidden="true" loading="lazy" className="block aspect-[16/9] w-full border-t border-[var(--line)] object-cover" />
-      )}
-      <div className="flex flex-wrap items-center gap-2 border-t border-[var(--line)] bg-[var(--bg)] px-4 py-3">
-        {p.status === "published" ? (
-          <>
-            <span className="flex items-center gap-1.5 text-[14px] font-medium text-[var(--good)]"><Icon name="check" size={16} />Posted</span>
-            {p.url && <a href={p.url} target="_blank" rel="noreferrer" className="btn btn-ghost ml-auto">See it on LinkedIn<Icon name="external" size={14} /></a>}
-          </>
-        ) : p.status === "failed" || p.status === "unconfirmed" ? (
-          <>
-            <span className="flex items-center gap-1.5 text-[14px] font-medium text-[var(--bad)]"><Icon name="alert" size={16} />{p.status === "failed" ? "Could not post" : "Not sure it posted"}</span>
-            <Link href={`/posts/${p.id}`} className="btn ml-auto">See what happened</Link>
-          </>
-        ) : waiting ? (
-          <>
-            <form action={approvePostAction}>
-              <input type="hidden" name="id" value={p.id} />
-              <input type="hidden" name="back" value="home" />
-              <button className="btn btn-primary h-10 px-5 text-[14px]"><Icon name="check" size={16} />Approve</button>
-            </form>
-            <Link href={`/posts/${p.id}`} className="btn h-10 px-4 text-[14px]"><Icon name="pencil" size={15} />Edit</Link>
-            <form action={rejectPostAction} className="ml-auto">
-              <input type="hidden" name="id" value={p.id} />
-              <button className="btn btn-ghost h-10 text-[13px]" title="Skip this one and write about a different story">Different story</button>
-            </form>
-          </>
-        ) : (
-          <>
-            <span className="flex items-center gap-1.5 text-[14px] font-medium text-[var(--good)]"><Icon name="check" size={16} />{approvalOn ? "Approved" : "Scheduled"} · {time}</span>
-            <span className="ml-auto flex items-center gap-1">
-              <Link href={`/posts/${p.id}`} className="btn btn-ghost">Edit</Link>
-              {approvalOn && p.approvedAt && (
-                <form action={unapprovePostAction}>
-                  <input type="hidden" name="id" value={p.id} />
-                  <input type="hidden" name="back" value="home" />
-                  <button className="btn btn-ghost">Undo</button>
-                </form>
-              )}
-            </span>
-          </>
-        )}
-      </div>
-    </article>
   );
 }

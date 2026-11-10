@@ -6,7 +6,7 @@ import { contactEmail } from "@/server/env";
 const STEPS = [
   { t: "Pick your field and topics", b: "Engineer, doctor, accountant, lawyer or anything else." },
   { t: "PostFlow reads the news", b: "It writes a clear post and checks each claim against the source." },
-  { t: "You approve in one tap", b: "On the calendar, or in one tap on Telegram. Nothing posts without your OK." },
+  { t: "You tap Approve", b: "In the app, or on Telegram if you like. Nothing posts without your OK." },
 ];
 
 const PROFESSIONS = ["Engineers", "Doctors", "Accountants", "Lawyers", "Marketers", "Teachers"];
@@ -29,7 +29,7 @@ function Pitch() {
         <ol className="mt-8 space-y-5">
           {STEPS.map((s, i) => (
             <li key={s.t} className="flex gap-4">
-              <span className="typed flex h-7 w-7 flex-none items-center justify-center rounded-full border border-[var(--ink)] text-[13px] font-semibold">{i + 1}</span>
+              <span className="flex h-7 w-7 flex-none items-center justify-center rounded-full bg-[var(--accent-soft)] text-[13px] font-bold text-[var(--accent)]">{i + 1}</span>
               <span>
                 <span className="block text-[15px] font-semibold">{s.t}</span>
                 <span className="block text-[14px] text-[var(--muted)]">{s.b}</span>
@@ -39,7 +39,7 @@ function Pitch() {
         </ol>
 
         {/* A sample post, labelled as one: made-up story. */}
-        <figure className="mt-9 -rotate-[0.6deg] rounded-[4px] border border-[var(--line-strong)] bg-[var(--surface)] p-4 shadow-[0_14px_30px_-20px_rgba(24,34,30,.45)]">
+        <figure className="mt-9 rounded-[16px] bg-[var(--surface)] p-4 shadow-[0_12px_28px_-16px_rgba(0,0,0,.16)]">
           <div className="flex items-center gap-2.5">
             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--mark-soft)] text-[12px] font-semibold" aria-hidden="true">AR</span>
             <div className="min-w-0 flex-1">

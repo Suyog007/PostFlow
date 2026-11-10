@@ -29,7 +29,7 @@ export function SideNav({ owner = false }: { owner?: boolean }) {
           key={i.href}
           href={i.href}
           aria-current={active(path, i.href) ? "page" : undefined}
-          className={`relative flex h-10 items-center gap-3 rounded-[8px] px-3 text-[15px] font-medium ${active(path, i.href) ? "bg-[var(--surface)] text-[var(--ink)] shadow-[0_2px_0_var(--line)] before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-full before:bg-[var(--accent)]" : "text-[var(--muted)] hover:bg-[var(--surface)]/70 hover:text-[var(--ink)]"}`}
+          className={`flex h-11 items-center gap-3 rounded-full px-4 text-[15px] font-semibold transition-colors ${active(path, i.href) ? "bg-[var(--accent-soft)] text-[var(--accent)]" : "text-[var(--muted)] hover:bg-[var(--raised)] hover:text-[var(--ink)]"}`}
         >
           <Icon name={i.icon} size={16} />
           {i.label}
@@ -42,10 +42,10 @@ export function SideNav({ owner = false }: { owner?: boolean }) {
 export function TabBar() {
   const path = usePathname();
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-[var(--line)] bg-[var(--surface)] pb-[env(safe-area-inset-bottom,0px)] md:hidden">
+    <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-[var(--line)] bg-[var(--surface)]/95 pb-[env(safe-area-inset-bottom,0px)] backdrop-blur md:hidden">
       {ITEMS.map((i) => (
-        <Link key={i.href} href={i.href} aria-current={active(path, i.href) ? "page" : undefined} className={`relative flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] font-semibold ${active(path, i.href) ? "text-[var(--ink)] after:absolute after:top-0 after:h-[3px] after:w-8 after:rounded-b-full after:bg-[var(--accent)]" : "text-[var(--subtle)]"}`}>
-          <Icon name={i.icon} size={20} />
+        <Link key={i.href} href={i.href} aria-current={active(path, i.href) ? "page" : undefined} className={`flex flex-1 flex-col items-center gap-1 pb-2 pt-2.5 text-[12px] font-semibold ${active(path, i.href) ? "text-[var(--accent)]" : "text-[var(--muted)]"}`}>
+          <span className={`flex h-8 w-14 items-center justify-center rounded-full ${active(path, i.href) ? "bg-[var(--accent-soft)]" : ""}`}><Icon name={i.icon} size={20} /></span>
           {i.label}
         </Link>
       ))}
