@@ -1,3 +1,4 @@
+import { findSources } from "./source-finder";
 import { needsWelcome } from "./welcome";
 import { and, desc, eq, gt, inArray, isNull, lt } from "drizzle-orm";
 import { db, schema } from "./db/client";
@@ -283,7 +284,21 @@ export async function replaceForUser(userId: string, postId: string): Promise<{ 
   });
 }
 
-async function startBackgroundJob(userId: string, job: "fill" | "refresh" | "replace", postId?: string): Promise<boolean> {
+/** Finds sources for an account after sign-up, or when they ask for more. Runs in the background function. */
+export async function findSourcesForUser(userId: string): Promise<{ added: number; checked: number }> {
+  return withUser(userId, async () => {
+    const r = await findSources();
+    log.info("sources_found", { userId, added: r.added, checked: r.checked });
+    return r;
+  });
+}
+
+export async function requestSources(userId: string, fallback: (job: () => Promise<unknown>) => void): Promise<void> {
+  if (await startBackgroundJob(userId, "sources")) return;
+  fallback(() => findSourcesForUser(userId).catch(warnOnError("find_sources_failed", { userId })));
+}
+
+async function startBackgroundJob(userId: string, job: "fill" | "refresh" | "replace" | "sources", postId?: string): Promise<boolean> {
   const e = env();
   if (!e.CRON_SECRET) return false;
   const base = e.APP_URL.replace(/\/$/, "").replace(/^http:\/\/(?!localhost)/, "https://");
@@ -291,7 +306,7 @@ async function startBackgroundJob(userId: string, job: "fill" | "refresh" | "rep
     const res = await fetch(`${base}/.netlify/functions/tick-background`, {
       method: "POST",
       headers: { authorization: `Bearer ${e.CRON_SECRET}`, "content-type": "application/json" },
-      body: JSON.stringify(job === "fill" ? { fillUserId: userId } : job === "replace" ? { replaceUserId: userId, replacePostId: postId } : { refreshUserId: userId }),
+      body: JSON.stringify(job === "fill" ? { fillUserId: userId } : job === "replace" ? { replaceUserId: userId, replacePostId: postId } : job === "sources" ? { sourcesUserId: userId } : { refreshUserId: userId }),
       redirect: "manual",
       signal: AbortSignal.timeout(10_000),
     });

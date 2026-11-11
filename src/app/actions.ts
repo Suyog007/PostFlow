@@ -18,7 +18,7 @@ import { createRequest, processRequests, retryAnyway, type RequestMode } from "@
 import { addTip } from "@/server/tips";
 import { disconnectAccount, startOAuth } from "@/server/platforms/accounts";
 import { newTelegramLinkUrl, registerWebhook, unlinkTelegram } from "@/server/telegram";
-import { requestFillNow, requestRefresh, requestReplacement, runForUser, tick } from "@/server/tick";
+import { requestFillNow, requestRefresh, requestReplacement, requestSources, runForUser, tick } from "@/server/tick";
 import { addEvent } from "@/server/events";
 import { publishDue } from "@/server/publisher";
 import { declinePost, fillNowDays, recheckPost, refillSlot, rewordPost, swapToAlternative, writeLesson } from "@/server/generate";
@@ -482,6 +482,12 @@ export async function adminTickAction() {
 }
 
 // ---- sources --------------------------------------------------------------
+
+/** "Find more sources for me": picks, checks and adds sources for the person's field in the background. */
+export async function findSourcesAction() {
+  const user = await requireActiveUser();
+  await guarded("/settings/sources", () => requestSources(user.id, (job) => after(job)), "Looking for journals and news for your field. New sources appear here in a minute or two.");
+}
 
 export async function addSourceAction(form: FormData) {
   await guarded("/settings/sources", async () => {

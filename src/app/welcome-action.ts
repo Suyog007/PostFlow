@@ -5,6 +5,8 @@ import { requireActiveUser } from "@/server/auth";
 import { withUser } from "@/server/context";
 import { completeWelcome } from "@/server/welcome";
 import { log } from "@/server/log";
+import { after } from "next/server";
+import { requestSources } from "@/server/tick";
 
 export type WelcomeValues = { field: string; audience: string; role: string; expertise: string; region: string; feed1: string; feed2: string };
 export type WelcomeState = { error: string; values: WelcomeValues } | null;
@@ -31,6 +33,8 @@ export async function welcomeAction(_: WelcomeState, form: FormData): Promise<We
     log.error("welcome_failed", { error: (err as Error).message });
     return { error: "Something went wrong. Please try again.", values };
   }
-  const ok = added.length ? `You're set. Added ${added.join(" and ")} to your feeds.` : "You're set.";
+  // Journals, research and trade sources for their field are found and checked in the background.
+  await requestSources(user.id, (job) => after(job)).catch((err: Error) => log.warn("request_sources_failed", { error: err.message }));
+  const ok = added.length ? `You're set. Added ${added.join(" and ")} to your sources. PostFlow is finding the best journals and news for your field.` : "You're set. PostFlow is finding the best journals and news for your field.";
   redirect(`/calendar?welcome=1&ok=${encodeURIComponent(ok)}`);
 }

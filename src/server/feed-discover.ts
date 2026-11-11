@@ -91,3 +91,11 @@ export async function discoverFeed(raw: string): Promise<FoundFeed | null> {
   }
   return null;
 }
+
+/** Fetches a feed address and confirms it is a working RSS or Atom feed with at least one article. */
+export async function checkFeed(url: string): Promise<FoundFeed | null> {
+  if (!isPublicHttpUrl(url)) return null;
+  const page = await fetchPage(url);
+  if (!page || !looksLikeFeed(page) || !/<(item|entry)[\s>]/i.test(page.body)) return null;
+  return { url: page.url, name: titleOf(page.body, new URL(page.url).hostname.replace(/^www\./, "")) };
+}

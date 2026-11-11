@@ -60,7 +60,7 @@ export function PostCard({ w, p }: { w: Week; p: Post }) {
         <p className="mt-4 flex items-start gap-2.5 rounded-[14px] bg-[var(--raised)] px-4 py-3 text-[15px]">
           <Icon name="link" size={18} className="mt-0.5 flex-none text-[var(--accent)]" />
           <span>
-            From the news:{" "}
+            {src.label}:{" "}
             {src.url ? <a href={src.url} target="_blank" rel="noreferrer" className="font-semibold text-[var(--accent)] hover:underline">{src.name}</a> : <span className="font-semibold text-[var(--accent)]">{src.name}</span>}
           </span>
         </p>

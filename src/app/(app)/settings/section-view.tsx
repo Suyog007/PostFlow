@@ -12,7 +12,7 @@ const PAGES = {
   topics: { title: "What to write about", lead: "PostFlow only picks news that matters in your work." },
   times: { title: "When to post", lead: "Pick the days and times. Nothing goes out until you approve it." },
   accounts: { title: "Your accounts", lead: "Where your posts go, and how PostFlow reaches you." },
-  sources: { title: "News sources", lead: "The websites and newsletters PostFlow reads for you." },
+  sources: { title: "Your sources", lead: "The journals, research, magazines, official bodies and news PostFlow reads for you." },
   more: { title: "More options", lead: "Fine-tuning. Most people never need these." },
 } as const;
 

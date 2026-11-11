@@ -4,6 +4,7 @@ import { storyIndex, sameStory as sameStoryInFeeds } from "./stories";
 import { db, schema } from "./db/client";
 import { isPublicHttpUrl } from "./net";
 import { log } from "./log";
+import { ORIGINAL_SOURCE_DOMAINS } from "@/lib/source-catalog";
 
 type ItemRow = typeof schema.items.$inferSelect;
 
@@ -120,6 +121,8 @@ export function searchNews(query: string): Promise<Mention[]> {
 
 const RECHECK_MS = 45 * 60_000;
 
+const ORIGINAL_SOURCES = new Set(ORIGINAL_SOURCE_DOMAINS.map((d) => registrableDomain(d)));
+
 function queryFor(title: string) {
   return title.replace(/\s+[-|–]\s+[^-|–]{2,40}$/, "").split(/\s+/).slice(0, 14).join(" ");
 }
@@ -128,7 +131,8 @@ function queryFor(title: string) {
 export function evaluate(item: Pick<ItemRow, "url" | "title" | "summary">, found: Mention[], matched: Mention[] = []): Verification {
   const origin = registrableDomain(item.url);
   const originKey = origin.split(".")[0];
-  const primary = PRIMARY.some((d) => origin === d || origin.endsWith(`.${d}`));
+  // Companies announcing their own news, and journals, research servers and regulators publishing their own findings.
+  const primary = PRIMARY.some((d) => origin === d || origin.endsWith(`.${d}`)) || ORIGINAL_SOURCES.has(origin);
   const risky = RISKY.test(`${item.title} ${item.summary}`);
   const others = new Map<string, Mention>();
   for (const [m, known] of [...matched.map((m) => [m, true] as const), ...found.map((m) => [m, false] as const)]) {

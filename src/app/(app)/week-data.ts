@@ -84,10 +84,14 @@ export async function loadWeek(offset = 0) {
     /** Where the story came from, by name: the feed's name, else the article's website. */
     sourceOf: (p: Post) => {
       const named = p.itemId ? sourceByItem.get(p.itemId) : null;
-      if (named) return { name: named, url: p.sourceUrl };
+      // Found sources are saved as "JAMA Ophthalmology · Journal": show the name, and say what kind it is.
+      if (named) {
+        const [name, kind] = named.split(" · ");
+        return { name, url: p.sourceUrl, label: kind === "Journal" ? "From the journal" : kind === "Research" ? "From the research" : kind === "Official" ? "From" : "From the news" };
+      }
       if (!p.sourceUrl) return null;
       try {
-        return { name: new URL(p.sourceUrl).hostname.replace(/^www\./, ""), url: p.sourceUrl };
+        return { name: new URL(p.sourceUrl).hostname.replace(/^www\./, ""), url: p.sourceUrl, label: "From the news" };
       } catch {
         return null;
       }

@@ -12,7 +12,7 @@ import { telegramConfigured } from "@/server/telegram";
 import { env } from "@/server/env";
 import { isPlatformConfigured } from "@/server/platforms/accounts";
 import { ScheduleEditor } from "@/components/schedule-editor";
-import { addSourceAction, connectAction, deleteSourceAction, disconnectAction, runTickAction, togglePauseAction, toggleApprovalAction, saveFastLaneAction, saveVoiceAction, saveAdvancedAction, savePostStyleAction, saveSlotsAction, unlinkTelegramAction, toggleSourceAction, removeStyleNoteAction, connectTelegramAction } from "@/app/actions";
+import { findSourcesAction, addSourceAction, connectAction, deleteSourceAction, disconnectAction, runTickAction, togglePauseAction, toggleApprovalAction, saveFastLaneAction, saveVoiceAction, saveAdvancedAction, savePostStyleAction, saveSlotsAction, unlinkTelegramAction, toggleSourceAction, removeStyleNoteAction, connectTelegramAction } from "@/app/actions";
 
 /** A titled block in a tab: heading, one line on what it does, then the controls. */
 function Section({ title, hint, children, id }: { title: ReactNode; hint?: ReactNode; children: ReactNode; id?: string }) {
@@ -229,7 +229,12 @@ export async function Sources({ userId, s, feeds }: { userId: string; s: S; feed
   const sources = await db().select().from(schema.sources).where(eq(schema.sources.userId, userId)).orderBy(asc(schema.sources.pillar), asc(schema.sources.name));
   const count = sources.filter((x) => x.url !== "tips://manual").length;
   return (
-    <Section title={`News sources · ${count} of ${feeds}`} hint="The feeds PostFlow reads. Paste a blog, newsletter or site you trust to add it.">
+    <Section title={`Your sources · ${count} of ${feeds}`}>
+      <form action={findSourcesAction} className="mb-6 rounded-[18px] border border-[var(--line)] bg-[var(--surface)] p-5">
+        <p className="text-[16px] leading-relaxed text-[var(--muted)]">Let PostFlow pick the best journals, research and news for your field and topics. Each one is checked before it is added.</p>
+        <button className="btn btn-primary mt-4 h-12 w-full px-6 text-[16px] sm:w-auto" disabled={count >= feeds}>Find more sources for me</button>
+      </form>
+      <p className="mb-2 text-[15px] font-semibold">Add one yourself</p>
       <form action={addSourceAction} className="card grid gap-2 p-3 sm:grid-cols-[minmax(0,1fr)_160px_140px_auto]">
         <input name="url" aria-label="Feed or site address" placeholder="https://example.com/feed.xml" className="input" required />
         <input name="name" aria-label="Name" placeholder="Name (optional)" className="input" />
