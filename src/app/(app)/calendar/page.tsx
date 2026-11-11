@@ -95,7 +95,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
               <div id={`post-${focus!.id}`} className="scroll-mt-24"><PostCard w={w} p={focus!} /></div>
 
               {/* The answers. On phones they stay above the tab bar while you read. */}
-              <div className="sticky bottom-[76px] z-20 -mx-4 mt-4 bg-gradient-to-t from-[var(--bg)] from-70% px-4 pb-3 pt-4 md:static md:mx-0 md:bg-none md:p-0 lg:max-w-[640px]">
+              <div className="sticky bottom-0 z-20 -mx-4 mt-4 bg-gradient-to-t from-[var(--bg)] from-70% px-4 pb-[max(12px,env(safe-area-inset-bottom))] pt-4 md:static md:mx-0 md:bg-none md:p-0 lg:max-w-[640px]">
                 <form action={approvePostAction}>
                   <input type="hidden" name="id" value={focus!.id} />
                   <input type="hidden" name="back" value="home" />

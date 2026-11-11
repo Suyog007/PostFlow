@@ -3,7 +3,7 @@ import { requireActiveUser } from "@/server/auth";
 import { entitlementOf, postsThisMonth } from "@/server/billing/plans";
 import { getSettings } from "@/server/settings";
 import { Avatar, Logo } from "@/components/ui";
-import { TabBar, TopNav } from "@/components/nav";
+import { MobileMenu, TopNav } from "@/components/nav";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +16,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <div className="min-h-screen">
       <header className="sticky top-0 z-30 border-b border-[var(--line)] bg-[var(--bg)]/95 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-[1240px] items-center gap-10 px-4 md:h-[72px] md:px-8">
+        <div className="mx-auto flex h-16 max-w-[1240px] items-center gap-2 px-4 md:h-[72px] md:gap-10 md:px-8">
+          <MobileMenu name={name} used={used !== null ? `${used} of ${ent.quota.postsPerMonth} posts used this month` : undefined} />
           <Link href="/calendar" className="flex items-center gap-2.5" aria-label="PostFlow home">
             <Logo size={30} />
             <span className="display text-[24px] md:text-[28px]">PostFlow</span>
@@ -33,8 +34,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           PostFlow is paused, so nothing is written or posted. <Link href="/settings/accounts" className="font-semibold underline">Turn it back on</Link>
         </div>
       )}
-      <main className="mx-auto max-w-[1240px] px-4 pb-32 pt-6 md:px-8 md:pb-16 md:pt-12">{children}</main>
-      <TabBar />
+      <main className="mx-auto max-w-[1240px] px-4 pb-16 pt-6 md:px-8 md:pt-12">{children}</main>
     </div>
   );
 }

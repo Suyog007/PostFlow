@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 // Three places, named for what people do there. Writing your own post and ideas are on Home.
 const ITEMS = [
@@ -37,22 +39,96 @@ export function TopNav() {
   );
 }
 
-/** Phone: the tabs at the bottom, within thumb reach. */
-export function TabBar() {
+/** Phone: a menu button at the top left that slides a panel in from the left. */
+export function MobileMenu({ name, used }: { name: string; used?: string }) {
   const path = usePathname();
-  // First-run setup is one task with its own Continue button; the tabs would only distract.
+  const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const panel = useRef<HTMLDivElement>(null);
+  // The panel is drawn on <body>: inside the blurred header, "fixed" would be trapped in the header.
+  useEffect(() => setMounted(true), []);
+  const button = useRef<HTMLButtonElement>(null);
+
+  // Close when a link is followed.
+  useEffect(() => setOpen(false), [path]);
+
+  // While open: Escape closes, the page behind does not scroll, focus moves into the panel and back out.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Tab" && panel.current) {
+        const items = panel.current.querySelectorAll<HTMLElement>("a, button");
+        const first = items[0], last = items[items.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    };
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKey);
+    panel.current?.querySelector<HTMLElement>("a")?.focus();
+    const btn = button.current;
+    return () => { window.removeEventListener("keydown", onKey); document.body.style.overflow = overflow; btn?.focus(); };
+  }, [open]);
+
   if (path.startsWith("/welcome")) return null;
+  const extra = [
+    { href: "/create", label: "Write your own post" },
+    { href: "/notes", label: "Ideas about your work" },
+    { href: "/account", label: "Email and password" },
+  ];
   return (
-    <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-30 flex border-t border-[var(--line)] bg-[var(--bg)]/95 pb-[env(safe-area-inset-bottom,0px)] backdrop-blur md:hidden">
-      {ITEMS.map((i) => {
-        const on = isActive(path, i.match);
-        return (
-          <Link key={i.href} href={i.href} aria-current={on ? "page" : undefined} className={`flex flex-1 flex-col items-center gap-1 pb-2.5 pt-3 text-[14px] font-semibold ${on ? "text-[var(--ink)]" : "text-[var(--muted)]"}`}>
-            <span className={on ? "text-[var(--accent)]" : ""}><Glyph name={i.label} on={on} /></span>
-            {i.label}
-          </Link>
-        );
-      })}
-    </nav>
+    <>
+      <button ref={button} type="button" onClick={() => setOpen(true)} aria-expanded={open} aria-controls="phone-menu" aria-label="Open menu" className="-ml-2 flex h-11 w-11 items-center justify-center rounded-full hover:bg-[var(--raised)] md:hidden">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10" /></svg>
+      </button>
+
+      {mounted && createPortal(
+      <div className={`fixed inset-0 z-50 md:hidden ${open ? "" : "pointer-events-none"}`} aria-hidden={!open}>
+        <div onClick={() => setOpen(false)} className={`absolute inset-0 bg-[var(--ink)]/40 transition-opacity duration-300 motion-reduce:transition-none ${open ? "opacity-100" : "opacity-0"}`} />
+        <div
+          ref={panel}
+          id="phone-menu"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Menu"
+          className={`absolute inset-y-0 left-0 flex w-[84%] max-w-[330px] flex-col bg-[var(--bg)] shadow-[8px_0_40px_-12px_rgba(27,36,32,.35)] transition-transform duration-[320ms] [transition-timing-function:cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none ${open ? "translate-x-0" : "-translate-x-full"}`}
+        >
+          <div className="flex items-center justify-between px-5 pb-2 pt-5">
+            <span className="display text-[24px]">PostFlow</span>
+            <button type="button" onClick={() => setOpen(false)} aria-label="Close menu" className="-mr-2 flex h-11 w-11 items-center justify-center rounded-full hover:bg-[var(--raised)]">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
+            </button>
+          </div>
+
+          <nav aria-label="Main" className="mt-2 px-3">
+            {ITEMS.map((i) => {
+              const on = isActive(path, i.match);
+              return (
+                <Link key={i.href} href={i.href} tabIndex={open ? 0 : -1} aria-current={on ? "page" : undefined} className={`flex h-14 items-center gap-4 rounded-[14px] px-3 text-[19px] font-semibold ${on ? "bg-[var(--surface)] text-[var(--ink)] shadow-[0_6px_16px_-12px_rgba(27,36,32,.4)]" : "text-[var(--muted)]"}`}>
+                  <span className={on ? "text-[var(--accent)]" : ""}><Glyph name={i.label} on={on} /></span>
+                  {i.label}
+                </Link>
+              );
+            })}
+          </nav>
+
+          <div className="mx-6 my-4 border-t border-[var(--line)]" />
+          <nav aria-label="More" className="px-3">
+            {extra.map((i) => (
+              <Link key={i.href} href={i.href} tabIndex={open ? 0 : -1} className="flex h-12 items-center rounded-[12px] px-3 text-[17px] text-[var(--ink)] hover:bg-[var(--raised)]">{i.label}</Link>
+            ))}
+          </nav>
+
+          <div className="mt-auto border-t border-[var(--line)] px-6 py-5">
+            <p className="text-[16px] font-semibold">{name}</p>
+            {used && <p className="mt-0.5 text-[14px] text-[var(--muted)]">{used}</p>}
+          </div>
+        </div>
+      </div>,
+      document.body,
+      )}
+    </>
   );
 }

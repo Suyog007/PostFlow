@@ -123,7 +123,7 @@ export default async function SettingsHub({ searchParams }: { searchParams: Prom
       </div>
 
       {sp.ok && (
-        <p role="status" className="fixed bottom-[96px] left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full bg-[var(--ink)] px-5 py-3 text-[16px] font-semibold text-[var(--bg)] shadow-lg md:bottom-10">
+        <p role="status" className="fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full bg-[var(--ink)] px-5 py-3 text-[16px] font-semibold text-[var(--bg)] shadow-lg md:bottom-10">
           <Icon name="check" size={18} />{sp.ok}
         </p>
       )}
