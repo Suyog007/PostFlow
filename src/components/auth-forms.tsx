@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useActionState, useEffect, useState } from "react";
 import { confirmEmailAction, confirmEmailNewPasswordAction, forgotPasswordAction, loginAction, resendVerificationAction, resetPasswordAction, signupAction, type FormState } from "@/app/auth-actions";
+import { PlaneLoader } from "@/components/plane-loader";
 
 function Status({ state }: { state: FormState }) {
   if (state?.error) return <p role="alert" className="text-[13px] text-[var(--bad)]">{state.error}</p>;
@@ -59,7 +60,7 @@ export function LoginForm({ next }: { next?: string }) {
         <input id="password" name="password" type="password" required autoComplete="current-password" className="input h-10" />
       </div>
       <Status state={state} />
-      <button className="btn btn-primary h-10 w-full text-[14px]" disabled={pending}>{pending ? "Signing in…" : "Sign in"}</button>
+      <button className="btn btn-primary h-10 w-full text-[14px]" disabled={pending}>{pending ? <><PlaneLoader size="sm" label="Signing in…" />Signing in…</> : "Sign in"}</button>
     </form>
   );
 }
@@ -90,7 +91,7 @@ export function SignupForm() {
         </span>
       </label>
       <Status state={state} />
-      <button className="btn btn-primary h-10 w-full text-[14px]" disabled={pending}>{pending ? "Creating account…" : "Create account"}</button>
+      <button className="btn btn-primary h-10 w-full text-[14px]" disabled={pending}>{pending ? <><PlaneLoader size="sm" label="Creating account…" />Creating account…</> : "Create account"}</button>
     </form>
   );
 }
@@ -104,7 +105,7 @@ export function ForgotForm() {
         <input id="email" name="email" type="email" required autoComplete="email" className="input h-10" />
       </div>
       <Status state={state} />
-      <button className="btn btn-primary h-10 w-full text-[14px]" disabled={pending}>{pending ? "Sending…" : "Send reset link"}</button>
+      <button className="btn btn-primary h-10 w-full text-[14px]" disabled={pending}>{pending ? <><PlaneLoader size="sm" label="Sending…" />Sending…</> : "Send reset link"}</button>
     </form>
   );
 }
@@ -120,7 +121,7 @@ export function ResetForm({ token }: { token: string }) {
         <p className="hint mt-1">At least 10 characters. You will be signed out on other devices.</p>
       </div>
       <Status state={state} />
-      <button className="btn btn-primary h-10 w-full text-[14px]" disabled={pending}>{pending ? "Saving…" : "Save password"}</button>
+      <button className="btn btn-primary h-10 w-full text-[14px]" disabled={pending}>{pending ? <><PlaneLoader size="sm" label="Saving…" />Saving…</> : "Save password"}</button>
     </form>
   );
 }
@@ -130,7 +131,7 @@ export function ResendForm() {
   return (
     <form action={action} className="space-y-3">
       <Status state={state} />
-      <button className="btn h-10 w-full text-[14px]" disabled={pending}>{pending ? "Sending…" : "Send the link again"}</button>
+      <button className="btn h-10 w-full text-[14px]" disabled={pending}>{pending ? <><PlaneLoader size="sm" label="Sending…" />Sending…</> : "Send the link again"}</button>
     </form>
   );
 }
@@ -150,7 +151,7 @@ export function ConfirmEmailForm({ token, needsPassword }: { token: string; need
           </div>
         )}
         <Status state={state} />
-        <button className="btn btn-primary h-10 w-full text-[14px]" disabled={pending}>{pending ? "Confirming…" : "Confirm my email"}</button>
+        <button className="btn btn-primary h-10 w-full text-[14px]" disabled={pending}>{pending ? <><PlaneLoader size="sm" label="Confirming…" />Confirming…</> : "Confirm my email"}</button>
       </form>
       {needsPassword && (
         <form action={resetAction} className="space-y-2 border-t border-[var(--line)] pt-4">

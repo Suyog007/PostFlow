@@ -41,11 +41,18 @@ export function Icon({ name, size = 16, className = "" }: { name: IconName; size
   );
 }
 
+/**
+ * PostFlow's mark: a paper plane leaving a flowing trail, a post on its way out. Cream plane and marigold
+ * trail on the ink tile. The same drawing is the browser-tab icon (src/app/icon.svg).
+ */
 export function Logo({ size = 22 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
-      <rect width="24" height="24" rx="6" fill="var(--ink)" />
-      <path d="M6 15.5v2M10 12v5.5M14 8.5v9M18 6v11.5" stroke="var(--bg)" strokeWidth="2" strokeLinecap="round" />
+    <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true">
+      <rect width="32" height="32" rx="8" fill="#1b2420" />
+      <path d="M4.5 26.5c2.6-.4 4.4-1.9 5.6-3.8 1.1-1.7 2.2-3.2 4-4.1" fill="none" stroke="#e9b44c" strokeWidth="2" strokeLinecap="round" strokeDasharray="2.6 2.4" />
+      <path d="M26.5 6.5 7.6 13.6l6.6 3.1z" fill="#fbf6ea" />
+      <path d="m26.5 6.5-12.3 10.2 3.3 8.3z" fill="#e3d6bb" />
+      <path d="m14.2 16.7.9 4.9 2.4-1.4" fill="#c9bb9c" />
     </svg>
   );
 }

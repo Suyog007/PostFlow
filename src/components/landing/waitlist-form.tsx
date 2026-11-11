@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import { joinWaitlistAction } from "@/app/waitlist-action";
 import { PLANS } from "@/lib/pricing";
 import { Icon } from "@/components/ui";
+import { PlaneLoader } from "@/components/plane-loader";
 
 type State = { ok: true; message: string } | { ok: false; error: string } | null;
 
@@ -46,7 +47,7 @@ export function WaitlistForm({ plan }: { plan?: string }) {
         <input id="wl-company" name="company" tabIndex={-1} autoComplete="off" />
       </div>
       {state && !state.ok && <p role="alert" className="mt-3 text-[13px] text-[var(--bad)]">{state.error}</p>}
-      <button className="btn btn-primary mt-4 h-10 w-full text-[14px]" disabled={pending}>{pending ? "Joining…" : "Get early access"}</button>
+      <button className="btn btn-primary mt-4 h-10 w-full text-[14px]" disabled={pending}>{pending ? <><PlaneLoader size="sm" label="Joining…" />Joining…</> : "Get early access"}</button>
       <p className="mt-2 text-center text-[12px] text-[var(--subtle)]">No card needed. One email when your invite is ready.</p>
     </form>
   );

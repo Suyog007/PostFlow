@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { DateTime } from "luxon";
 import { Avatar, Icon, PlatformGlyph } from "@/components/ui";
+import { PlaneLoader } from "@/components/plane-loader";
 import { dayLabel, headline, type Post, type Week } from "./week-data";
 
 /** The week at a glance: seven days, today ringed, a word under the days that have posts. */
@@ -106,8 +107,8 @@ export function WeekRows({ w, list, current }: { w: Week; list: Post[]; current?
 export function StatusCard({ title, body, children, busy }: { title: string; body: string; children?: ReactNode; busy?: boolean }) {
   return (
     <div className="rounded-[22px] border border-[var(--line)] bg-[var(--surface)] p-6" role="status">
+      {busy && <div className="mb-4"><PlaneLoader size="md" label={title} /></div>}
       <div className="flex items-start gap-3">
-        {busy && <span aria-hidden="true" className="first-spinner mt-1 flex-none" />}
         <div>
           <p className="display text-[24px]">{title}</p>
           <p className="mt-2 max-w-[52ch] text-[16px] leading-relaxed text-[var(--muted)]">{body}</p>

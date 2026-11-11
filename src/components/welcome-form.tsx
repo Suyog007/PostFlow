@@ -6,6 +6,7 @@
 import { useActionState, useState } from "react";
 import { welcomeAction, type WelcomeState } from "@/app/welcome-action";
 import { fieldOf } from "@/lib/fields";
+import { PlaneLoader } from "@/components/plane-loader";
 
 const JOBS = [
   { id: "health", title: "Doctor", sub: "Clinician or specialist", icon: <path d="M7 4v5a4 4 0 0 0 8 0V4M11 13v2a4 4 0 0 0 8 0v-1.5M19 13.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z" /> },
@@ -117,7 +118,7 @@ export function WelcomeForm({ name, field, audience, role, expertise, region }: 
         {step < 2 ? (
           <button type="button" disabled={!canNext} onClick={() => setStep((s) => s + 1)} className="btn btn-primary h-14 w-full text-[18px]">Continue</button>
         ) : (
-          <button className="btn btn-primary h-14 w-full text-[18px]" disabled={pending}>{pending ? "Setting up…" : "Start writing my posts"}</button>
+          <button className="btn btn-primary h-14 w-full text-[18px]" disabled={pending}>{pending ? <><PlaneLoader size="sm" label="Setting up…" />Setting up…</> : "Start writing my posts"}</button>
         )}
         <div className="mt-4 flex items-center justify-center gap-4 text-[15px] text-[var(--muted)]">
           {step > 0 && <button type="button" onClick={() => setStep((s) => s - 1)} className="font-semibold underline underline-offset-4">Back</button>}

@@ -10,6 +10,7 @@ import { requireActiveUser } from "@/server/auth";
 import { activePlatforms, approvalGate, entitlementOf } from "@/server/billing/plans";
 import { Icon, PageHeader, PlatformGlyph, StatusBadge } from "@/components/ui";
 import { Flash } from "../flash";
+import { PlaneLoader } from "@/components/plane-loader";
 import { fillCalendarAction, refreshQueuedAction, writeLessonAction } from "@/app/actions";
 import { fillNowDays } from "@/server/generate";
 import { slotsBetween } from "@/server/slots";
@@ -73,7 +74,7 @@ function FirstRun({ mins }: { mins: number }) {
   return (
     <section className="panel mb-5 p-5" role="status" aria-live="polite">
       <div className="flex items-start gap-4">
-        <span aria-hidden="true" className="first-spinner mt-1 flex-none" />
+        <PlaneLoader size="sm" label="Writing your first posts" />
         <div className="min-w-0">
           <h2 className="display text-[24px]">{late ? "Still looking for the right stories." : "Writing your first posts…"}</h2>
           <p className="mt-1 max-w-2xl text-[14px] text-[var(--muted)]">
