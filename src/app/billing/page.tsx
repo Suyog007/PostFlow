@@ -66,7 +66,7 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
               PostFlow is free on LinkedIn, with up to {ent.quota.postsPerMonth} posts a month. Posting to X comes with the Pro plan, which opens soon:{" "}
               <Link href="/?plan=pro#early-access" className="underline">join the waitlist</Link>. We will email you well before paid plans start, and nothing is charged unless you choose one.
             </p>
-            <p className="mt-3 text-[14px]"><span className="font-medium tnum">{used}</span> of {ent.quota.postsPerMonth} posts used this month</p>
+            <p className="mt-3 text-[14px]"><span className="font-medium tnum">{used}</span> of {ent.quota.postsPerMonth} posts written this month</p>
             <Link href="/calendar" className="btn btn-primary mt-4">Open the app</Link>
           </div>
         ) : ent.plan === "owner" ? (
@@ -85,7 +85,7 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
                   {STATUS[user.subscriptionStatus!] ?? user.subscriptionStatus}
                   {user.currentPeriodEnd && (user.cancelAtPeriodEnd ? ` · ends ${fmt(user.currentPeriodEnd)}` : user.subscriptionStatus === "trialing" ? ` · first charge ${fmt(user.currentPeriodEnd)}` : ` · renews ${fmt(user.currentPeriodEnd)}`)}
                 </p>
-                {used !== null && <p className="mt-3 text-[14px]"><span className="font-medium tnum">{used}</span> of {ent.quota.postsPerMonth} posts used this month</p>}
+                {used !== null && <p className="mt-3 text-[14px]"><span className="font-medium tnum">{used}</span> of {ent.quota.postsPerMonth} posts written this month</p>}
               </div>
               <form action={portalAction}><button className="btn btn-primary">Manage billing</button></form>
             </div>

@@ -96,7 +96,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
               <thead className="text-[12px] text-[var(--muted)]">
                 <tr className="border-b border-[var(--line)]">
                   <th className="p-3 font-medium">Email</th><th className="p-3 font-medium">Plan</th><th className="p-3 font-medium">Status</th>
-                  <th className="p-3 font-medium">Posts this month</th><th className="p-3 font-medium">Model calls (30 d)</th><th className="p-3 font-medium">Telegram</th><th className="p-3 font-medium">Joined</th>
+                  <th className="p-3 font-medium" title="Posts PostFlow wrote this month. Not counted: drafts the reviewer threw away and posts the person skipped.">Posts written</th><th className="p-3 font-medium">Model calls (30 d)</th><th className="p-3 font-medium">Telegram</th><th className="p-3 font-medium">Joined</th>
                 </tr>
               </thead>
               <tbody>

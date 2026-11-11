@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { db, schema } from "../src/server/db/client";
 import { resetEnvCache } from "../src/server/env";
-import { activePlatforms, assertFeedQuota, assertPostQuota, entitledUsers, entitlementOf, LimitError } from "../src/server/billing/plans";
+import { activePlatforms, assertFeedQuota, assertPostQuota, entitledUsers, entitlementOf, LimitError, postsThisMonth } from "../src/server/billing/plans";
 import { createRequest } from "../src/server/requests";
 import { publishDue } from "../src/server/publisher";
 import { saveSettings } from "../src/server/settings";
@@ -25,6 +25,13 @@ describe("plans and limits", () => {
     expect(entitlementOf({ ...base, plan: "agency" }).active).toBe(false); // not for sale yet
     expect(entitlementOf({ isOwner: true, plan: null, subscriptionStatus: null, emailVerifiedAt: new Date() }).plan).toBe("owner");
     expect(entitlementOf({ isOwner: true, plan: null, subscriptionStatus: null, emailVerifiedAt: null }).active).toBe(false);
+  });
+
+  it("counts posts written, not drafts thrown away or posts the person skipped", async () => {
+    const at = new Date(Date.now() + 86_400_000);
+    const post = (status: "scheduled" | "published" | "rejected" | "declined", h: number) => ({ userId: me(), platform: "linkedin" as const, pillar: "news" as const, text: "x", status, scheduledAt: new Date(at.getTime() + h * 3_600_000) });
+    await db().insert(schema.posts).values([post("scheduled", 1), post("published", 2), post("rejected", 3), post("declined", 4)]);
+    expect(await postsThisMonth(me())).toBe(2);
   });
 
   it("stops writing when the monthly post quota is used", async () => {

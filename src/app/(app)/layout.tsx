@@ -17,14 +17,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div className="min-h-screen">
       <header className="sticky top-0 z-30 border-b border-[var(--line)] bg-[var(--bg)]/95 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-[1240px] items-center gap-2 px-4 md:h-[72px] md:gap-10 md:px-8">
-          <MobileMenu name={name} used={used !== null ? `${used} of ${ent.quota.postsPerMonth} posts used this month` : undefined} />
+          <MobileMenu name={name} used={used !== null ? `${used} of ${ent.quota.postsPerMonth} posts written this month` : undefined} />
           <Link href="/calendar" className="flex items-center gap-2.5" aria-label="PostFlow home">
             <Logo size={30} />
             <span className="display text-[24px] md:text-[28px]">PostFlow</span>
           </Link>
           <TopNav />
           <div className="ml-auto flex items-center gap-4">
-            {used !== null && <Link href="/billing" className="hidden text-[15px] text-[var(--muted)] hover:text-[var(--ink)] lg:inline">{used} of {ent.quota.postsPerMonth} posts used this month</Link>}
+            {used !== null && <Link href="/billing" className="hidden text-[15px] text-[var(--muted)] hover:text-[var(--ink)] lg:inline">{used} of {ent.quota.postsPerMonth} posts written this month</Link>}
             <Link href="/settings" aria-label="Your settings"><Avatar name={name} size={40} /></Link>
           </div>
         </div>

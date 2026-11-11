@@ -94,7 +94,7 @@ export default async function SettingsHub({ searchParams }: { searchParams: Prom
             <Row href="/settings/accounts" icon="shield" title="Your accounts" body={accountsLine} />
           </ul>
 
-          {used !== null && <p className="mt-5 px-1 text-[16px] text-[var(--muted)]">You&apos;ve used {used} of {ent.quota.postsPerMonth} posts this month. That count resets on {resets}.</p>}
+          {used !== null && <p className="mt-5 px-1 text-[16px] text-[var(--muted)]">PostFlow has written {used} of your {ent.quota.postsPerMonth} posts this month. Posts you skip don&apos;t count. The count resets on {resets}.</p>}
           <p className="mt-4 flex flex-wrap gap-x-5 gap-y-2 px-1 text-[16px]">
             <Link href="/settings/sources" className="text-[var(--accent)] hover:underline">News sources</Link>
             <Link href="/settings/more" className="text-[var(--accent)] hover:underline">More options</Link>

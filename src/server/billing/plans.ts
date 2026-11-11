@@ -1,4 +1,4 @@
-import { and, count, eq, gte, inArray, isNotNull, ne } from "drizzle-orm";
+import { and, count, eq, gte, inArray, isNotNull, ne, notInArray } from "drizzle-orm";
 import { db, schema } from "../db/client";
 import { env } from "../env";
 import { uid } from "../context";
@@ -83,12 +83,16 @@ function monthStart(now = new Date()) {
 }
 
 /** Posts that count against the monthly quota: everything written this month except what the reviewer rejected. */
+/**
+ * Posts PostFlow wrote for this account this month: the ones that count against the plan.
+ * Drafts the reviewer threw away and posts the person skipped do not count; skipping must never use up the month.
+ */
 export async function postsThisMonth(userId?: string): Promise<number> {
   const id = userId ?? (await uid());
   const [row] = await db()
     .select({ n: count() })
     .from(schema.posts)
-    .where(and(eq(schema.posts.userId, id), gte(schema.posts.createdAt, monthStart()), ne(schema.posts.status, "rejected")));
+    .where(and(eq(schema.posts.userId, id), gte(schema.posts.createdAt, monthStart()), notInArray(schema.posts.status, ["rejected", "declined"])));
   return Number(row.n);
 }
 
