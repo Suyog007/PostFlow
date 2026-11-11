@@ -1,7 +1,7 @@
-import { JetBrains_Mono, Plus_Jakarta_Sans } from "next/font/google";
+import { Fraunces, JetBrains_Mono, Source_Sans_3 } from "next/font/google";
 
-// PostFlow's type, the Friendly SaaS pairing from Design Lounge: Plus Jakarta Sans for titles and
-// reading, JetBrains Mono for times and numbers. Downloaded at build time, served from this site.
-export const display = Plus_Jakarta_Sans({ subsets: ["latin"], weight: ["600", "800"], variable: "--font-display", display: "swap" });
-export const body = Plus_Jakarta_Sans({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-body", display: "swap" });
+// PostFlow's type: Fraunces for titles (a warm serif that reads like a good letter), Source Sans 3 for
+// everything you read and tap, a mono only for code. Downloaded at build time, served from this site.
+export const display = Fraunces({ subsets: ["latin"], axes: ["opsz"], variable: "--font-display", display: "swap" });
+export const body = Source_Sans_3({ subsets: ["latin"], variable: "--font-body", display: "swap" });
 export const typed = JetBrains_Mono({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-type", display: "swap" });

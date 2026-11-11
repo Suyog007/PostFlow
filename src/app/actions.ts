@@ -31,7 +31,8 @@ function back(path: string, kind: "error" | "ok", message: string): never {
   redirect(`${base}${base.includes("?") ? "&" : "?"}${kind}=${encodeURIComponent(message)}${hash ? `#${hash}` : ""}`);
 }
 
-async function guarded(path: string, fn: () => Promise<unknown>, okMessage?: string): Promise<never> {
+/** Runs a change; on failure returns to `path` with the reason, on success to `donePath` (default: the same page). */
+async function guarded(path: string, fn: () => Promise<unknown>, okMessage?: string, donePath?: string): Promise<never> {
   await requireActiveUser();
   try {
     await fn();
@@ -40,7 +41,7 @@ async function guarded(path: string, fn: () => Promise<unknown>, okMessage?: str
     throw err;
   }
   revalidatePath("/", "layout");
-  return back(path, "ok", okMessage ?? "Saved");
+  return back(donePath ?? path, "ok", okMessage ?? "Saved");
 }
 
 // ---- posts ----------------------------------------------------------------
@@ -298,6 +299,46 @@ export async function saveVoiceAction(form: FormData) {
   });
 }
 
+/** Settings > Your voice: name, how you describe your work, voice, things never to write about, what posts include. */
+export async function saveYouAction(form: FormData) {
+  await guarded("/settings/you", async () => {
+    const s = await getSettings();
+    const voice = String(form.get("voice") ?? "").trim();
+    if (!voice) throw new Error("Pick the post that sounds like you, or describe your voice in your own words.");
+    await saveSettings({
+      profile: {
+        ...s.profile,
+        name: String(form.get("name") ?? s.profile.name).trim().slice(0, 80),
+        role: String(form.get("role") ?? s.profile.role).trim().slice(0, 100),
+        voice: voice.slice(0, 600),
+        avoid: String(form.get("avoid") ?? s.profile.avoid).trim().slice(0, 600),
+      },
+      hashtags: { ...s.hashtags, linkedin: form.get("tags_linkedin") === "on" },
+      images: { ...s.images, linkedin: form.get("img_linkedin") === "on" },
+      includeLinks: { ...s.includeLinks, linkedin: form.get("link_linkedin") === "on" },
+    });
+  }, "Saved", "/settings");
+}
+
+/** Settings > What to write about: field, topics, readers, place. */
+export async function saveTopicsAction(form: FormData) {
+  await guarded("/settings/topics", async () => {
+    const s = await getSettings();
+    const expertise = String(form.get("expertise") ?? "").split(/[\n,;]/).map((x) => x.trim()).filter(Boolean).slice(0, 12);
+    if (!expertise.length) throw new Error("Add at least one topic you know well.");
+    await saveSettings({
+      profile: {
+        ...s.profile,
+        field: fieldOf(String(form.get("field") ?? s.profile.field)).id,
+        expertise,
+        audience: String(form.get("audience") ?? s.profile.audience).trim().slice(0, 160),
+        region: String(form.get("region") ?? s.profile.region).trim().slice(0, 60),
+        bio: String(form.get("bio") ?? s.profile.bio).trim().slice(0, 400),
+      },
+    });
+  }, "Saved", "/settings");
+}
+
 /** Settings > About you > Post style: what goes into every post. */
 export async function savePostStyleAction(form: FormData) {
   await guarded("/settings/you", async () => {
@@ -356,7 +397,7 @@ export async function saveSlotsAction(form: FormData) {
     const timezone = String(form.get("timezone") ?? "").trim();
     if (timezone && !DateTime.local().setZone(timezone).isValid) throw new Error(`"${timezone}" is not a timezone PostFlow knows.`);
     await saveSettings({ slots: parseSlots(String(form.get("slots") ?? "")), ...(timezone ? { timezone } : {}) });
-  });
+  }, "Saved", "/settings");
 }
 export async function toggleApprovalAction(form?: FormData) {
   await guarded(switchBack(form), async () => {

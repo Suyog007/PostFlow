@@ -158,7 +158,7 @@ export function HeroDemo() {
         <p className="whitespace-pre-line px-5 pb-4 pt-3 text-[15px] leading-relaxed">{text}</p>
         {PICTURES[field] ?? null}
         <div className="flex items-center gap-2 border-t border-[var(--line)] bg-[var(--bg)] px-4 py-3" aria-hidden="true">
-          <span className="inline-flex h-10 items-center gap-1.5 rounded-full bg-[var(--accent)] px-5 text-[14px] font-semibold text-[var(--accent-ink)]">✓ Approve</span>
+          <span className="inline-flex h-10 items-center gap-1.5 rounded-full bg-[var(--mark)] px-5 text-[14px] font-semibold text-[var(--mark-ink)]">✓ Approve</span>
           <span className="inline-flex h-10 items-center rounded-full border border-[var(--line-strong)] px-4 text-[14px]">Edit</span>
           <span className="ml-auto text-[13px] text-[var(--d-muted)]">Waiting for your OK</span>
         </div>

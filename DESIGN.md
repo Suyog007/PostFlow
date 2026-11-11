@@ -13,20 +13,21 @@
 
 ## Picks
 
-- Theme: Fog City, cool gray, white, one cobalt: civic and calm. https://www.designlounge.live/themes/fog-city (dark: Fog Night)
-- Pairing: Friendly SaaS (Plus Jakarta Sans, JetBrains Mono). https://www.designlounge.live/type/friendly-saas
-- Family: Soft, 14px cards, pill buttons and chips.
-- Recipe: web-app, direction Cobalt app (the app); the public page uses the same kit.
-- Pieces: Agent approval card https://www.designlounge.live/demo/agent-approval-card (the home focus card), Sticky mobile CTA bar https://www.designlounge.live/demo/cta-sticky-mobile-bar (phone tab bar spacing), Split hero with UI card stack https://www.designlounge.live/demo/hero-split-ui-stack (landing hero).
+- Mode: Free colour and type, from the owner's own mockups (Home, Your settings, Your voice, What do you do?).
+- Colour: warm paper (#f6f3ec) and cream cards (#fffdf8), deep teal (#23614f) for links, selection and switches, marigold (#e9b44c) for the one main action on a screen (Approve, Continue, Done). Night: the same paper at night, teal and marigold brighter.
+- Type: Fraunces for titles (a warm serif, lining numbers), Source Sans 3 for everything read and tapped.
+- Shapes: 18 to 22px cards, pill buttons 56px tall on the main action, 44px minimum targets.
+- Navigation: three places, Home, This week, Settings. Top bar on wide screens, bottom tab bar on phones.
+- Pieces used as reference: Grouped settings list https://www.designlounge.live/demo/ios-grouped-settings (Settings hub rows), Agent approval card https://www.designlounge.live/demo/agent-approval-card (one post, one main answer).
 
 ## Defaults set aside
 
-- Cobalt app locks the Quiet family (6px). Soft (14px, pills) is used instead, because the owner asked for friendly and mobile-first for non-technical people.
-- Soft asks for a tonal primary button. The primary stays a solid cobalt fill so the one action (Approve) is unmistakable for first-time users.
-- Labels that used the mono face now use the text face; mono is kept for nothing on screen, because mono read as "technical" to testers.
+- The library's Fog City kit was replaced by the owner's warm palette and serif, because their mockups and testers asked for it.
+- Greeting headline ("Good evening, Anita") kept on purpose: it is the owner's design and orients non-technical people.
+- Mono labels are not used anywhere on screen.
 
 ## Signature
 
-The approval card: every post that needs you is a LinkedIn-looking preview with one cobalt Approve button. The same card appears on the landing page, so the site shows the exact thing you will do.
+The approval card: one post at a time, as it will look on LinkedIn, with where the story came from, and one marigold Approve button that stays in reach on a phone.
 
 Designed using Design Lounge (https://www.designlounge.live).

@@ -1,29 +1,29 @@
 @import "tailwindcss";
 
-/* Colours: Fog City and Fog Night from Design Lounge (https://www.designlounge.live). One cobalt accent. */
+/* Colours: warm paper, deep teal, marigold. One main action colour (marigold), one accent (teal). */
 :root {
-  /* Fog City (Design Lounge): cool grey, white, one cobalt. */
-  --bg: #eef1f3;
-  --side: #dfe4e8;
-  --surface: #ffffff;
-  --raised: #dfe4e8;
-  --line: #cdd3d8;
-  --line-strong: #858a8f;
-  --ink: #0f1418;
-  --muted: #4a5560;
-  --subtle: #5c666f;
-  --accent: #0e66eb;
+  /* Warm paper, deep teal, marigold for the one main action. Chosen for calm, trustworthy, non-technical. */
+  --bg: #f6f3ec;
+  --side: #efeadf;
+  --surface: #fffdf8;
+  --raised: #f3efe5;
+  --line: #e4ddcf;
+  --line-strong: #c9c0ad;
+  --ink: #1b2420;
+  --muted: #5a615b;
+  --subtle: #6b706a;
+  --accent: #23614f;
   --accent-ink: #fffdf8;
-  --accent-soft: #cfdff5;
-  --mark: #0e66eb;
-  --mark-ink: #fffdf8;
-  --mark-soft: #cfdff5;
-  --good: #216446;
-  --good-soft: #d1e3de;
-  --warn: #84530e;
-  --warn-soft: #e8e0d4;
-  --bad: #ac1017;
-  --bad-soft: #e8d2d5;
+  --accent-soft: #e2ece6;
+  --mark: #e9b44c;
+  --mark-ink: #1b2420;
+  --mark-soft: #f6e9c8;
+  --good: #23614f;
+  --good-soft: #e2ece6;
+  --warn: #8a5d12;
+  --warn-soft: #f6e9c8;
+  --bad: #a3271c;
+  --bad-soft: #f6e0dc;
   --li: #0a66c2;
   --x: #0f1419;
   --font: var(--font-body), ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -33,56 +33,56 @@
 /* Dark: follows the device unless a theme was picked with the toggle (data-theme on <html>). */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    /* Fog Night (Design Lounge): slate, white type, the same cobalt brighter. */
-    --bg: #0f1317;
-    --side: #1d232a;
-    --surface: #151a1f;
-    --raised: #1d232a;
-    --line: #262e36;
-    --line-strong: #70777d;
-    --ink: #e8edf1;
-    --muted: #9aa6b1;
-    --subtle: #7d8892;
-    --accent: #5a9bff;
-    --accent-ink: #141210;
-    --accent-soft: #21344f;
-    --mark: #5a9bff;
-    --mark-ink: #141210;
-    --mark-soft: #21344f;
-    --good: #4cc28a;
-    --good-soft: #1e3d33;
-    --warn: #e0a34b;
-    --warn-soft: #413623;
-    --bad: #ff6b6b;
-    --bad-soft: #49282b;
+    /* Night: the same paper at night, teal and marigold brighter. */
+    --bg: #131613;
+    --side: #1a1e1a;
+    --surface: #1b201c;
+    --raised: #232923;
+    --line: #2e3630;
+    --line-strong: #4a544c;
+    --ink: #f1ede2;
+    --muted: #b3b7ac;
+    --subtle: #8e9488;
+    --accent: #5cc4a6;
+    --accent-ink: #0f1411;
+    --accent-soft: #1b3a31;
+    --mark: #efbd57;
+    --mark-ink: #1b2420;
+    --mark-soft: #3b3018;
+    --good: #5cc4a6;
+    --good-soft: #1b3a31;
+    --warn: #e9b44c;
+    --warn-soft: #3b3018;
+    --bad: #ff8b80;
+    --bad-soft: #3a1a17;
     --li: #5eaaf0;
     --x: #e8ebf0;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-    /* Fog Night (Design Lounge): slate, white type, the same cobalt brighter. */
-    --bg: #0f1317;
-    --side: #1d232a;
-    --surface: #151a1f;
-    --raised: #1d232a;
-    --line: #262e36;
-    --line-strong: #70777d;
-    --ink: #e8edf1;
-    --muted: #9aa6b1;
-    --subtle: #7d8892;
-    --accent: #5a9bff;
-    --accent-ink: #141210;
-    --accent-soft: #21344f;
-    --mark: #5a9bff;
-    --mark-ink: #141210;
-    --mark-soft: #21344f;
-    --good: #4cc28a;
-    --good-soft: #1e3d33;
-    --warn: #e0a34b;
-    --warn-soft: #413623;
-    --bad: #ff6b6b;
-    --bad-soft: #49282b;
+    /* Night: the same paper at night, teal and marigold brighter. */
+    --bg: #131613;
+    --side: #1a1e1a;
+    --surface: #1b201c;
+    --raised: #232923;
+    --line: #2e3630;
+    --line-strong: #4a544c;
+    --ink: #f1ede2;
+    --muted: #b3b7ac;
+    --subtle: #8e9488;
+    --accent: #5cc4a6;
+    --accent-ink: #0f1411;
+    --accent-soft: #1b3a31;
+    --mark: #efbd57;
+    --mark-ink: #1b2420;
+    --mark-soft: #3b3018;
+    --good: #5cc4a6;
+    --good-soft: #1b3a31;
+    --warn: #e9b44c;
+    --warn-soft: #3b3018;
+    --bad: #ff8b80;
+    --bad-soft: #3a1a17;
     --li: #5eaaf0;
     --x: #e8ebf0;
     color-scheme: dark;
@@ -104,19 +104,21 @@
 html, body { background: var(--bg); color: var(--ink); }
 /* Nothing may widen the page sideways: on phones that lets the whole page drag left and right. */
 html, body { overflow-x: clip; overscroll-behavior-x: none; }
-body { font-family: var(--font); font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; font-feature-settings: "cv11", "ss03"; }
+body { font-family: var(--font); font-size: 15px; line-height: 1.5; -webkit-font-smoothing: antialiased; font-feature-settings: "cv11", "ss03"; }
 ::selection { background: var(--accent-soft); }
 a { color: inherit; text-decoration: none; }
 h1, h2, h3 { text-wrap: balance; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
 
 /* ---- buttons ---- */
+/* Component classes sit in a layer, so Tailwind utilities (h-14, w-auto, rounded-…) on the same element win. */
+@layer components {
 /* .btn-primary / .btn-secondary also work on their own (older pages use them without .btn). */
 .btn, .btn-primary, .btn-secondary { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 40px; padding: 0 16px; border-radius: 999px; font-size: 14px; font-weight: 600; white-space: nowrap; cursor: pointer; border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); transition: background .12s, border-color .12s; }
 .btn:hover, .btn-secondary:hover { background: var(--raised); border-color: var(--line-strong); }
 .btn:disabled, .btn-primary:disabled, .btn-secondary:disabled { opacity: .5; cursor: not-allowed; }
-.btn-primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-.btn-primary:hover { background: var(--accent); opacity: .9; border-color: var(--accent); }
+.btn-primary { background: var(--mark); color: var(--mark-ink); border-color: var(--mark); font-weight: 700; }
+.btn-primary:hover { background: color-mix(in srgb, var(--mark) 88%, #000); border-color: color-mix(in srgb, var(--mark) 88%, #000); }
 .btn-accent { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .btn-accent:hover { background: var(--accent); opacity: .9; border-color: var(--accent); }
 .btn-danger { color: var(--bad); }
@@ -148,7 +150,7 @@ h1, h2, h3 { text-wrap: balance; }
 .chip-input:focus-visible + .chip { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ---- surfaces ---- */
-.panel, .card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
+.panel, .card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; }
 .panel-head { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--line); font-weight: 700; font-size: 14px; }
 .panel-body { padding: 16px; }
 .divide > * + * { border-top: 1px solid var(--line); }
@@ -162,6 +164,7 @@ h1, h2, h3 { text-wrap: balance; }
 .badge-bad { background: var(--bad-soft); color: var(--bad); }
 .badge-accent { background: var(--accent-soft); color: var(--accent); }
 .badge-info { background: var(--side); color: var(--ink); box-shadow: inset 0 0 0 1px var(--line); }
+}
 
 .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .tnum { font-variant-numeric: tabular-nums; }
@@ -246,14 +249,14 @@ h1, h2, h3 { text-wrap: balance; }
   color: var(--ink);
   font-family: var(--font-body), var(--font);
 }
-.desk .display { font-weight: 800; letter-spacing: -0.035em; line-height: 1.02; }
+.desk .display { font-weight: 600; letter-spacing: -0.025em; line-height: 1.02; }
 .desk .typed { font-family: var(--font); font-variant-numeric: tabular-nums; }
 /* Highlighter: a marigold stroke under the words, not a box. */
 .desk .hl { background: linear-gradient(transparent 58%, var(--mark-soft) 58%, var(--mark-soft) 92%, transparent 92%); padding: 0 .1em; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
 .desk .red { color: var(--accent); }
 .desk .press-stripe { display: none; }
-.desk .btn-desk { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 52px; padding: 0 26px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 16px; border: 0; transition: background .2s cubic-bezier(0.2, 0.7, 0.2, 1), transform .1s; }
-.desk .btn-desk:hover { background: color-mix(in srgb, var(--accent) 88%, #000); }
+.desk .btn-desk { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 52px; padding: 0 26px; border-radius: 999px; background: var(--mark); color: var(--mark-ink); font-weight: 700; font-size: 16px; border: 0; transition: background .2s cubic-bezier(0.2, 0.7, 0.2, 1), transform .1s; }
+.desk .btn-desk:hover { background: color-mix(in srgb, var(--mark) 88%, #000); }
 .desk .btn-desk:active, .desk .btn-outline:active { transform: scale(.98); }
 .desk .btn-outline { display: inline-flex; align-items: center; justify-content: center; height: 52px; padding: 0 22px; border-radius: 999px; border: 1px solid var(--line-strong); color: var(--ink); font-weight: 600; background: var(--surface); }
 .desk .btn-outline:hover { background: var(--side); }
@@ -265,7 +268,7 @@ h1, h2, h3 { text-wrap: balance; }
 
 /* ---------- the news desk, app-wide ----------
    Display type for titles, typewriter type for times and small notes, the press stripe. */
-.display { font-family: var(--font-display), "Helvetica Neue", Arial, sans-serif; font-weight: 800; letter-spacing: -0.035em; line-height: 1.04; }
+.display { font-family: var(--font-display), Georgia, serif; font-weight: 600; letter-spacing: -0.02em; line-height: 1.06; font-variation-settings: "opsz" 144; font-variant-numeric: lining-nums; font-feature-settings: "lnum" 1, "onum" 0; }
 /* The words that matter in a title: in teal. */
 .em { color: var(--accent); }
 .typed { font-family: var(--font); font-variant-numeric: tabular-nums; }

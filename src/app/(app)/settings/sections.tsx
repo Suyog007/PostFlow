@@ -7,13 +7,12 @@ import { db, schema } from "@/server/db/client";
 import { getSettings } from "@/server/settings";
 import { myChecks } from "@/server/health";
 import { requireActiveUser } from "@/server/auth";
-import { entitlementOf } from "@/server/billing/plans";
+import { approvalGate, entitlementOf } from "@/server/billing/plans";
 import { telegramConfigured } from "@/server/telegram";
 import { env } from "@/server/env";
 import { isPlatformConfigured } from "@/server/platforms/accounts";
 import { ScheduleEditor } from "@/components/schedule-editor";
-import { ToneField } from "@/components/tone-field";
-import { addSourceAction, connectAction, deleteSourceAction, disconnectAction, runTickAction, saveFastLaneAction, saveVoiceAction, saveAdvancedAction, savePostStyleAction, saveSlotsAction, unlinkTelegramAction, toggleSourceAction, removeStyleNoteAction, connectTelegramAction } from "@/app/actions";
+import { addSourceAction, connectAction, deleteSourceAction, disconnectAction, runTickAction, togglePauseAction, toggleApprovalAction, saveFastLaneAction, saveVoiceAction, saveAdvancedAction, savePostStyleAction, saveSlotsAction, unlinkTelegramAction, toggleSourceAction, removeStyleNoteAction, connectTelegramAction } from "@/app/actions";
 
 /** A titled block in a tab: heading, one line on what it does, then the controls. */
 function Section({ title, hint, children, id }: { title: ReactNode; hint?: ReactNode; children: ReactNode; id?: string }) {
@@ -123,6 +122,25 @@ export async function General({ user, s, ent, showX, pro }: { user: User; s: S; 
         </div>
       </Section>
 
+      <Section title="PostFlow">
+        <div className="card divide-y divide-line">
+          <form action={togglePauseAction} className="flex flex-wrap items-center gap-3 px-4 py-4">
+            <div className="min-w-0 flex-1 text-[15px]">
+              <div className="font-semibold">{s.paused ? "PostFlow is paused" : "PostFlow is on"}</div>
+              <p className="text-[var(--muted)]">{s.paused ? "Nothing is written or posted." : "It finds stories and writes posts for you to approve."}</p>
+            </div>
+            <button className={s.paused ? "btn-primary" : "btn-secondary"}>{s.paused ? "Turn back on" : "Pause"}</button>
+          </form>
+          <div className="flex flex-wrap items-center gap-3 px-4 py-4">
+            <div className="min-w-0 flex-1 text-[15px]">
+              <div className="font-semibold">{approvalGate(s, ent.features.autoMode).blocks ? "You approve every post" : "Checked posts go out by themselves"}{!ent.features.autoMode && pro("Auto posting")}</div>
+              <p className="text-[var(--muted)]">{approvalGate(s, ent.features.autoMode).blocks ? "A post you haven't approved by its time is skipped." : "You can still change or remove any post before its time."}</p>
+            </div>
+            {ent.features.autoMode && <form action={toggleApprovalAction}><button className="btn-secondary">{approvalGate(s, ent.features.autoMode).blocks ? "Post without asking" : "Ask me first"}</button></form>}
+          </div>
+        </div>
+      </Section>
+
       <Section id="telegram" title="Telegram" hint="Approve posts and send notes from your phone. Free.">
         <div className="card flex flex-wrap items-center gap-3 px-4 py-3 text-[14px]">
           {user.telegramChatId ? (
@@ -200,65 +218,6 @@ export function Schedule({ s, ent, showX, pro, keep }: { s: S; ent: Ent; showX: 
           )}
           <button className="btn-primary">Save</button>
         </form>
-      </Section>
-    </>
-  );
-}
-
-/* ---------------------------------------------------------------- voice */
-
-export function Voice({ s, field }: { s: S; field: Field }) {
-  return (
-    <>
-      <Section id="profile" title="Who you are" hint="PostFlow writes as you, so posts sound like someone in your seat.">
-        <form action={saveVoiceAction} className="card space-y-5 p-5">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block"><span className="label">Your name</span><input name="name" defaultValue={s.profile.name} className="input h-10" /></label>
-            <label className="block"><span className="label">What you do</span><input name="role" defaultValue={s.profile.role} placeholder={field.roleExample} className="input h-10" /></label>
-            <label className="block">
-              <span className="label">Your field</span>
-              <select name="field" defaultValue={field.id} className="input h-10">
-                {FIELD_IDS.map((id) => <option key={id} value={id}>{FIELDS[id].label}</option>)}
-              </select>
-            </label>
-            <label className="block"><span className="label">Who reads your posts</span><input name="audience" maxLength={160} defaultValue={s.profile.audience} placeholder={field.audience} className="input h-10" /></label>
-          </div>
-          <label className="block"><span className="label">Topics you know well</span><textarea name="expertise" rows={2} defaultValue={s.profile.expertise.join(", ")} placeholder="Separate with commas" className="textarea" /><span className="hint mt-1 block">PostFlow picks news about these first.</span></label>
-          <div id="voice" className="scroll-mt-24"><ToneField name="voice" defaultValue={s.profile.voice} /></div>
-          <label className="block"><span className="label">Never write about</span><textarea name="avoid" rows={2} defaultValue={s.profile.avoid} className="textarea" /></label>
-          <details>
-            <summary className="cursor-pointer text-[14px] text-[var(--muted)] hover:text-[var(--ink)]">Bio and city</summary>
-            <div className="mt-3 space-y-4">
-              <label className="block"><span className="label">Short bio</span><textarea name="bio" rows={2} defaultValue={s.profile.bio} className="textarea" /></label>
-              <label className="block"><span className="label">Your city or country, for local {field.community} posts</span><input name="region" defaultValue={s.profile.region} placeholder="e.g. Berlin, Nepal, Lagos" className="input h-10" /></label>
-            </div>
-          </details>
-          <button className="btn-primary h-10 px-5">Save</button>
-        </form>
-      </Section>
-
-      <Section id="style" title="What every post includes" hint="Switch these on or off. PostFlow follows them for every new post.">
-        <form action={savePostStyleAction} className="card p-5">
-          <div className="divide-y divide-line">
-            <Toggle name="link_linkedin" label="A link to the news source" hint="Added at the end as “Source: …”. This is the only way links get into posts." on={s.includeLinks.linkedin} />
-            <Toggle name="img_linkedin" label="The logo of what the post is about" hint="When the story is about one company or product." on={s.images.linkedin} />
-            <Toggle name="tags_linkedin" label="Up to 3 hashtags" on={s.hashtags.linkedin} />
-          </div>
-          <button className="btn-primary mt-4 h-10 px-5">Save</button>
-        </form>
-      </Section>
-
-      <Section title="Wording you asked for" hint={s.styleNotes.length ? "Every new post follows these." : "None yet. When you change a post and tick \u201cRemember this\u201d, it shows up here."}>
-        {s.styleNotes.length > 0 && (
-          <ul className="card divide-y divide-line">
-            {s.styleNotes.map((n, i) => (
-              <li key={i} className="flex items-center gap-3 px-4 py-3 text-[14px]">
-                <span className="min-w-0 flex-1">{n}</span>
-                <form action={removeStyleNoteAction}><input type="hidden" name="i" value={i} /><button className="btn btn-ghost">Remove</button></form>
-              </li>
-            ))}
-          </ul>
-        )}
       </Section>
     </>
   );

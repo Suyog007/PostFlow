@@ -125,7 +125,7 @@ function Steps() {
         <div className="flex h-[150px] flex-col justify-center gap-3 rounded-[12px] bg-[var(--bg)] p-4" aria-hidden="true">
           <span className="flex items-center gap-2 text-[14px] font-medium"><span className="h-2.5 w-2.5 rounded-full bg-[var(--warn)]" />1 post is waiting for your OK</span>
           <span className="flex gap-2">
-            <span className="inline-flex h-10 items-center gap-1.5 rounded-full bg-[var(--accent)] px-5 text-[14px] font-semibold text-[var(--accent-ink)]">✓ Approve</span>
+            <span className="inline-flex h-10 items-center gap-1.5 rounded-full bg-[var(--mark)] px-5 text-[14px] font-semibold text-[var(--mark-ink)]">✓ Approve</span>
             <span className="inline-flex h-10 items-center rounded-full border border-[var(--line-strong)] px-4 text-[14px]">Edit</span>
           </span>
         </div>

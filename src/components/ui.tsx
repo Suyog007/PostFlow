@@ -68,7 +68,9 @@ export function PlatformGlyph({ platform, size = 16 }: { platform: string; size?
 }
 
 export function Avatar({ name, size = 36 }: { name: string; size?: number }) {
-  const initials = (name || "You").split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+  // "Dr. Anita Shrestha" is AS: titles are skipped, first and last name kept.
+  const words = (name || "You").split(/\s+/).filter((w) => !/^(dr|mr|mrs|ms|prof)\.?$/i.test(w));
+  const initials = (words.length > 1 ? words[0][0] + words[words.length - 1][0] : (words[0] ?? "Y").slice(0, 2)).toUpperCase();
   return (
     <span className="inline-flex flex-none items-center justify-center rounded-full font-semibold" style={{ width: size, height: size, fontSize: size * 0.38, background: "var(--accent-soft)", color: "var(--accent)" }}>
       {initials}
