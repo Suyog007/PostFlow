@@ -10,7 +10,7 @@ const SITE_URL = process.env.APP_URL || process.env.URL || "http://localhost:300
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: "PostFlow",
-  description: "Your LinkedIn and X presence on autopilot.",
+  description: "LinkedIn posts from the news in your field, written in your voice, checked against the source, posted only when you approve.",
   // The app stays out of search results; the landing page opts back in.
   robots: { index: false, follow: false },
 };

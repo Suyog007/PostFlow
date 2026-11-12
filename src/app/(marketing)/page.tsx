@@ -11,9 +11,10 @@ import { DeskNav, HeroDemo } from "@/components/landing/desk";
 import { BETA, TRIAL_DAYS } from "@/lib/pricing";
 import { contactEmail, env } from "@/server/env";
 
-const TITLE = "PostFlow · The news breaks. Your post is ready.";
+const TITLE = "LinkedIn posts from your field's news · PostFlow";
 const DESCRIPTION =
-  "PostFlow reads the news in your field, drafts a short LinkedIn post that names its source, and waits for your OK before it goes out.";
+  "PostFlow writes LinkedIn posts from the journals and news in your field, in your voice, with every source checked. You approve each one.";
+const SITE = (process.env.APP_URL || process.env.URL || "https://postfloow.netlify.app").replace(/\/$/, "");
 
 export const metadata: Metadata = {
   title: TITLE,
@@ -24,14 +25,32 @@ export const metadata: Metadata = {
     type: "website",
     url: "/",
     siteName: "PostFlow",
-    title: "PostFlow · The news breaks. Your post is ready.",
+    title: "PostFlow: be seen on LinkedIn, without the writing",
     description: DESCRIPTION,
-    images: [{ url: "/landing/calendar-light.png", width: 2560, height: 1600, alt: "The PostFlow calendar with a week of LinkedIn and X posts" }],
+    images: [{ url: "/og.png", width: 1200, height: 630, alt: "PostFlow: a sample LinkedIn post from the news, with its source and an Approve button" }],
   },
-  twitter: { card: "summary_large_image", title: "PostFlow · The news breaks. Your post is ready.", description: DESCRIPTION, images: ["/landing/calendar-light.png"] },
+  twitter: { card: "summary_large_image", title: "PostFlow: be seen on LinkedIn, without the writing", description: DESCRIPTION, images: ["/og.png"] },
 };
 
 const faqFor = (beta: boolean): { q: string; a: string }[] => [
+  {
+    q: "What is PostFlow?",
+    a: "PostFlow is a web app that keeps professionals visible on LinkedIn. It reads the journals, official sources and news in your field, writes short posts in your voice that name their source, checks every claim against the article, and publishes only the posts you approve.",
+  },
+  {
+    q: "Who is PostFlow for?",
+    a: "Professionals whose reputation brings them work and who have no time to write: doctors, accountants, lawyers, consultants, teachers, marketers and engineers. You pick your field and topics, and it only writes about news that matters in your work.",
+  },
+  {
+    q: "Where does PostFlow get its news?",
+    a: "From 10 to 20 sources picked for your field when you sign up: peer-reviewed journals, research servers, official bodies such as the WHO, FDA or HMRC, trade magazines and trusted news. You can remove any of them or add your own.",
+  },
+  {
+    q: "How much does PostFlow cost?",
+    a: beta
+      ? `It is free during the beta, for LinkedIn, with up to ${BETA.quota.postsPerMonth} posts a month and no card. Paid plans with X will start at $19 a month.`
+      : `Plans start at $19 a month, with a ${TRIAL_DAYS}-day free trial.`,
+  },
   {
     q: "Will it post something I haven't seen?",
     a: "No. Every post waits for you to tap Approve. One you don't approve is skipped, never posted.",
@@ -156,8 +175,30 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
         dangerouslySetInnerHTML={{
           __html: JSON.stringify({
             "@context": "https://schema.org",
-            "@type": "FAQPage",
-            mainEntity: FAQ.map((f) => ({ "@type": "Question", name: f.q, acceptedAnswer: { "@type": "Answer", text: f.a } })),
+            "@graph": [
+              {
+                "@type": "Organization",
+                "@id": `${SITE}/#org`,
+                name: "PostFlow",
+                url: `${SITE}/`,
+                logo: `${SITE}/apple-icon.png`,
+                ...(contactEmail() ? { email: contactEmail() } : {}),
+              },
+              {
+                "@type": "SoftwareApplication",
+                name: "PostFlow",
+                url: `${SITE}/`,
+                image: `${SITE}/og.png`,
+                applicationCategory: "BusinessApplication",
+                operatingSystem: "Web",
+                description: DESCRIPTION,
+                publisher: { "@id": `${SITE}/#org` },
+                offers: beta
+                  ? { "@type": "Offer", price: "0", priceCurrency: "USD", description: `Free beta for LinkedIn, up to ${BETA.quota.postsPerMonth} posts a month` }
+                  : { "@type": "AggregateOffer", lowPrice: "19", highPrice: "39", priceCurrency: "USD" },
+              },
+              { "@type": "FAQPage", mainEntity: FAQ.map((f) => ({ "@type": "Question", name: f.q, acceptedAnswer: { "@type": "Answer", text: f.a } })) },
+            ],
           }).replace(/</g, "\\u003c"),
         }}
       />
@@ -266,8 +307,8 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
             <div className="divide-y divide-[var(--d-sky-line)] border-y border-[var(--d-sky-line)]">
               {FAQ.map((f) => (
                 <details key={f.q} className="group py-5">
-                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-[18px] font-semibold [&::-webkit-details-marker]:hidden">
-                    {f.q}
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
+                    <h3 className="text-[18px] font-semibold">{f.q}</h3>
                     <span aria-hidden="true" className="red flex-none text-[26px] leading-none transition-transform group-open:rotate-45">+</span>
                   </summary>
                   <p className="mt-3 max-w-[640px] text-[16px] leading-relaxed text-[var(--d-muted)]">{f.a}</p>

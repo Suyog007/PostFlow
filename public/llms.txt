@@ -1,0 +1,27 @@
+# PostFlow
+
+> PostFlow keeps busy professionals visible on LinkedIn. It reads the journals, official sources and news in their field, writes short posts in their voice that name their source, checks every claim against the original article, and publishes only the posts they approve.
+
+## What it does
+
+- Picks 10 to 20 sources for each person's field at sign-up: peer-reviewed journals, research servers, official bodies and trusted news.
+- Scores new stories for how much they matter to the person and their readers.
+- Writes short LinkedIn posts in the person's chosen voice. Every news post names its source.
+- Checks each claim against the article, then a second, independent AI model checks it again. Drafts that fail are thrown away.
+- Shows each post exactly as it will look on LinkedIn, with Approve, Change and Skip. Posts that are not approved are never published.
+- Posts at the days and times the person picks. Ideas about their own work become posts too.
+
+## Who it is for
+
+Doctors, accountants, lawyers, consultants, teachers, marketers and engineers: professionals whose reputation brings them work and who have no time to write.
+
+## Pricing
+
+Free during the beta, for LinkedIn, with up to 60 posts a month and no card. Planned paid plans: Starter at $19 a month (60 posts, LinkedIn and X), Pro at $39 a month (150 posts, posts on breaking news, posts from a link).
+
+## Links
+
+- [Home](https://postfloow.netlify.app/): what PostFlow does, how it works, pricing and questions
+- [Sign up](https://postfloow.netlify.app/signup): start the free beta
+- [Privacy](https://postfloow.netlify.app/privacy)
+- [Terms](https://postfloow.netlify.app/terms)
